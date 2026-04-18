@@ -86,6 +86,13 @@ REGION_TYPE_NAMES = {
 }
 
 
+def _looks_like_plain_its_pdu(payload: bytes) -> bool:
+    """Heuristic: distinguish plain ITS-PDU headers from TS 103 097 envelopes."""
+    if len(payload) < 6 or payload[0] != 2:
+        return False
+    return payload[1] in ITS_PDU_MESSAGE_ID and payload[2] == 0 and payload[3] == 0
+
+
 def _read_uint8(data: bytes, offset: int) -> tuple[int, int]:
     """Read a single byte, return (value, new_offset)."""
     if offset >= len(data):
@@ -190,6 +197,9 @@ def parse_security_header(payload: bytes) -> Optional[SecurityInfo]:
         SecurityInfo with extracted fields, or None if not a signed message.
     """
     if len(payload) < 2:
+        return None
+
+    if _looks_like_plain_its_pdu(payload):
         return None
 
     offset = 0
@@ -346,7 +356,7 @@ def extract_security_from_decoded(decoded: dict, msg_type: str) -> Optional[Secu
         info.protocol_version = header["protocolVersion"]
 
     # Message ID maps to ITS-AID
-    msg_id = header.get("messageID")
+    msg_id = header.get("messageID", header.get("messageId"))
     if msg_id is not None:
         # ITS-AID values per ETSI TS 102 965
         its_aid_map = {
@@ -361,7 +371,7 @@ def extract_security_from_decoded(decoded: dict, msg_type: str) -> Optional[Secu
         info.its_aid_list = [its_aid_map.get(msg_id, msg_id)]
 
     # Station ID from header
-    station_id = header.get("stationID")
+    station_id = header.get("stationID", header.get("stationId"))
     if station_id is not None:
         info.station_type = f"Station-ID: {station_id}"
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import shutil
+from math import cos, radians
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -100,6 +101,52 @@ def _default_details(
     return details
 
 
+def _extract_geonet_lpv(raw_data: bytes, btp_offset: int) -> Optional[dict[str, float | str]]:
+    """Extract position-vector fields from a GeoNetworking long position vector."""
+    gn_src_offset = btp_offset - 24
+    lat_offset = btp_offset - 16
+    lon_offset = btp_offset - 12
+    speed_offset = btp_offset - 8
+    heading_offset = btp_offset - 6
+    if gn_src_offset < 0 or heading_offset + 2 > len(raw_data):
+        return None
+
+    lat = int.from_bytes(raw_data[lat_offset:lat_offset + 4], "big", signed=True) / 1e7
+    lon = int.from_bytes(raw_data[lon_offset:lon_offset + 4], "big", signed=True) / 1e7
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        return None
+
+    speed_field = int.from_bytes(raw_data[speed_offset:speed_offset + 2], "big")
+    heading_field = int.from_bytes(raw_data[heading_offset:heading_offset + 2], "big")
+    return {
+        "station_id": raw_data[gn_src_offset:gn_src_offset + 8].hex(":"),
+        "latitude": lat,
+        "longitude": lon,
+        "speed": float(speed_field & 0x7FFF) / 100.0,
+        "heading": float(heading_field) / 10.0,
+    }
+
+
+def _partial_cam_decode(payload: bytes) -> Optional[dict[str, int]]:
+    """Extract stable CAM header fields even when full ASN.1 decoding fails."""
+    if len(payload) < 8 or payload[0] != 0x02 or payload[1] != 0x02:
+        return None
+    return {
+        "stationId": int.from_bytes(payload[2:6], "big"),
+        "generationDeltaTime": int.from_bytes(payload[6:8], "big"),
+    }
+
+
+def _raw_decode_hint(msg_type: MessageType, payload: bytes) -> Optional[str]:
+    """Return a more specific fallback hint for known undecoded payload shapes."""
+    if msg_type != MessageType.CAM or len(payload) < 2:
+        return None
+
+    if payload[0] == 0x02 and payload[1] == 0x02:
+        return "CAM-PDU erkannt - Nutzlast unvollstaendig oder abweichend codiert"
+    return None
+
+
 def _decode_direct_geonet_payload(
     raw_data: bytes,
     timestamp: datetime,
@@ -137,23 +184,14 @@ def _decode_direct_geonet_payload(
         if raw_data[btp_payload_offset] != 0x02:
             continue
 
-        lat_offset = offset - 16
-        lon_offset = offset - 12
-        if lat_offset < 0 or lon_offset + 4 > len(raw_data):
+        lpv = _extract_geonet_lpv(raw_data, offset)
+        if lpv is None:
             continue
-
-        lat = int.from_bytes(raw_data[lat_offset:lat_offset + 4], "big", signed=True) / 1e7
-        lon = int.from_bytes(raw_data[lon_offset:lon_offset + 4], "big", signed=True) / 1e7
-        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
-            continue
+        lat = float(lpv["latitude"])
+        lon = float(lpv["longitude"])
 
         payload = raw_data[btp_payload_offset:]
-        # GeoNetworking source-address is the 8-byte GN_ADDR at offset-24
-        # from the BTP port field (CommonHeader + 8-byte source address).
-        gn_src_offset = offset - 24
-        gn_source_addr = None
-        if gn_src_offset >= 0 and gn_src_offset + 8 <= len(raw_data):
-            gn_source_addr = raw_data[gn_src_offset:gn_src_offset + 8].hex(":")
+        gn_source_addr = str(lpv["station_id"])
 
         decoded = _decode_its_message(
             msg_type,
@@ -161,6 +199,10 @@ def _decode_direct_geonet_payload(
             transport="GeoNetworking direkt",
             source=source,
             dst_port=dst_port,
+            fallback_position=(lat, lon),
+            fallback_station_id=station_id,
+            fallback_speed=float(lpv["speed"]),
+            fallback_heading=float(lpv["heading"]),
         )
         if decoded:
             decoded.timestamp = timestamp
@@ -170,21 +212,33 @@ def _decode_direct_geonet_payload(
                 decoded.details["GN-Quelladresse"] = gn_source_addr
             return decoded
 
+        from .security_parser import parse_security_header
+        security_info = parse_security_header(payload)
+        details = _default_details(
+            msg_type,
+            payload,
+            "GeoNetworking direkt",
+            source,
+            dst_port,
+            False,
+        )
+        decode_hint = _raw_decode_hint(msg_type, payload)
+        if decode_hint is not None:
+            details["ASN.1-Dekodierung"] = decode_hint
+        if security_info is not None and security_info.security_profile is not None:
+            details["Sicherheitsprofil"] = security_info.security_profile
+
         return V2xMessage(
             timestamp=timestamp,
             station_id=station_id,
             msg_type=msg_type,
             latitude=lat,
             longitude=lon,
+            speed=float(lpv["speed"]),
+            heading=float(lpv["heading"]),
             raw_payload=payload,
-            details=_default_details(
-                msg_type,
-                payload,
-                "GeoNetworking direkt",
-                source,
-                dst_port,
-                False,
-            ),
+            details=details,
+            security_info=security_info,
         )
 
     return None
@@ -248,22 +302,30 @@ def _extract_generic_position(decoded: dict, msg_type: MessageType) -> Optional[
     try:
         # Most ITS messages have a reference position in their header
         header = decoded.get("header", decoded.get("protocolVersion", {}))
-        station_id = str(header.get("stationID", "unknown"))
+        station_id = str(header.get("stationID", header.get("stationId", "unknown")))
 
         # Try to find any position reference
         ref_pos = decoded.get("referencePosition", None)
         if ref_pos is None:
             # Search nested structures
             for key, val in decoded.items():
-                if isinstance(val, dict) and "latitude" in val:
+                if isinstance(val, dict) and any(
+                    field in val for field in ("latitude", "lat", "longitude", "long")
+                ):
                     ref_pos = val
                     break
+        if ref_pos is None and msg_type == MessageType.MAPEM:
+            intersections = _safe_get(decoded, "map", "intersections", default=[])
+            if isinstance(intersections, list) and intersections:
+                ref_pos = intersections[0].get("refPoint")
 
         if ref_pos is None:
             return None
 
-        lat = int(ref_pos.get("latitude", 0)) / 1e7
-        lon = int(ref_pos.get("longitude", 0)) / 1e7
+        lat_raw = ref_pos.get("latitude", ref_pos.get("lat", 0))
+        lon_raw = ref_pos.get("longitude", ref_pos.get("lon", ref_pos.get("long", 0)))
+        lat = int(lat_raw) / 1e7
+        lon = int(lon_raw) / 1e7
         alt = int(ref_pos.get("altitude", {}).get("altitudeValue", 0)) / 100.0
 
         return lat, lon, alt, None, None, station_id
@@ -294,6 +356,124 @@ def _safe_get(obj, *keys, default=None):
         else:
             return default
     return cur if cur != {} else default
+
+
+def _normalize_geo_point(point: object) -> Optional[dict[str, float]]:
+    """Normalize ASN.1 coordinate dicts to {'lat', 'lon'} in decimal degrees."""
+    if not isinstance(point, dict):
+        return None
+    lat = point.get("lat", point.get("latitude"))
+    lon = point.get("lon", point.get("longitude", point.get("long")))
+    if lat is None or lon is None:
+        return None
+    try:
+        lat_num = float(lat)
+        lon_num = float(lon)
+    except (TypeError, ValueError):
+        return None
+    if abs(lat_num) > 90 or abs(lon_num) > 180:
+        lat_num /= 1e7
+        lon_num /= 1e7
+    return {"lat": lat_num, "lon": lon_num}
+
+
+def _delta_to_geo(
+    lat: float,
+    lon: float,
+    delta_x_cm: int,
+    delta_y_cm: int,
+) -> tuple[float, float]:
+    """Approximate ISO 19091 local XY deltas as absolute WGS84 points."""
+    meters_east = delta_x_cm / 100.0
+    meters_north = delta_y_cm / 100.0
+    lat += meters_north / 111_320.0
+    lon += meters_east / max(1e-6, 111_320.0 * cos(radians(lat)))
+    return (lat, lon)
+
+
+def _normalize_node_list(node_list: object, ref_point: Optional[dict[str, float]]) -> Optional[dict]:
+    """Convert ASN.1 MAP nodeList variants to a normalized {'nodes': [...]} shape."""
+    if ref_point is None:
+        return None
+
+    nodes = None
+    if isinstance(node_list, tuple) and len(node_list) == 2:
+        _, nodes = node_list
+    elif isinstance(node_list, dict):
+        nodes = node_list.get("nodes", node_list.get("nodeSetXY"))
+    elif isinstance(node_list, list):
+        nodes = node_list
+    if not isinstance(nodes, list):
+        return None
+
+    current_lat = ref_point["lat"]
+    current_lon = ref_point["lon"]
+    normalized_nodes: list[dict[str, float]] = []
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        point = _normalize_geo_point(node)
+        if point is not None:
+            current_lat = point["lat"]
+            current_lon = point["lon"]
+            normalized_nodes.append(point)
+            continue
+
+        delta = node.get("delta")
+        if isinstance(delta, tuple) and len(delta) == 2 and isinstance(delta[1], dict):
+            delta = delta[1]
+        if not isinstance(delta, dict):
+            continue
+        try:
+            delta_x = int(delta.get("x", 0))
+            delta_y = int(delta.get("y", 0))
+        except (TypeError, ValueError):
+            continue
+        current_lat, current_lon = _delta_to_geo(current_lat, current_lon, delta_x, delta_y)
+        normalized_nodes.append({"lat": current_lat, "lon": current_lon})
+
+    return {"nodes": normalized_nodes} if normalized_nodes else None
+
+
+def _normalize_map_intersection(intersection: dict) -> dict:
+    """Normalize decoded MAP intersection fields to the app's expected shape."""
+    normalized = dict(intersection)
+    normalized["intersectionId"] = _safe_get(intersection, "id", "id")
+    ref_point = _normalize_geo_point(intersection.get("refPoint"))
+    if ref_point is not None:
+        normalized["refPoint"] = ref_point
+
+    lane_set = intersection.get("laneSet")
+    if isinstance(lane_set, list):
+        normalized_lanes = []
+        for lane in lane_set:
+            if not isinstance(lane, dict):
+                continue
+            normalized_lane = dict(lane)
+            normalized_node_list = _normalize_node_list(lane.get("nodeList"), ref_point)
+            if normalized_node_list is not None:
+                normalized_lane["nodeList"] = normalized_node_list
+            normalized_lanes.append(normalized_lane)
+        normalized["laneSet"] = normalized_lanes
+    return normalized
+
+
+def _normalize_spat_intersection(intersection: dict) -> dict:
+    """Normalize decoded SPAT intersection fields to the app's expected shape."""
+    normalized = dict(intersection)
+    normalized["intersectionId"] = _safe_get(intersection, "id", "id")
+    states = intersection.get("states")
+    if isinstance(states, list):
+        normalized_states = []
+        for state in states:
+            if not isinstance(state, dict):
+                continue
+            normalized_state = dict(state)
+            if "stateTimeSpeed" not in normalized_state and "state-time-speed" in normalized_state:
+                normalized_state["stateTimeSpeed"] = normalized_state["state-time-speed"]
+            normalized_states.append(normalized_state)
+        normalized["states"] = normalized_states
+    return normalized
 
 
 def _extra_fields_cam(decoded: dict) -> dict:
@@ -348,7 +528,12 @@ def _extra_fields_mapem(decoded: dict) -> dict:
         intersections = []
     fields: dict = {}
     if intersections:
-        first = intersections[0]
+        normalized_intersections = [
+            _normalize_map_intersection(intersection)
+            for intersection in intersections
+            if isinstance(intersection, dict)
+        ]
+        first = normalized_intersections[0]
         iid = _safe_get(first, "id", "id")
         if iid is not None:
             fields["intersectionId"] = iid
@@ -357,11 +542,11 @@ def _extra_fields_mapem(decoded: dict) -> dict:
             fields["revision"] = rev
         lanes = first.get("laneSet", []) if isinstance(first, dict) else []
         fields["laneCount"] = len(lanes)
-        fields["intersectionCount"] = len(intersections)
+        fields["intersectionCount"] = len(normalized_intersections)
         speed_limits = first.get("speedLimits") if isinstance(first, dict) else None
         if speed_limits:
             fields["speedLimits"] = speed_limits
-        fields["intersections"] = intersections
+        fields["intersections"] = normalized_intersections
     return fields
 
 
@@ -371,7 +556,12 @@ def _extra_fields_spatem(decoded: dict) -> dict:
     fields: dict = {}
     intersections = body.get("intersections", []) if isinstance(body, dict) else []
     if intersections:
-        first = intersections[0]
+        normalized_intersections = [
+            _normalize_spat_intersection(intersection)
+            for intersection in intersections
+            if isinstance(intersection, dict)
+        ]
+        first = normalized_intersections[0]
         iid = _safe_get(first, "id", "id")
         if iid is not None:
             fields["intersectionId"] = iid
@@ -386,7 +576,7 @@ def _extra_fields_spatem(decoded: dict) -> dict:
             fields["timeStamp"] = ts
         states = first.get("states", []) if isinstance(first, dict) else []
         fields["signalGroupCount"] = len(states)
-        fields["intersections"] = intersections
+        fields["intersections"] = normalized_intersections
     return fields
 
 
@@ -471,6 +661,10 @@ def _decode_its_message(
     transport: str,
     source: str,
     dst_port: int,
+    fallback_position: Optional[tuple[float, float]] = None,
+    fallback_station_id: Optional[str] = None,
+    fallback_speed: Optional[float] = None,
+    fallback_heading: Optional[float] = None,
 ) -> Optional[V2xMessage]:
     """Attempt to decode an ITS message using ASN.1 schemas."""
     try:
@@ -481,15 +675,57 @@ def _decode_its_message(
         return None
 
     if decoded is None:
+        if msg_type == MessageType.CAM:
+            partial_cam = _partial_cam_decode(payload)
+            if partial_cam is not None and fallback_position is not None:
+                if fallback_speed is not None:
+                    partial_cam["speed"] = fallback_speed
+                if fallback_heading is not None:
+                    partial_cam["heading"] = fallback_heading
+                details = _default_details(msg_type, payload, transport, source, dst_port, False)
+                details["ASN.1-Dekodierung"] = (
+                    "CAM-Header teilweise extrahiert - optionale Container unvollstaendig"
+                )
+                details["stationId"] = str(partial_cam["stationId"])
+                details["generationDeltaTime"] = str(partial_cam["generationDeltaTime"])
+                if fallback_speed is not None:
+                    details["LPV-Geschwindigkeit"] = f"{fallback_speed:.2f} m/s"
+                if fallback_heading is not None:
+                    details["LPV-Heading"] = f"{fallback_heading:.1f} deg"
+                details["Fallback-Quelle"] = "GeoNetworking Long Position Vector"
+                return V2xMessage(
+                    timestamp=datetime.now(tz=timezone.utc),
+                    station_id=str(partial_cam["stationId"]),
+                    msg_type=msg_type,
+                    latitude=fallback_position[0],
+                    longitude=fallback_position[1],
+                    speed=fallback_speed,
+                    heading=fallback_heading,
+                    raw_payload=payload,
+                    details=details,
+                    decoded_data=partial_cam,
+                )
         return None
 
     extractor = _EXTRACTORS.get(msg_type, _extract_generic_position)
     result = extractor(decoded, msg_type) if extractor == _extract_generic_position else extractor(decoded)
 
     if result is None:
-        return None
-
-    lat, lon, alt, speed, heading, station_id = result
+        if fallback_position is None:
+            return None
+        lat, lon = fallback_position
+        alt = None
+        speed = None
+        heading = None
+        station_id = fallback_station_id or "unknown"
+    else:
+        lat, lon, alt, speed, heading, station_id = result
+        if station_id == "unknown" and fallback_station_id is not None:
+            station_id = fallback_station_id
+        if speed is None:
+            speed = fallback_speed
+        if heading is None:
+            heading = fallback_heading
 
     # ─── Extract security header info from raw payload ────
     from .security_parser import parse_security_header, extract_security_from_decoded

@@ -1,0 +1,20 @@
+CAM-PARTIAL { iso(1) member-body(2) }
+DEFINITIONS AUTOMATIC TAGS ::=
+BEGIN
+IMPORTS
+  ItsPduHeader, GenerationDeltaTime
+    FROM ITS-Container { itu-t (0) identified-organization (4) etsi (0) itsDomain (5) wg1 (1) ts (102894) cdd (2) version (2) }
+  BasicContainer, HighFrequencyContainer
+    FROM CAM-PDU-Descriptions { itu-t (0) identified-organization (4) etsi (0) itsDomain (5) wg1 (1) en (302637) cam (2) version (2) }
+;
+CamPartial ::= SEQUENCE {
+  header ItsPduHeader,
+  cam SEQUENCE {
+    generationDeltaTime GenerationDeltaTime,
+    camParameters SEQUENCE {
+      basicContainer BasicContainer,
+      highFrequencyContainer HighFrequencyContainer
+    }
+  }
+}
+END

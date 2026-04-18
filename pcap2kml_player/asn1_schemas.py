@@ -59,12 +59,12 @@ MSG_TYPE_MODULES = {
 
 # ITS ASN.1 type names used as top-level decode targets
 MSG_TYPE_ASN1_NAMES = {
-    "CAM": "CamPdu",
-    "DENM": "DenmPdu",
-    "MAPEM": "MapemPdu",
-    "SPATEM": "SpatemPdu",
-    "SREM": "SremPdu",
-    "SSEM": "SsemPdu",
+    "CAM": "CAM",
+    "DENM": "DENM",
+    "MAPEM": "MAPEM",
+    "SPATEM": "SPATEM",
+    "SREM": "SREM",
+    "SSEM": "SSEM",
 }
 
 # Common Data Dictionary (CDD) — required dependency for all ITS messages

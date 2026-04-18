@@ -481,3 +481,5 @@ def test_build_scene_snapshot_detects_raw_map_and_spat_in_real_test_pcap():
     assert any(msg.msg_type == MessageType.MAPEM for msg in session.messages)
     assert any(msg.msg_type == MessageType.SPATEM for msg in session.messages)
     assert scene.intersections
+    assert any(intersection.map_revision is not None for intersection in scene.intersections.values())
+    assert any(intersection.spat_revision is not None for intersection in scene.intersections.values())

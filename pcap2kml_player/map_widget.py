@@ -33,6 +33,18 @@ INFRASTRUCTURE_MESSAGE_OFFSETS = {
     MessageType.MAPEM: (0.0, 0.00003),
     MessageType.SPATEM: (0.0, -0.00003),
 }
+SPAT_PHASE_COLORS = {
+    "protected-Movement-Allowed": "#16a34a",
+    "permissive-Movement-Allowed": "#65a30d",
+    "protected-clearance": "#f59e0b",
+    "permissive-clearance": "#facc15",
+    "stop-And-Remain": "#dc2626",
+    "stop-Then-Proceed": "#ea580c",
+    "pre-Movement": "#2563eb",
+    "caution-Conflicting-Traffic": "#fb7185",
+    "dark": "#475569",
+    "unavailable": "#64748b",
+}
 
 
 def _marker_id_for_message(msg: V2xMessage) -> str:
@@ -46,6 +58,452 @@ def _marker_position_for_message(msg: V2xMessage) -> tuple[float, float]:
     """Slightly offset infrastructure markers so MAP/SPAT stay visible together."""
     lat_offset, lon_offset = INFRASTRUCTURE_MESSAGE_OFFSETS.get(msg.msg_type, (0.0, 0.0))
     return (msg.latitude + lat_offset, msg.longitude + lon_offset)
+
+
+def _coerce_lat_lon(value: object) -> Optional[tuple[float, float]]:
+    """Normalize mixed ASN.1 coordinate shapes to decimal degrees."""
+    if not isinstance(value, dict):
+        return None
+    lat = value.get("lat", value.get("latitude"))
+    lon = value.get("lon", value.get("longitude"))
+    if lat is None or lon is None:
+        return None
+    try:
+        lat_num = float(lat)
+        lon_num = float(lon)
+    except (TypeError, ValueError):
+        return None
+    if abs(lat_num) > 90 or abs(lon_num) > 180:
+        lat_num /= 1e7
+        lon_num /= 1e7
+    return (lat_num, lon_num)
+
+
+def _extract_map_polyline_points(intersection: dict) -> list[list[tuple[float, float]]]:
+    """Best-effort extraction of lane centerline points from MAPEM laneSet data."""
+    polylines: list[list[tuple[float, float]]] = []
+    lane_set = intersection.get("laneSet")
+    if not isinstance(lane_set, list):
+        return polylines
+
+    for lane in lane_set:
+        if not isinstance(lane, dict):
+            continue
+        node_list = lane.get("nodeList", lane.get("node-list"))
+        if isinstance(node_list, dict):
+            nodes = node_list.get("nodes", node_list.get("nodeSetXY"))
+        else:
+            nodes = node_list
+        if not isinstance(nodes, list):
+            continue
+
+        points: list[tuple[float, float]] = []
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            point = _coerce_lat_lon(node)
+            if point is None:
+                delta = node.get("delta")
+                point = _coerce_lat_lon(delta)
+            if point is not None:
+                points.append(point)
+        if len(points) >= 2:
+            polylines.append(points)
+    return polylines
+
+
+def _lane_identifier(lane: dict) -> Optional[str]:
+    """Return a human-readable lane identifier if one exists."""
+    for key in ("laneID", "laneId", "id"):
+        value = lane.get(key)
+        if value is None:
+            continue
+        return str(value)
+    return None
+
+
+def _coerce_int(value: object) -> Optional[int]:
+    """Best-effort integer coercion for decoded MAP/SPAT helper fields."""
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    if isinstance(value, dict):
+        for key in ("id", "value", "lane", "signalGroup"):
+            nested = _coerce_int(value.get(key))
+            if nested is not None:
+                return nested
+    return None
+
+
+def _intersection_point(intersection: dict, msg: V2xMessage) -> tuple[float, float]:
+    """Return the best available map point for one infrastructure intersection."""
+    for key in ("refPoint", "referencePoint", "refPos", "referencePosition"):
+        point = _coerce_lat_lon(intersection.get(key))
+        if point is not None:
+            return point
+    return (msg.latitude, msg.longitude)
+
+
+def _intersection_key(intersection: dict, msg: V2xMessage) -> str:
+    """Build a stable cross-message key for MAP/SPAT joins."""
+    for key in ("intersectionId", "id"):
+        value = intersection.get(key)
+        numeric = _coerce_int(value)
+        if numeric is not None:
+            return f"id:{numeric}"
+    point = _intersection_point(intersection, msg)
+    return f"pos:{round(point[0], 4):.4f}:{round(point[1], 4):.4f}"
+
+
+def _iter_message_intersections(msg: V2xMessage) -> list[dict]:
+    """Return decoded intersections or a raw fallback for infrastructure messages."""
+    intersections = msg.decoded_data.get("intersections")
+    if isinstance(intersections, list) and intersections:
+        return [intersection for intersection in intersections if isinstance(intersection, dict)]
+    return [{}]
+
+
+def _polyline_label_point(points: list[tuple[float, float]]) -> Optional[tuple[float, float]]:
+    """Place a label near the middle of a lane polyline."""
+    if not points:
+        return None
+    return points[len(points) // 2]
+
+
+def _spat_intersection_phase(intersection: dict) -> Optional[str]:
+    """Extract the currently active SPAT phase from the first signal group."""
+    states = intersection.get("states")
+    if not isinstance(states, list):
+        return None
+    for signal_group in states:
+        if not isinstance(signal_group, dict):
+            continue
+        events = signal_group.get("stateTimeSpeed", signal_group.get("state-time-speed"))
+        if not isinstance(events, list):
+            continue
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            event_state = event.get("eventState")
+            if isinstance(event_state, str) and event_state:
+                return event_state
+    return None
+
+
+def _spat_color_for_intersection(intersection: dict) -> str:
+    """Choose a SPAT color that reflects the dominant decoded phase when available."""
+    phase = _spat_intersection_phase(intersection)
+    if phase is None:
+        return INFRASTRUCTURE_MESSAGE_COLORS[MessageType.SPATEM]
+    return SPAT_PHASE_COLORS.get(phase, INFRASTRUCTURE_MESSAGE_COLORS[MessageType.SPATEM])
+
+
+def _spat_states_by_group(intersection: dict) -> dict[int, str]:
+    """Extract the current phase per signal group from a SPAT intersection."""
+    states_by_group: dict[int, str] = {}
+    states = intersection.get("states")
+    if not isinstance(states, list):
+        return states_by_group
+    for signal_group in states:
+        if not isinstance(signal_group, dict):
+            continue
+        signal_group_id = _coerce_int(signal_group.get("signalGroup"))
+        if signal_group_id is None:
+            continue
+        events = signal_group.get("stateTimeSpeed", signal_group.get("state-time-speed"))
+        if not isinstance(events, list):
+            continue
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            event_state = event.get("eventState")
+            if isinstance(event_state, str) and event_state:
+                states_by_group[signal_group_id] = event_state
+                break
+    return states_by_group
+
+
+def _lane_signal_group_ids(lane: dict) -> list[int]:
+    """Extract related SPAT signal groups for one MAP lane."""
+    signal_groups: list[int] = []
+    direct_group = _coerce_int(lane.get("signalGroup"))
+    if direct_group is not None:
+        signal_groups.append(direct_group)
+
+    connects_to = lane.get("connectsTo", lane.get("connectsto"))
+    if isinstance(connects_to, dict):
+        connects_to = connects_to.get("connections", connects_to.get("connectsTo"))
+    if isinstance(connects_to, list):
+        for connection in connects_to:
+            if not isinstance(connection, dict):
+                continue
+            candidate = _coerce_int(connection.get("signalGroup"))
+            if candidate is None:
+                candidate = _coerce_int(connection.get("connectingLane"))
+            if candidate is not None and candidate not in signal_groups:
+                signal_groups.append(candidate)
+    return signal_groups
+
+
+def _intersection_popup(msg: V2xMessage, intersection: Optional[dict], fallback_label: str) -> str:
+    """Build a concise popup text for infrastructure overlays."""
+    if not isinstance(intersection, dict):
+        return fallback_label
+
+    pieces = [msg.msg_type.value]
+    for key in ("intersectionId", "id"):
+        value = intersection.get(key)
+        if isinstance(value, dict):
+            value = value.get("id")
+        if value is not None:
+            pieces.append(f"Intersection {value}")
+            break
+
+    if msg.msg_type == MessageType.MAPEM:
+        lane_set = intersection.get("laneSet")
+        if isinstance(lane_set, list):
+            pieces.append(f"{len(lane_set)} lanes")
+    elif msg.msg_type == MessageType.SPATEM:
+        phase = _spat_intersection_phase(intersection)
+        if phase:
+            pieces.append(phase)
+    return " | ".join(pieces)
+
+
+def _infrastructure_overlays_for_message(msg: V2xMessage) -> list[dict[str, object]]:
+    """Create renderable infrastructure overlays for MAPEM and SPATEM messages."""
+    overlays: list[dict[str, object]] = []
+    base_color = INFRASTRUCTURE_MESSAGE_COLORS.get(msg.msg_type)
+    layer = "map" if msg.msg_type == MessageType.MAPEM else "spat"
+    if base_color is None:
+        return overlays
+
+    intersections = msg.decoded_data.get("intersections")
+    if isinstance(intersections, list) and intersections:
+        for index, intersection in enumerate(intersections):
+            if not isinstance(intersection, dict):
+                continue
+            point = None
+            for key in ("refPoint", "referencePoint", "refPos", "referencePosition"):
+                point = _coerce_lat_lon(intersection.get(key))
+                if point is not None:
+                    break
+            if point is None:
+                point = (msg.latitude, msg.longitude)
+
+            popup = _intersection_popup(msg, intersection, f"{msg.msg_type.value} Intersection")
+            circle_color = (
+                _spat_color_for_intersection(intersection)
+                if msg.msg_type == MessageType.SPATEM
+                else base_color
+            )
+            overlays.append({
+                "kind": "circle",
+                "id": f"{msg.msg_type.value}_{msg.station_id}_{index}_circle",
+                "lat": point[0],
+                "lon": point[1],
+                "radius": 20 if msg.msg_type == MessageType.MAPEM else 28,
+                "color": circle_color,
+                "popup": popup,
+                "layer": layer,
+            })
+            overlays.append({
+                "kind": "label",
+                "id": f"{msg.msg_type.value}_{msg.station_id}_{index}_label",
+                "lat": point[0],
+                "lon": point[1],
+                "text": popup,
+                "color": circle_color,
+                "layer": layer,
+            })
+
+            if msg.msg_type == MessageType.MAPEM:
+                lane_set = intersection.get("laneSet")
+                if not isinstance(lane_set, list):
+                    lane_set = []
+                for polyline_index, points in enumerate(_extract_map_polyline_points(intersection)):
+                    overlays.append({
+                        "kind": "polyline",
+                        "id": f"{msg.msg_type.value}_{msg.station_id}_{index}_lane_{polyline_index}",
+                        "coords": [[lat, lon] for lat, lon in points],
+                        "color": base_color,
+                        "popup": "MAPEM Lane Geometry",
+                        "layer": layer,
+                    })
+                    lane = lane_set[polyline_index] if polyline_index < len(lane_set) else {}
+                    lane_id = _lane_identifier(lane) if isinstance(lane, dict) else None
+                    label_point = _polyline_label_point(points)
+                    if lane_id and label_point is not None:
+                        overlays.append({
+                            "kind": "label",
+                            "id": f"{msg.msg_type.value}_{msg.station_id}_{index}_lane_{polyline_index}_label",
+                            "lat": label_point[0],
+                            "lon": label_point[1],
+                            "text": f"Lane {lane_id}",
+                            "color": base_color,
+                            "layer": layer,
+                        })
+    else:
+        raw_popup = f"{msg.msg_type.value} raw infrastructure position"
+        overlays.append({
+            "kind": "circle",
+            "id": f"{msg.msg_type.value}_{msg.station_id}_raw",
+            "lat": msg.latitude,
+            "lon": msg.longitude,
+            "radius": 18 if msg.msg_type == MessageType.MAPEM else 26,
+            "color": base_color,
+            "popup": raw_popup,
+            "layer": layer,
+        })
+        overlays.append({
+            "kind": "label",
+            "id": f"{msg.msg_type.value}_{msg.station_id}_raw_label",
+            "lat": msg.latitude,
+            "lon": msg.longitude,
+            "text": f"{msg.msg_type.value} raw",
+            "color": base_color,
+            "layer": layer,
+        })
+
+    return overlays
+
+
+def _infrastructure_overlays_for_messages(messages: list[V2xMessage]) -> list[dict[str, object]]:
+    """Aggregate the latest MAP/SPAT context per intersection into render overlays."""
+    latest_map: dict[str, tuple[V2xMessage, dict]] = {}
+    latest_spat: dict[str, tuple[V2xMessage, dict]] = {}
+
+    for msg in messages:
+        if msg.msg_type not in INFRASTRUCTURE_MESSAGE_COLORS:
+            continue
+        for intersection in _iter_message_intersections(msg):
+            key = _intersection_key(intersection, msg)
+            target = latest_map if msg.msg_type == MessageType.MAPEM else latest_spat
+            current = target.get(key)
+            if current is None or current[0].timestamp <= msg.timestamp:
+                target[key] = (msg, intersection)
+
+    overlays: list[dict[str, object]] = []
+    for key in sorted(set(latest_map) | set(latest_spat)):
+        map_entry = latest_map.get(key)
+        spat_entry = latest_spat.get(key)
+
+        if map_entry is not None:
+            map_msg, map_intersection = map_entry
+            map_point = _intersection_point(map_intersection, map_msg)
+            map_popup = _intersection_popup(map_msg, map_intersection, "MAPEM Intersection")
+            overlays.append({
+                "kind": "circle",
+                "id": f"{key}_map_circle",
+                "lat": map_point[0],
+                "lon": map_point[1],
+                "radius": 20,
+                "color": INFRASTRUCTURE_MESSAGE_COLORS[MessageType.MAPEM],
+                "popup": map_popup,
+                "layer": "map",
+            })
+            overlays.append({
+                "kind": "label",
+                "id": f"{key}_map_label",
+                "lat": map_point[0],
+                "lon": map_point[1],
+                "text": map_popup,
+                "color": INFRASTRUCTURE_MESSAGE_COLORS[MessageType.MAPEM],
+                "layer": "map",
+            })
+
+            lane_set = map_intersection.get("laneSet")
+            if not isinstance(lane_set, list):
+                lane_set = []
+            spat_states = _spat_states_by_group(spat_entry[1]) if spat_entry is not None else {}
+            map_polylines = _extract_map_polyline_points(map_intersection)
+            for polyline_index, points in enumerate(map_polylines):
+                lane = lane_set[polyline_index] if polyline_index < len(lane_set) else {}
+                lane_id = _lane_identifier(lane) if isinstance(lane, dict) else None
+                signal_groups = _lane_signal_group_ids(lane) if isinstance(lane, dict) else []
+                matched_signal_group = next(
+                    (signal_group for signal_group in signal_groups if signal_group in spat_states),
+                    None,
+                )
+                matched_phase = (
+                    spat_states.get(matched_signal_group)
+                    if matched_signal_group is not None
+                    else None
+                )
+                lane_color = (
+                    SPAT_PHASE_COLORS.get(matched_phase, INFRASTRUCTURE_MESSAGE_COLORS[MessageType.MAPEM])
+                    if matched_phase is not None
+                    else INFRASTRUCTURE_MESSAGE_COLORS[MessageType.MAPEM]
+                )
+                lane_popup_parts = ["MAPEM Lane Geometry"]
+                if lane_id:
+                    lane_popup_parts.append(f"Lane {lane_id}")
+                if matched_signal_group is not None:
+                    lane_popup_parts.append(f"SG {matched_signal_group}")
+                if matched_phase:
+                    lane_popup_parts.append(matched_phase)
+                overlays.append({
+                    "kind": "polyline",
+                    "id": f"{key}_lane_{polyline_index}",
+                    "coords": [[lat, lon] for lat, lon in points],
+                    "color": lane_color,
+                    "popup": " | ".join(lane_popup_parts),
+                    "layer": "map",
+                })
+                label_point = _polyline_label_point(points)
+                if label_point is not None:
+                    label_parts = []
+                    if lane_id:
+                        label_parts.append(f"Lane {lane_id}")
+                    if matched_signal_group is not None:
+                        label_parts.append(f"SG {matched_signal_group}")
+                    if matched_phase:
+                        label_parts.append(matched_phase)
+                    if label_parts:
+                        overlays.append({
+                            "kind": "label",
+                            "id": f"{key}_lane_{polyline_index}_label",
+                            "lat": label_point[0],
+                            "lon": label_point[1],
+                            "text": " | ".join(label_parts),
+                            "color": lane_color,
+                            "layer": "map",
+                        })
+
+        if spat_entry is not None:
+            spat_msg, spat_intersection = spat_entry
+            spat_point = _intersection_point(spat_intersection, spat_msg)
+            spat_popup = _intersection_popup(spat_msg, spat_intersection, "SPATEM Intersection")
+            spat_color = _spat_color_for_intersection(spat_intersection)
+            overlays.append({
+                "kind": "circle",
+                "id": f"{key}_spat_circle",
+                "lat": spat_point[0],
+                "lon": spat_point[1],
+                "radius": 28,
+                "color": spat_color,
+                "popup": spat_popup,
+                "layer": "spat",
+            })
+            overlays.append({
+                "kind": "label",
+                "id": f"{key}_spat_label",
+                "lat": spat_point[0],
+                "lon": spat_point[1],
+                "text": spat_popup,
+                "color": spat_color,
+                "layer": "spat",
+            })
+
+    return overlays
 
 
 def _js_escape(value: str) -> str:
@@ -102,6 +560,19 @@ LEAFLET_HTML = """<!DOCTYPE html>
 
         var markers = {};
         var trajectories = {};
+        var infrastructureLayers = {};
+        var overlayGroups = {
+            markers: L.layerGroup().addTo(map),
+            trajectories: L.layerGroup().addTo(map),
+            map: L.layerGroup().addTo(map),
+            spat: L.layerGroup().addTo(map)
+        };
+        var overlayControl = L.control.layers(null, {
+            'Stationen': overlayGroups.markers,
+            'Trajektorien': overlayGroups.trajectories,
+            'MAP-Infrastruktur': overlayGroups.map,
+            'SPAT-Status': overlayGroups.spat
+        }, {collapsed: false}).addTo(map);
         var stationColors = {};
 
         // Called from Python to set station colors
@@ -110,7 +581,8 @@ LEAFLET_HTML = """<!DOCTYPE html>
         }
 
         // Called from Python to add a marker
-        function addMarker(id, lat, lon, popup, color) {
+        function addMarker(id, lat, lon, popup, color, layerName) {
+            var group = overlayGroups[layerName] || overlayGroups.markers;
             if (markers[id]) {
                 markers[id].setLatLng([lat, lon]);
                 markers[id].setPopupContent(popup);
@@ -122,7 +594,7 @@ LEAFLET_HTML = """<!DOCTYPE html>
                         iconSize: [12, 12],
                         iconAnchor: [6, 6]
                     })
-                }).addTo(map).bindPopup(popup);
+                }).addTo(group).bindPopup(popup);
             }
         }
 
@@ -133,7 +605,59 @@ LEAFLET_HTML = """<!DOCTYPE html>
             } else {
                 trajectories[stationId] = L.polyline(coords, {
                     color: color, weight: 2, opacity: 0.6
-                }).addTo(map);
+                }).addTo(overlayGroups.trajectories);
+            }
+        }
+
+        function infrastructureGroup(layerName) {
+            return overlayGroups[layerName] || overlayGroups.map;
+        }
+
+        function addInfrastructureCircle(id, lat, lon, radius, color, popup, layerName) {
+            if (infrastructureLayers[id]) {
+                infrastructureLayers[id].setLatLng([lat, lon]);
+                infrastructureLayers[id].setRadius(radius);
+                infrastructureLayers[id].setStyle({color: color});
+                infrastructureLayers[id].bindPopup(popup);
+            } else {
+                infrastructureLayers[id] = L.circle([lat, lon], {
+                    radius: radius,
+                    color: color,
+                    weight: 2,
+                    fillColor: color,
+                    fillOpacity: 0.12
+                }).addTo(infrastructureGroup(layerName)).bindPopup(popup);
+            }
+        }
+
+        function addInfrastructurePolyline(id, coords, color, popup, layerName) {
+            if (infrastructureLayers[id]) {
+                infrastructureLayers[id].setLatLngs(coords);
+                infrastructureLayers[id].setStyle({color: color});
+                infrastructureLayers[id].bindPopup(popup);
+            } else {
+                infrastructureLayers[id] = L.polyline(coords, {
+                    color: color,
+                    weight: 3,
+                    opacity: 0.85,
+                    dashArray: '8 6'
+                }).addTo(infrastructureGroup(layerName)).bindPopup(popup);
+            }
+        }
+
+        function addInfrastructureLabel(id, lat, lon, text, color, layerName) {
+            if (infrastructureLayers[id]) {
+                infrastructureLayers[id].setLatLng([lat, lon]);
+            } else {
+                infrastructureLayers[id] = L.marker([lat, lon], {
+                    interactive: false,
+                    icon: L.divIcon({
+                        className: 'infrastructure-label',
+                        html: '<div style="color:' + color + ';font:600 11px Segoe UI, sans-serif;text-shadow:0 0 4px white, 0 0 4px white;">' + text + '</div>',
+                        iconSize: [160, 18],
+                        iconAnchor: [8, -6]
+                    })
+                }).addTo(infrastructureGroup(layerName));
             }
         }
 
@@ -150,26 +674,44 @@ LEAFLET_HTML = """<!DOCTYPE html>
 
         // Called from Python to fit the map view to all markers
         function fitToMarkers() {
-            var group = [];
+            var bounds = [];
             for (var key in markers) {
-                var ll = markers[key].getLatLng();
-                group.push([ll.lat, ll.lng]);
+                var markerLatLng = markers[key].getLatLng();
+                bounds.push([markerLatLng.lat, markerLatLng.lng]);
             }
-            if (group.length > 0) {
-                map.fitBounds(group, { padding: [30, 30], maxZoom: 16 });
+            for (var infraKey in infrastructureLayers) {
+                var layer = infrastructureLayers[infraKey];
+                if (layer.getBounds) {
+                    var layerBounds = layer.getBounds();
+                    if (layerBounds.isValid()) {
+                        bounds.push([layerBounds.getSouth(), layerBounds.getWest()]);
+                        bounds.push([layerBounds.getNorth(), layerBounds.getEast()]);
+                    }
+                } else if (layer.getLatLng) {
+                    var infraLatLng = layer.getLatLng();
+                    bounds.push([infraLatLng.lat, infraLatLng.lng]);
+                }
+            }
+            if (bounds.length > 0) {
+                map.fitBounds(bounds, { padding: [30, 30], maxZoom: 16 });
             }
         }
 
         // Called from Python to clear all markers and trajectories
         function clearAll() {
             for (var key in markers) {
-                map.removeLayer(markers[key]);
+                overlayGroups.markers.removeLayer(markers[key]);
             }
             for (var key in trajectories) {
-                map.removeLayer(trajectories[key]);
+                overlayGroups.trajectories.removeLayer(trajectories[key]);
+            }
+            for (var key in infrastructureLayers) {
+                overlayGroups.map.removeLayer(infrastructureLayers[key]);
+                overlayGroups.spat.removeLayer(infrastructureLayers[key]);
             }
             markers = {};
             trajectories = {};
+            infrastructureLayers = {};
         }
 
         // Bridge for Python communication
@@ -235,7 +777,6 @@ class MapWidget(QWebEngineView):
 
         # Group by station for trajectories
         station_coords: dict[str, list] = {}
-        station_last_msg: dict[str, V2xMessage] = {}
 
         for msg in messages:
             color = self._color_for_message(msg)
@@ -251,16 +792,49 @@ class MapWidget(QWebEngineView):
             marker_id = _js_escape(_marker_id_for_message(msg))
             popup_js = _js_escape(popup)
             color_js = _js_escape(color)
+            marker_layer = (
+                "map"
+                if msg.msg_type == MessageType.MAPEM
+                else "spat"
+                if msg.msg_type == MessageType.SPATEM
+                else "markers"
+            )
             self._run_js(
                 f"addMarker('{marker_id}', {marker_lat}, {marker_lon}, "
-                f"'{popup_js}', '{color_js}')"
+                f"'{popup_js}', '{color_js}', '{marker_layer}')"
             )
-            station_last_msg[msg.station_id] = msg
 
             # Collect trajectory coordinates
-            station_coords.setdefault(msg.station_id, []).append(
-                [msg.latitude, msg.longitude]
-            )
+            if msg.msg_type not in INFRASTRUCTURE_MESSAGE_COLORS:
+                station_coords.setdefault(msg.station_id, []).append(
+                    [msg.latitude, msg.longitude]
+                )
+
+        for overlay in _infrastructure_overlays_for_messages(messages):
+            overlay_id = _js_escape(str(overlay["id"]))
+            overlay_color = _js_escape(str(overlay["color"]))
+            if overlay["kind"] == "circle":
+                overlay_popup = _js_escape(str(overlay.get("popup", "")))
+                self._run_js(
+                    "addInfrastructureCircle("
+                    f"'{overlay_id}', {overlay['lat']}, {overlay['lon']}, {overlay['radius']}, "
+                    f"'{overlay_color}', '{overlay_popup}', '{_js_escape(str(overlay['layer']))}')"
+                )
+            elif overlay["kind"] == "polyline":
+                overlay_popup = _js_escape(str(overlay.get("popup", "")))
+                coords_js = json.dumps(overlay["coords"])
+                self._run_js(
+                    "addInfrastructurePolyline("
+                    f"'{overlay_id}', {coords_js}, '{overlay_color}', '{overlay_popup}', "
+                    f"'{_js_escape(str(overlay['layer']))}')"
+                )
+            elif overlay["kind"] == "label":
+                self._run_js(
+                    "addInfrastructureLabel("
+                    f"'{overlay_id}', {overlay['lat']}, {overlay['lon']}, "
+                    f"'{_js_escape(str(overlay['text']))}', '{overlay_color}', "
+                    f"'{_js_escape(str(overlay['layer']))}')"
+                )
 
         # Draw trajectories
         for station_id, coords in station_coords.items():

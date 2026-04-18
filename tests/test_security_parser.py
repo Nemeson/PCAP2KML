@@ -75,6 +75,11 @@ def test_parse_security_header_wrong_version_returns_none():
     assert parse_security_header(b"\x03\x00") is None
 
 
+def test_parse_security_header_ignores_plain_its_pdu_header():
+    # protocolVersion=2, messageId=2 (CAM), followed by a 4-byte stationID.
+    assert parse_security_header(b"\x02\x02\x00\x00\x1b\xf1") is None
+
+
 def test_parse_security_header_unsecured_message():
     # Version 2, profile 0 = unsecured
     info = parse_security_header(b"\x02\x00")
@@ -155,10 +160,11 @@ def test_extract_security_from_decoded_empty_returns_none():
 
 
 def test_extract_security_from_decoded_mapem_uses_aid_121():
-    decoded = {"header": {"messageID": 4, "stationID": 1}}
+    decoded = {"header": {"messageId": 4, "stationId": 1}}
     info = extract_security_from_decoded(decoded, "MAPEM")
     assert info is not None
     assert info.its_aid_list == [0x79]
+    assert info.station_type == "Station-ID: 1"
 
 
 def test_extract_security_from_decoded_spatem_message_id_3_uses_aid_121():

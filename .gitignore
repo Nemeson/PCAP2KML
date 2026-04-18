@@ -13,3 +13,4 @@ venv/
 .vscode/
 *.heapsnapshot
 .omc/
+.claude/
