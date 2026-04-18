@@ -14,7 +14,7 @@ class ParsingWorker(QObject):
     """Parse one or more PCAP files in a background thread."""
 
     progress = pyqtSignal(int, str)
-    finished = pyqtSignal(object, object, object)
+    finished = pyqtSignal(object, list, list)
     cancelled = pyqtSignal()
 
     def __init__(self, paths: list[str]):

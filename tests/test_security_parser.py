@@ -2,6 +2,7 @@
 
 import struct
 
+from pcap2kml_player.pcap_parser import ITS_PDU_MESSAGE_ID
 from pcap2kml_player.security_parser import (
     _bytes_to_hex,
     _read_length_determinant,
@@ -154,7 +155,31 @@ def test_extract_security_from_decoded_empty_returns_none():
 
 
 def test_extract_security_from_decoded_mapem_uses_aid_121():
-    decoded = {"header": {"messageID": 5, "stationID": 1}}
+    decoded = {"header": {"messageID": 4, "stationID": 1}}
     info = extract_security_from_decoded(decoded, "MAPEM")
     assert info is not None
     assert info.its_aid_list == [0x79]
+
+
+def test_extract_security_from_decoded_spatem_message_id_3_uses_aid_121():
+    decoded = {"header": {"messageID": 3, "stationID": 1}}
+    info = extract_security_from_decoded(decoded, "SPATEM")
+    assert info is not None
+    assert info.its_aid_list == [0x79]
+
+
+def test_security_message_id_aid_mapping_stays_consistent_with_parser_mapping():
+    expected_aids = {
+        "DENM": 0x24,
+        "CAM": 0x24,
+        "MAPEM": 0x79,
+        "SPATEM": 0x79,
+        "SREM": 0x79,
+        "SSEM": 0x79,
+    }
+
+    for message_id, msg_type in ITS_PDU_MESSAGE_ID.items():
+        decoded = {"header": {"messageID": message_id, "stationID": 1}}
+        info = extract_security_from_decoded(decoded, msg_type.value)
+        assert info is not None
+        assert info.its_aid_list == [expected_aids[msg_type.value]]

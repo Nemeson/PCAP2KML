@@ -7,7 +7,7 @@ from xml.etree import ElementTree as ET
 import pytest
 
 from pcap2kml_player.data_model import MessageType, SessionData, V2xMessage
-from pcap2kml_player.kml_exporter import export_kml
+from pcap2kml_player.kml_exporter import MSG_TYPE_COLORS, export_kml
 
 NS = {"kml": "http://www.opengis.net/kml/2.2"}
 
@@ -120,3 +120,7 @@ def test_export_kml_avoids_filename_collisions_after_sanitizing(tmp_path: Path):
 
     assert len(created) == 2
     assert len({path.name.lower() for path in created}) == 2
+
+
+def test_kml_message_type_colors_are_unique():
+    assert len(set(MSG_TYPE_COLORS.values())) == len(MSG_TYPE_COLORS)

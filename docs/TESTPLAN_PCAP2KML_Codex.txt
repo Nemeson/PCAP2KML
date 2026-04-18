@@ -1,0 +1,248 @@
+Du bist ein leitender QA-Architekt, Testmanager und Testautomatisierungs-Experte fuer Desktop-Anwendungen mit Python, PyQt6, PCAP-/Netzwerk-Parsing und geospatialer Visualisierung.
+
+Deine Aufgabe ist NICHT, Code zu schreiben oder Tests auszufuehren, sondern einen vollstaendigen, professionellen und umsetzbaren Testplan fuer die folgende Applikation zu erstellen.
+
+# Projektkontext
+
+Projektname: PCAP2KML Player
+
+Technologie:
+- Python 3.11+
+- PyQt6
+- PyQt6-WebEngine
+- Leaflet.js eingebettet in QWebEngineView
+- scapy
+- pyshark
+- asn1tools
+- simplekml
+
+Applikationstyp:
+- Windows-Desktop-Anwendung
+- Analyse- und Visualisierungstool fuer V2X-Nachrichten aus PCAP-Dateien
+
+Hauptfunktionen der App:
+- Laden von .pcap, .pcapng und .cap
+- Hintergrund-Parsing mit Fortschrittsanzeige und Abbrechen-Funktion
+- Drag & Drop fuer Capture-Dateien
+- "Letzte Sitzung"-Funktion mit persistentem App-Memory
+- Parsing und Decoding von: CAM, DENM, MAPEM, SPATEM, SREM, SSEM, NMEA/GNSS
+- pyshark bevorzugt, scapy als Fallback
+- direkte GeoNetworking-/BTP-Erkennung fuer EtherType 0x8947
+- ITS-PDU-Header-messageId als Fallback zur Nachrichtentyp-Erkennung
+- Interaktive Karte mit Markern und Trajektorien
+- Synchronisierte Wiedergabe mit Play/Pause/Stop, Slider, Scrubbing, Geschwindigkeiten 0.1x bis 10x
+- Filter nach Nachrichtentyp und Station-ID
+- Nachrichtentabelle und Detailansicht
+- Security-/PKI-Feldanzeige
+- KML-Export pro Station
+- Windows-sicherer KML-Dateiname mit Kollisionsvermeidung
+- ASN.1-Schema-Update, Integritaetspruefung und Schema-Provenance
+- Szenen-Aggregation fuer MAP/SPAT/SREM/SSEM
+- Szenen-Panel mit: Intersection-/Revision-Status, 30s-Phasenprognose, offenen Anforderungen, Timeout-Warnungen, Clock-Skew-Hinweisen, ETA-Verifikation via CAM-Trajektorie
+
+Wichtige Module:
+- pcap2kml_player/main.py
+- pcap2kml_player/data_model.py
+- pcap2kml_player/pcap_parser.py
+- pcap2kml_player/nmea_parser.py
+- pcap2kml_player/asn1_schemas.py
+- pcap2kml_player/security_parser.py
+- pcap2kml_player/kml_exporter.py
+- pcap2kml_player/player_controller.py
+- pcap2kml_player/parsing_worker.py
+- pcap2kml_player/map_widget.py
+- pcap2kml_player/scene_model.py
+- pcap2kml_player/ui/main_window.py
+
+Bekannter Qualitaetsstand:
+- Kernlogik ist bereits recht gut getestet
+- UI-/Main-/Map-/Worker-Bereiche sind deutlich weniger direkt abgedeckt
+- Projektstand laut Tests: 102 Tests gruen
+- Die App ist funktional fortgeschritten, aber nicht als finaler Release zu betrachten
+
+# Dein Ziel
+
+Erstelle einen vollstaendigen Testplan fuer diese konkrete Applikation, der als Grundlage fuer:
+- manuelle Tests
+- automatisierte Tests
+- Regressionstests
+- Release-Freigaben
+- spaetere CI-Pipelines
+verwendet werden kann.
+
+# Wichtige Anforderungen an deine Antwort
+
+1. Denke gruendlich und systematisch.
+2. Erstelle KEINE generische QA-Vorlage.
+3. Beziehe dich explizit auf die oben beschriebene App und ihre Module/Funktionen.
+4. Decke funktionale, nicht-funktionale und risikobasierte Tests ab.
+5. Priorisiere Testbereiche sinnvoll.
+6. Beruecksichtige sowohl Windows-Desktop-Aspekte als auch Parser-/Daten-/Visualisierungslogik.
+7. Beruecksichtige Offline-/Fehler-/Abbruch-/Edge-Case-Szenarien.
+8. Beruecksichtige reale V2X-/PCAP-Datenprobleme:
+   - unvollstaendige Frames
+   - fehlerhafte ASN.1-Payloads
+   - fehlende Zeitfelder
+   - widerspruechliche MAP-/SPAT-Daten
+   - leere Sessions
+   - grosse Dateien
+   - viele Stationen
+   - Dateinamen mit problematischen Zeichen
+9. Beruecksichtige Desktop-UI-Risiken:
+   - Threading
+   - UI-Freeze
+   - Race Conditions
+   - Playback-/Filter-Synchronisation
+   - QWebEngine-/Map-Verhalten
+10. Beruecksichtige Export-Risiken:
+   - KML-Korrektheit
+   - Dateinamensicherheit
+   - Kollisionsvermeidung
+   - Filtertreue
+11. Beruecksichtige Szenenmodell-Risiken:
+   - Intersection Join
+   - Revision mismatch
+   - Forecast correctness
+   - offene Anforderungen
+   - Timeout detection
+   - Clock skew
+   - ETA verification
+12. Benenne klar, welche Tests automatisiert werden sollten und welche eher manuell oder explorativ sind.
+13. Schlage geeignete Testwerkzeuge vor.
+14. Definiere Exit-Kriterien fuer Release und Regression.
+15. Nenne Luecken und Risiken, die mit dem aktuellen Stand schwer testbar sind.
+
+# Gewuenschtes Ausgabeformat
+
+Antworte in sauberem Markdown mit genau dieser Struktur:
+
+## 1. Teststrategie
+- Kurzbeschreibung der Gesamtstrategie
+- Testziele
+- Testarten
+- Risikobasierter Fokus
+
+## 2. Testumfang
+### Im Scope
+### Nicht im Scope
+### Annahmen
+### Abhaengigkeiten
+
+## 3. Testobjekte und Modul-Matrix
+Erstelle eine Tabelle mit:
+- Modul/Feature
+- Risiko
+- Testart
+- Prioritaet
+- Automatisierungsgrad
+- Bemerkungen
+
+## 4. Teststufen
+Definiere separat:
+- Unit Tests
+- Integrationstests
+- Systemtests
+- GUI-Tests
+- End-to-End-Tests
+- Regressionstests
+- Explorative Tests
+- UAT/Abnahmetests
+
+## 5. Detaillierte Testbereiche
+Fuer jeden Bereich eine eigene Untersektion mit Testzielen, wichtigsten Szenarien und Edge Cases:
+
+Pflichtbereiche:
+- Installation / Start / Abhaengigkeiten
+- Dateiladen / Session-Workflow / Drag & Drop
+- Parsing-Backends: pyshark und scapy
+- Nachrichtentyp-Erkennung
+- ASN.1-Decoding und Schema-Management
+- NMEA/GNSS-Verarbeitung
+- Security-/PKI-Parsing
+- Playback / Zeitsynchronisation / Slider / Geschwindigkeit
+- Filterlogik
+- Nachrichtentabelle / Detailansicht
+- Kartenansicht / Marker / Trajektorien / Highlighting
+- Szenenmodell / Phase Forecast / Requests / Warnings
+- KML-Export
+- App-Memory / Letzte Sitzung
+- Fehlerbehandlung / Logging / Cancel / Robustheit
+- Performance / Speicher / grosse Dateien
+- Usability / Operator-Workflow / UI-Konsistenz
+
+## 6. Konkrete Testfaelle
+Erstelle eine priorisierte Liste konkreter Testfaelle mit:
+- ID
+- Titel
+- Prioritaet (P0, P1, P2, P3)
+- Vorbedingungen
+- Schritte
+- Erwartetes Ergebnis
+- Automatisierbar: Ja/Nein
+- Empfohlene Ebene: Unit / Integration / GUI / E2E / Manuell
+
+Es sollen mindestens 50 hochwertige, app-spezifische Testfaelle enthalten sein.
+
+## 7. Automatisierungsplan
+- Welche Tests zuerst automatisieren
+- Welche Frameworks/Tools geeignet sind
+- Welche Tests mock-basiert sein sollten
+- Welche Tests echte Testdaten brauchen
+- Welche GUI-Tests stabil automatisierbar sind
+- Welche Bereiche sich fuer Snapshot-/Golden-File-Tests eignen
+
+## 8. Testdatenstrategie
+- Welche Test-PCAPs benoetigt werden
+- Welche synthetischen Daten zusaetzlich erzeugt werden sollten
+- Welche korrupten/faulty Samples benoetigt werden
+- Wie MAP/SPAT/SREM/SSEM-Korrelationen testbar gemacht werden koennen
+- Welche Export-Referenzdateien benoetigt werden
+
+## 9. Nicht-funktionale Tests
+Bitte separat behandeln:
+- Performance
+- Speicherverbrauch
+- Responsiveness
+- Stabilitaet bei langen Sessions
+- Dateigroessen
+- Skalierung bei vielen Nachrichten / Stationen
+- Zuverlaessigkeit des Hintergrund-Threads
+- Recovery nach Fehlern
+
+## 10. Release- und Regression-Gates
+Definiere:
+- Smoke-Test-Suite
+- minimale Regression-Suite
+- empfohlene Vollregression
+- Release-Blocker
+- Exit-Kriterien
+
+## 11. Bekannte Testluecken und Empfehlungen
+- Welche Bereiche aktuell schwer testbar sind
+- Welche Refactorings die Testbarkeit verbessern wuerden
+- Welche Metriken verfolgt werden sollten
+- Welche Tests spaeter in CI sollten
+
+## 12. Priorisierte Umsetzungsroadmap fuer QA
+Erstelle eine gestufte Roadmap:
+- Phase A: Sofort
+- Phase B: Kurzfristig
+- Phase C: Mittelfristig
+- Phase D: Vor Release
+
+# Zusaetzliche Anforderungen
+
+- Sei konkret statt allgemein.
+- Schreibe keine Marketingtexte.
+- Wenn du eine Empfehlung gibst, erklaere kurz warum.
+- Nutze Tabellen dort, wo sie die Entscheidung erleichtern.
+- Weise explizit darauf hin, wo GUI-Tests unter PyQt6/QWebEngine besonders heikel sind.
+- Weise explizit darauf hin, wo Parser-Tests mit echten PCAP-Dateien unverzichtbar sind.
+- Weise explizit darauf hin, welche Szenenmodell-Tests deterministisch sein muessen.
+- Weise explizit darauf hin, wie man KML-Export valide prueft, ohne sich nur auf "Datei existiert" zu verlassen.
+
+# Abschluss
+
+Beende deine Antwort mit:
+1. einer Top-10-Liste der kritischsten Tests zuerst
+2. einer kurzen Empfehlung, welche 10 Tests man innerhalb eines Tages als erste Regression automatisieren sollte

@@ -5,6 +5,7 @@ import pytest
 from pcap2kml_player.data_model import MessageType
 from pcap2kml_player.nmea_parser import (
     _nmea_to_decimal,
+    _validate_nmea_checksum,
     parse_gpgga,
     parse_gprmc,
     parse_nmea_sentence,
@@ -61,6 +62,20 @@ def test_parse_gpgga_uses_default_station_id():
     assert msg.station_id == "TEST_GPS"
 
 
+def test_parse_gpgga_invalid_checksum_returns_none_and_logs_warning(caplog):
+    sentence = "$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*48"
+    with caplog.at_level("WARNING"):
+        msg = parse_gpgga(sentence)
+    assert msg is None
+    assert "invalid checksum" in caplog.text
+
+
+def test_parse_gpgga_missing_checksum_is_accepted():
+    sentence = "$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,"
+    msg = parse_gpgga(sentence)
+    assert msg is not None
+
+
 # ---------- GPRMC ----------
 
 def test_parse_gprmc_valid_active():
@@ -85,6 +100,18 @@ def test_parse_gprmc_date_propagated_to_timestamp():
     assert msg.timestamp.year == 2094  # "94" -> 2094 given the 2000+YY convention
     assert msg.timestamp.month == 3
     assert msg.timestamp.day == 23
+
+
+def test_parse_gprmc_invalid_checksum_returns_none_and_logs_warning(caplog):
+    sentence = "$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*00"
+    with caplog.at_level("WARNING"):
+        msg = parse_gprmc(sentence)
+    assert msg is None
+    assert "invalid checksum" in caplog.text
+
+
+def test_validate_nmea_checksum_handles_empty_string():
+    assert _validate_nmea_checksum("") is True
 
 
 # ---------- parse_nmea_sentence dispatcher ----------

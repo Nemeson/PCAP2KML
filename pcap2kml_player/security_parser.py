@@ -19,6 +19,7 @@ import struct
 from typing import Optional
 
 from .data_model import SecurityInfo
+from .pcap_parser import ITS_PDU_MESSAGE_ID
 
 logger = logging.getLogger(__name__)
 
@@ -351,10 +352,11 @@ def extract_security_from_decoded(decoded: dict, msg_type: str) -> Optional[Secu
         its_aid_map = {
             1: 0x00000024,  # DENM = 36
             2: 0x00000024,  # CAM = 36 (same ITS-AID)
-            4: 0x00000079,  # SPATEM = 121
-            5: 0x00000079,  # MAPEM = 121
+            3: 0x00000079,  # SPATEM = 121
+            4: 0x00000079,  # MAPEM = 121
+            5: 0x00000079,  # SPATEM = 121
             9: 0x00000079,  # SREM = 121
-            10: 0x00000079, # SSEM = 121
+            10: 0x00000079,  # SSEM = 121
         }
         info.its_aid_list = [its_aid_map.get(msg_id, msg_id)]
 

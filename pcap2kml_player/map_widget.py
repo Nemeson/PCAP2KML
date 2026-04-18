@@ -25,6 +25,18 @@ STATION_PALETTE = [
     "#42d4f4", "#f032e6", "#bfef45", "#fabed4", "#469990",
 ]
 
+
+def _js_escape(value: str) -> str:
+    """Escape a Python string for safe embedding in single-quoted JS literals."""
+    escaped = value.replace("\\", "\\\\")
+    escaped = escaped.replace("`", "\\`")
+    escaped = escaped.replace("'", "\\'")
+    escaped = escaped.replace("${", "\\${")
+    escaped = escaped.replace("</script>", "<\\/script>")
+    escaped = escaped.replace("\r", " ").replace("\n", " ")
+    escaped = escaped.replace("\x00", "")
+    return escaped
+
 LEAFLET_HTML = """<!DOCTYPE html>
 <html>
 <head>
@@ -209,10 +221,12 @@ class MapWidget(QWebEngineView):
             )
 
             # Place marker at latest position
-            marker_id = f"station_{msg.station_id}"
+            marker_id = _js_escape(f"station_{msg.station_id}")
+            popup_js = _js_escape(popup)
+            color_js = _js_escape(color)
             self._run_js(
                 f"addMarker('{marker_id}', {msg.latitude}, {msg.longitude}, "
-                f"`{popup}`, '{color}')"
+                f"'{popup_js}', '{color_js}')"
             )
             station_last_msg[msg.station_id] = msg
 
@@ -223,17 +237,17 @@ class MapWidget(QWebEngineView):
 
         # Draw trajectories
         for station_id, coords in station_coords.items():
-            color = self._get_station_color(station_id)
+            color = _js_escape(self._get_station_color(station_id))
             coords_js = json.dumps(coords)
-            self._run_js(f"addTrajectory('{station_id}', {coords_js}, '{color}')")
+            self._run_js(f"addTrajectory('{_js_escape(station_id)}', {coords_js}, '{color}')")
 
         # Fit map to all markers
         self._run_js("fitToMarkers()")
 
     def update_playback_position(self, msg: V2xMessage) -> None:
         """Move the marker for msg.station_id and highlight it."""
-        color = self._get_station_color(msg.station_id)
-        marker_id = f"station_{msg.station_id}"
+        self._get_station_color(msg.station_id)
+        marker_id = _js_escape(f"station_{msg.station_id}")
         self._run_js(f"highlightMarker('{marker_id}')")
 
     def clear(self) -> None:

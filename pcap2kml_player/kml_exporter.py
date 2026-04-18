@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # Distinct colors for message types in KML
 MSG_TYPE_COLORS = {
     MessageType.CAM: "ff0000ff",      # Blue
-    MessageType.DENM: "ff0000ff",    # Red
+    MessageType.DENM: "ffff0000",     # Red
     MessageType.SREM: "ffff6600",    # Orange
     MessageType.SSEM: "ff00ffff",    # Yellow
     MessageType.MAPEM: "ff00ff00",   # Green

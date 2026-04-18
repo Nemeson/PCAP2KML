@@ -5,11 +5,14 @@ Parses GPGGA and GPRMC sentences to extract position, speed, and heading.
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from .data_model import MessageType, V2xMessage
+
+logger = logging.getLogger(__name__)
 
 # Regex patterns for NMEA sentences
 _GPGGA_RE = re.compile(
@@ -81,9 +84,35 @@ def _parse_nmea_time(time_str: str, frac: str = "", date_str: str = "") -> datet
     return datetime(now.year, now.month, now.day, hour, minute, second, microsecond, tzinfo=timezone.utc)
 
 
+def _validate_nmea_checksum(sentence: str) -> bool:
+    """Validate the optional NMEA checksum."""
+    sentence = sentence.strip()
+    if not sentence or "*" not in sentence:
+        return True
+    if not sentence.startswith("$"):
+        return False
+    payload, checksum_text = sentence[1:].split("*", 1)
+    checksum_text = checksum_text[:2]
+    if len(checksum_text) != 2:
+        return False
+    checksum = 0
+    for char in payload:
+        checksum ^= ord(char)
+    try:
+        return checksum == int(checksum_text, 16)
+    except ValueError:
+        return False
+
+
 def parse_gpgga(sentence: str, default_station_id: str = "GPS") -> Optional[V2xMessage]:
     """Parse a $GPGGA sentence into a V2xMessage."""
-    match = _GPGGA_RE.match(sentence.strip())
+    sentence = sentence.strip()
+    if not sentence:
+        return None
+    if not _validate_nmea_checksum(sentence):
+        logger.warning("Ignoring GPGGA sentence with invalid checksum")
+        return None
+    match = _GPGGA_RE.match(sentence)
     if not match:
         return None
 
@@ -109,7 +138,13 @@ def parse_gpgga(sentence: str, default_station_id: str = "GPS") -> Optional[V2xM
 
 def parse_gprmc(sentence: str, default_station_id: str = "GPS") -> Optional[V2xMessage]:
     """Parse a $GPRMC sentence into a V2xMessage."""
-    match = _GPRMC_RE.match(sentence.strip())
+    sentence = sentence.strip()
+    if not sentence:
+        return None
+    if not _validate_nmea_checksum(sentence):
+        logger.warning("Ignoring GPRMC sentence with invalid checksum")
+        return None
+    match = _GPRMC_RE.match(sentence)
     if not match:
         return None
 

@@ -48,6 +48,7 @@ PYSHARK_OPEN_TIMEOUT_S = 30.0
 ITS_PDU_MESSAGE_ID = {
     1: MessageType.DENM,
     2: MessageType.CAM,
+    3: MessageType.SPATEM,
     4: MessageType.MAPEM,
     5: MessageType.SPATEM,
     9: MessageType.SREM,
@@ -60,7 +61,7 @@ def _infer_msg_type_from_pdu(payload: bytes) -> Optional[MessageType]:
 
     ITS PDU header layout (ETSI TS 102 894-2):
       byte 0: protocolVersion (== 2 for current ITS)
-      byte 1: messageID (1=DENM, 2=CAM, 4=MAPEM, 5=SPATEM, 9=SREM, 10=SSEM)
+      byte 1: messageID (1=DENM, 2=CAM, 3/5=SPATEM, 4=MAPEM, 9=SREM, 10=SSEM)
     """
     if len(payload) < 2 or payload[0] != 0x02:
         return None

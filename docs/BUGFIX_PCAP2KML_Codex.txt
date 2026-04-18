@@ -1,0 +1,258 @@
+Du bist ein Senior-Softwareentwickler und Bugfix-Spezialist fuer Python-Desktop-Anwendungen mit Schwerpunkt auf V2X/ITS-G5-Nachrichtenverarbeitung, ASN.1-Decoding und PyQt6-UIs.
+
+Deine Aufgabe ist es, konkrete Fehler und Qualitaetsluecken in der PCAP2KML-Player-Applikation zu beheben und die Behebungen in die bestehende Roadmap (docs/ROADMAP.md) einzupflegen.
+
+# Projektkontext
+
+Projekt: PCAP2KML Player
+Technologie: Python 3.11+, PyQt6, PyQt6-WebEngine, Leaflet.js, scapy, pyshark, asn1tools, simplekml
+Zweck: Analyse- und Visualisierungstool fuer V2X-Nachrichten aus PCAP-Dateien
+
+# Verzeichnisstruktur
+
+```
+C:\PythonTools\PCAP2KML\
+├── docs\
+│   └── ROADMAP.md          ← Hier muessen die Behebungen eingepflegt werden
+├── pcap2kml_player\
+│   ├── main.py
+│   ├── data_model.py
+│   ├── pcap_parser.py       ← Bug 1: messageID-Mapping
+│   ├── nmea_parser.py
+│   ├── asn1_schemas.py
+│   ├── security_parser.py   ← Bug 1: messageID-Mapping (inkonsistent)
+│   ├── kml_exporter.py      ← Bug 2: Farbkollision CAM/DENM
+│   ├── player_controller.py
+│   ├── app_memory.py
+│   ├── parsing_worker.py
+│   ├── map_widget.py        ← Bug 3: JS-Injektion
+│   ├── scene_model.py
+│   └── ui\
+│       └── main_window.py
+├── tests\
+│   └── ... (bestehende Tests)
+└── testfiles\
+    └── ... (Test-PCAPs)
+```
+
+# Konkrete Fehler und Qualitaetsluecken
+
+## BUG 1 (P0 — Kritisch): messageID-Mapping-Inkonsistenz
+
+### Beschreibung
+In `pcap2kml_player/pcap_parser.py` (Zeilen 48-55) existiert das Mapping `ITS_PDU_MESSAGE_ID`:
+```python
+ITS_PDU_MESSAGE_ID = {
+    1: MessageType.DENM,
+    2: MessageType.CAM,
+    4: MessageType.MAPEM,
+    5: MessageType.SPATEM,
+    9: MessageType.SREM,
+    10: MessageType.SSEM,
+}
+```
+
+In `pcap2kml_player/security_parser.py` (Zeilen 351-358) existiert ein ZWEITES Mapping in `extract_security_from_decoded()`:
+```python
+its_aid_map = {
+    1: 0x00000024,  # DENM = 36
+    2: 0x00000024,  # CAM = 36
+    4: 0x00000079,  # SPATEM = 121   ← FALSCH! Sollte MAPEM sein
+    5: 0x00000079,  # MAPEM = 121    ← FALSCH! Sollte SPATEM sein
+    9: 0x00000079,  # SREM = 121
+    10: 0x00000079, # SSEM = 121
+}
+```
+
+### Referenz
+Gemaeß ETSI TS 102 894-2 Table 2: messageId values:
+- 1 = DENM
+- 2 = CAM
+- 3 = SPATEM (nicht im pcap_parser gemappt!)
+- 4 = MAPEM
+- 5 = SPATEM
+- 9 = SREM
+- 10 = SSEM
+
+Hinweis: Es gibt ein separates Feld messageId=3 fuer SPATEM, das in pcap_parser.py ebenfalls fehlt. Die aktuelle pcap_parser-Zuordnung (4=MAPEM, 5=SPATEM) ist die in der Praxis uebliche, aber messageId=3 sollte zumindest beruecksichtigt werden.
+
+### Behebung
+1. Korrigiere `security_parser.py`: Die Kommentare bei 4 und 5 sind vertauscht. Die ITS-AID-Werte (0x79) sind fuer BEIDE korrekt (da MAPEM und SPATEM derselben ITS-AID-Gruppe angehoeren), aber die KOMMENTARE muessen stimmen:
+   - `4: 0x00000079,  # MAPEM = 121` (nicht SPATEM!)
+   - `5: 0x00000079,  # SPATEM = 121` (nicht MAPEM!)
+
+2. Erwaegung: Fuege `3: MessageType.SPATEM` zum `ITS_PDU_MESSAGE_ID` in `pcap_parser.py` hinzu, falls SPATEM-Nachrichten mit messageId=3 in der Wildnis auftreten koennen.
+
+3. Langfristig: Zentralisiere das messageId-Mapping in `data_model.py` als einzige Quelle der Wahrheit, und importiere es in beiden Modulen.
+
+### Test
+Schreibe einen Unit-Test in `tests/test_security_parser.py`, der verifiziert, dass die ITS-AID-Zuordnung in `extract_security_from_decoded` mit der messageId-Zuordnung in `pcap_parser.ITS_PDU_MESSAGE_ID` konsistent ist.
+
+---
+
+## BUG 2 (P1 — Mittel): KML-Export-Farbkollision CAM/DENM
+
+### Beschreibung
+In `pcap2kml_player/kml_exporter.py` (Zeilen 22-30):
+```python
+MSG_TYPE_COLORS = {
+    MessageType.CAM: "ff0000ff",      # Blue
+    MessageType.DENM: "ff0000ff",    # Red
+    ...
+}
+```
+
+Beide Nachrichtentypen haben denselben Hex-Wert `ff0000ff` (ABGR: Alpha=ff, Blau=ff, Gruen=00, Rot=00 = Blau). Der Kommentar bei DENM sagt "Red", aber der Wert ist "Blue". CAM und DENM sind im KML-Export visuell nicht unterscheidbar.
+
+### Behebung
+Aendere DENM auf eine rote Farbe, z.B.:
+```python
+MessageType.DENM: "ff0000cc",    # Red (ABGR: Alpha=ff, Rot=cc)
+```
+oder
+```python
+MessageType.DENM: "ffff0000",    # Red (ABGR: Alpha=ff, Rot=ff, Gruen=00, Blau=00)
+```
+
+Hinweis: simplekml verwendet ABGR-Format (Alpha-Blue-Green-Red), NICHT ARGB. Der Kommentar bei CAM ("Blue") mit `ff0000ff` ist korrekt. Die korrekte rote Farbe waere `ffff0000`.
+
+### Test
+Schreibe einen Unit-Test in `tests/test_kml_exporter.py`, der verifiziert, dass alle Werte in `MSG_TYPE_COLORS` eindeutig sind (keine zwei Nachrichtentypen teilen sich eine Farbe).
+
+---
+
+## BUG 3 (P1 — Hoch): JS-Injektionsrisiko in MapWidget
+
+### Beschreibung
+In `pcap2kml_player/map_widget.py` werden JavaScript-Strings per f-String mit User-Daten konstruiert:
+- `addMarker(id, lat, lon, popup, color)` — `id` ist die station_id, `popup` enthaelt Details
+- `addTrajectory(stationId, coords, color)` — `stationId` ist User-Daten
+
+Wenn eine station_id Zeichen wie Backticks (`), `${}`, `</script>` oder einfache Anfuehrungszeichen enthaelt, kann:
+1. Der JavaScript-Code brechen (Syntax-Fehler)
+2. Beliebiger JS-Code ausgefuehrt werden (XSS im QWebEngine-Kontext)
+
+Beispiel: `station_id = "RSU`; alert(1); //"`
+
+### Behebung
+1. Erstelle eine Hilfsfunktion `_js_escape(value: str) -> str`, die:
+   - Backticks durch escaped Backticks ersetzt
+   - `${` escaped
+   - `</script>` escaped
+   - Neue Zeilen entfernt
+   - Mindestens einfache Anfuehrungszeichen escaped
+
+2. Wende `_js_escape()` auf alle User-Daten an, die in JS-Strings eingefuegt werden: station_id, popup-Text, Farbwerte (obwohl diese kontrolliert sind).
+
+3. Alternative/Zusaetzlich: Verwende `QWebChannel` fuer strukturierte Kommunikation statt String-Interpolation.
+
+### Test
+Schreibe einen Unit-Test, der `_js_escape()` mit problematischen Eingaben testet:
+- Backticks, `${}`, `</script>`, einfache Anfuehrungszeichen, Newlines, NULL-Bytes
+
+---
+
+## LUECKE 4 (P1): NMEA-Checksum-Validierung fehlt
+
+### Beschreibung
+`pcap2kml_player/nmea_parser.py` parst GPGGA und GPRMC ohne die NMEA-Checksum (`*XX`) zu validieren. Korrupte Saetze mit gueltigem Praefix werden akzeptiert.
+
+### Behebung
+1. Implementiere `_validate_nmea_checksum(sentence: str) -> bool`:
+   - Berechne XOR aller Zeichen zwischen `$` und `*` (ausschliesslich)
+   - Vergleiche mit dem Hex-Wert nach `*`
+
+2. Integriere in `parse_gpgga()` und `parse_gprmc()`:
+   - Bei ungueltiger Checksum: logge Warning, returne None
+   - Bei fehlendem `*XX`: akzeptiere (fuer Abwaertskompatibilitaet)
+
+### Test
+Schreibe Tests fuer:
+- Gueltige Checksum → akzeptiert
+- Ungueltige Checksum → None + Warning im Log
+- Fehlende Checksum → akzeptiert (Legacy)
+- Leerer String → None
+
+---
+
+## LUECKE 5 (P1): ParsingWorker-Signal-Typisierung
+
+### Beschreibung
+In `pcap2kml_player/parsing_worker.py` hat das `finished`-Signal die Signatur `pyqtSignal(object, object, object)`. Das macht Typfehler zur Laufzeit unsichtbar.
+
+### Behebung
+Aendere zu typisierten Signalen:
+```python
+finished = pyqtSignal(object, list, list)  # SessionData, list[Path], list[str]
+```
+
+Hinweis: `SessionData` kann nicht direkt als Typ verwendet werden (PyQt-Limitation), aber `object` fuer das erste Argument ist ausreichend. Die Listen sollten explizit `list` sein statt `object`.
+
+### Test
+Verifiziere, dass bei einer `FileNotFoundError`-Exception eine leere Session und eine Fehlerliste emittiert werden.
+
+---
+
+## LUECKE 6 (P2): Pickle-Cache ohne Integritaetspruefung
+
+### Beschreibung
+In `pcap2kml_player/asn1_schemas.py` werden kompilierte Schemata als `.pkl`-Dateien gespeichert. Der Cache-Key basiert auf dem SHA-256 der Eingabedateien, aber der Pickle-Inhalt selbst wird nicht validiert. Korrupte oder manipulierte Pickle-Dateien wuerden still geladen.
+
+### Behebung
+1. Speichere eine SHA-256-Checksum der Pickle-Datei als Sidecar-Datei (`.pkl.sha256`) oder im Dateinamen
+2. Pruefe die Checksum beim Laden
+3. Bei Missachtung: loesche Cache-Datei, kompiliere neu
+
+### Test
+Teste mit einer manipulierten .pkl-Datei: Erwartung → Neu-Kompilierung, kein Crash
+
+---
+
+## LUECKE 7 (P2): PlayerController set_filtered_messages Duration-Berechnung
+
+### Beschreibung
+In `pcap2kml_player/player_controller.py` berechnet `set_filtered_messages()` die Dauer als `(last.timestamp - first.timestamp).total_seconds()`, waehrend `set_session()` `session.duration_seconds` verwendet. Die beiden Methoden koennen unterschiedliche Ergebnisse liefern.
+
+### Behebung
+Verwende eine einheitliche Berechnungsmethode. Bevorzugt: `max(0, (last.timestamp - first.timestamp).total_seconds())` in beiden Faellen, oder extrahiere eine Hilfsfunktion.
+
+### Test
+Teste mit gefilterter Teilmenge, deren Zeitraum kuerzer ist als die Gesamt-Session.
+
+---
+
+# Arbeitsanweisungen
+
+1. Behebe BUG 1 (messageID-Mapping) als ERSTES — er ist P0 und betrifft die Datenintegritaet.
+2. Behebe BUG 2 (KML-Farbkollision) — trivialer Fix, grosser visueller Impact.
+3. Behebe BUG 3 (JS-Injektion) — Sicherheitsrisiko, erfordert neue Hilfsfunktion + Tests.
+4. Behebe LUECKE 4 (NMEA-Checksum) — Datenqualitaetsverbesserung.
+5. Behebe LUECKE 5 (Signal-Typisierung) — Refactoring fuer Typsicherheit.
+6. Dokumentiere LUECKE 6 und LUECKE 7 als "Known Issues" in der Roadmap (fuer spaetere Umsetzung).
+
+# Einpflegen in die Roadmap
+
+Nach jedem Fix aktualisiere `docs/ROADMAP.md`:
+
+1. Markiere behobene Punkte als [x] wenn sie bereits existieren
+2. Fuege NEUE Punkte unter der entsprechenden Phase ein mit [x] wenn behoben
+3. Fuege "Known Issues" oder "Offene Punkte" am Ende der betroffenen Phase ein
+
+Struktur fuer neue Eintraege:
+```
+- [x] Fix: <kurzbeschreibung> (Details siehe BUG-Nr im Testplan)
+```
+
+Fuer Known Issues:
+```
+- [ ] Known Issue: <kurzbeschreibung> — <begruendung warum zurueckgestellt>
+```
+
+# WICHTIG
+
+- Aendere KEINE Funktionalitaet, die nicht in den Bugs/Luecken beschrieben ist.
+- Fuege KEINE neuen Features hinzu.
+- Schreibe fuer JEDEN Fix einen zugehoerigen Test.
+- Laufe die existierende Test-Suite nach jedem Fix durch: `pytest tests/ -v`
+- Aendere nur die genannten Dateien und die Roadmap.
+- Halte den Codestil konsistent mit dem bestehenden Projekt (PEP 8, type annotations, logging statt print).

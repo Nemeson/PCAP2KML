@@ -12,6 +12,7 @@
 - [x] `test_nmea_parser.py` - GPGGA/GPRMC-Parsing mit echten und fehlerhaften Saetzen
 - [x] `test_pcap_parser.py` - Parsing mit echten Test-PCAPs
 - [x] `test_kml_exporter.py` - KML-Generierung und Filteroptionen
+- [x] Fix: Regressionstests fuer `map_widget.py` und `parsing_worker.py` ergaenzt (JS-Escaping, Fehlerpfad im Worker)
 - [x] Reale Test-PCAP-Dateien in `testfiles/` einbinden
 - [ ] Ziel: 80%+ Testabdeckung (aktuell 92 Tests gruen; Gesamt-Coverage 47% — Kernmodule: security_parser 80%, scene_model 96%, kml_exporter 95%, nmea_parser 89%, data_model 87%, app_memory 86%, player_controller 74%, asn1_schemas 61%, pcap_parser 56%. UI/main/map_widget/parsing_worker ohne Tests)
 
@@ -21,6 +22,7 @@
 - [x] Abbrechen-Button beim Laden langer PCAPs (`ParsingWorker.cancel`)
 - [x] ASN.1-Decoding-Fehler pro Nachricht strukturierter loggen (`get_decoding_error_stats`)
 - [x] Pruefung auf fehlende Abhaengigkeiten beim Start
+- [x] Fix: `ParsingWorker.finished` auf explizite Listen-Signaturen verengt (`pyqtSignal(object, list, list)`)
 
 ### 1.3 Parser-Robustheit
 - [x] Timeout-Handling fuer `pyshark.FileCapture` (`PYSHARK_OPEN_TIMEOUT_S`)
@@ -28,6 +30,8 @@
 - [x] Direkte GeoNetworking/BTP-Erkennung fuer EtherType `0x8947`
 - [x] GeoNetworking-Header-Extraktion fuer Quell-/Zieladresse (`GN-Quelladresse` in details)
 - [x] ITS-PDU-Header-Message-ID als Fallback zur Nachrichtentyp-Erkennung (`_infer_msg_type_from_pdu`)
+- [x] Fix: ITS-PDU-`messageId=3` als SPATEM-Fallback aufgenommen und Security-Mapping konsistent getestet
+- [x] Fix: NMEA-Checksum-Validierung fuer GPGGA/GPRMC mit Legacy-Fallback bei fehlender Checksum
 
 ### 1.4 UX und Session-Workflow
 - [x] Persistentes App-Memory fuer letzte Sitzung, letzte Verzeichnisse und Session-Zusammenfassung
@@ -57,6 +61,7 @@
 - [x] Lazy-Compiling fuer Schemata (`get_compiled_schema` on demand)
 - [x] Compiled-Schema-Cache auf Festplatte (`assets/cache/*.pkl`)
 - [ ] Batch-Decoding fuer grosse PCAPs (offen, erst bei Throughput-Problem priorisieren)
+- [ ] Known Issue: Pickle-Cache ohne separate Integritaetspruefung des `.pkl`-Inhalts — zurueckgestellt, da aktueller Cache-Key nur Schemaeingaben absichert
 
 ---
 
@@ -67,6 +72,7 @@
 - [x] `security_parser.py` fuer ETSI TS 103 097
 - [x] Extraktion aus Rohpayloads und dekodierten Nachrichten
 - [x] Detailtabelle in der UI fuer PKI-Informationen
+- [x] Fix: ITS-AID-Kommentare und `messageID`-Zuordnung in `security_parser.py` mit Parser-Mapping abgeglichen
 
 ### Naechste Schritte
 - [ ] Zertifikatsketten vollstaendig parsen
@@ -120,6 +126,7 @@ oder "ist mein Flow frei?" beantworten koennen.
 
 ## Phase 3: Karten- und Visualisierungsverbesserung
 
+- [x] Fix: JS-Escaping fuer `station_id`-, Popup- und Farbwerte im `MapWidget` gegen Script-Injektion gehaertet
 - [ ] Offline-Kartenunterstuetzung
 - [ ] Kartenlayer-Auswahl
 - [ ] Heatmap-Overlay
@@ -135,6 +142,7 @@ oder "ist mein Flow frei?" beantworten koennen.
 
 ## Phase 4: Analyse und Export
 
+- [x] Fix: KML-Farbkollision zwischen CAM und DENM behoben, Einzigartigkeit per Test abgesichert
 - [ ] Statistik-Dashboard
 - [ ] Zeitlicher Verlauf der Nachrichtenraten
 - [ ] Geschwindigkeits-/Heading-Verteilung pro Station
@@ -142,6 +150,10 @@ oder "ist mein Flow frei?" beantworten koennen.
 - [ ] Zeitanimierte KML-Dateien
 - [ ] GeoJSON-Export
 - [ ] GPX-Export
+
+## Offene Punkte aus Bugfix-Runde
+
+- [ ] Known Issue: `PlayerController.set_filtered_messages()` nutzt weiterhin eine eigene Duration-Berechnung — zurueckgestellt, da funktional stabil und ausserhalb der priorisierten Fixes
 
 ---
 
