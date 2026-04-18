@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional, set as typing_set
+from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -33,11 +33,11 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from data_model import MessageType, SessionData, V2xMessage
-from kml_exporter import export_kml
-from map_widget import MapWidget
-from pcap_parser import parse_pcap
-from player_controller import SPEED_OPTIONS, PlayerController
+from ..data_model import MessageType, SessionData, V2xMessage
+from ..kml_exporter import export_kml
+from ..map_widget import MapWidget
+from ..pcap_parser import parse_pcap
+from ..player_controller import SPEED_OPTIONS, PlayerController
 
 logger = logging.getLogger(__name__)
 

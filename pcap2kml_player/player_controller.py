@@ -13,7 +13,7 @@ from typing import Optional
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
-from data_model import SessionData, V2xMessage
+from .data_model import SessionData, V2xMessage
 
 logger = logging.getLogger(__name__)
 

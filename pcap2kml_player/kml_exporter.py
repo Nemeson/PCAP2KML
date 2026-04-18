@@ -13,7 +13,7 @@ from typing import Optional
 
 import simplekml
 
-from data_model import MessageType, SessionData, V2xMessage
+from .data_model import MessageType, SessionData, V2xMessage
 
 logger = logging.getLogger(__name__)
 

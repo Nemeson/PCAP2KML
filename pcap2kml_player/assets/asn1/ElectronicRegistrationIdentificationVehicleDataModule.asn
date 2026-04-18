@@ -1,0 +1,15 @@
+-- Stub module for ISO 24534 Electronic Registration Identification
+-- Provides Iso3833VehicleType used by DSRC module from ISO TS 19091
+-- Full module is defined in ISO 24534-3:2016
+
+ElectronicRegistrationIdentificationVehicleDataModule { iso(1) standard(0) iso24534 (24534) vehicleData (1) version1 (1) }
+
+DEFINITIONS AUTOMATIC TAGS ::=
+
+BEGIN
+
+-- ISO 3833 vehicle type classification
+-- Simplified stub: INTEGER-based representation
+Iso3833VehicleType ::= INTEGER (0..255)
+
+END

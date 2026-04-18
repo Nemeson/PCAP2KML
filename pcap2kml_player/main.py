@@ -12,12 +12,12 @@ from pathlib import Path
 
 from PyQt6.QtWidgets import QApplication
 
-# Add the project root to Python path for imports
-project_root = Path(__file__).parent
+# Add the parent directory to Python path so pcap2kml_player is importable
+project_root = Path(__file__).resolve().parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from ui.main_window import MainWindow
+from pcap2kml_player.ui.main_window import MainWindow
 
 
 def setup_logging() -> None:

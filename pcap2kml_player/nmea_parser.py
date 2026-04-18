@@ -9,7 +9,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from data_model import MessageType, V2xMessage
+from .data_model import MessageType, V2xMessage
 
 # Regex patterns for NMEA sentences
 _GPGGA_RE = re.compile(

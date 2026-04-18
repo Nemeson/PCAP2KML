@@ -12,19 +12,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from data_model import MessageType, SessionData, V2xMessage
-from nmea_parser import parse_nmea_sentence
+from .data_model import MessageType, SessionData, V2xMessage
+from .nmea_parser import parse_nmea_sentence
 
 logger = logging.getLogger(__name__)
 
-# BTP port numbers for ITS message types (ETSI TS 102 636-5)
+# BTP port numbers for ITS message types (ETSI TS 103 248 V2.2.1)
 BTP_PORTS = {
     2001: MessageType.CAM,
     2002: MessageType.DENM,
     2003: MessageType.MAPEM,
     2004: MessageType.SPATEM,
-    2005: MessageType.SREM,
-    2006: MessageType.SSEM,
+    2007: MessageType.SREM,
+    2008: MessageType.SSEM,
 }
 
 
@@ -119,7 +119,7 @@ _EXTRACTORS = {
 def _decode_its_message(msg_type: MessageType, payload: bytes) -> Optional[V2xMessage]:
     """Attempt to decode an ITS message using ASN.1 schemas."""
     try:
-        from asn1_schemas import decode_its_message
+        from .asn1_schemas import decode_its_message
         decoded = decode_its_message(msg_type.value, payload)
     except ImportError:
         logger.warning("asn1_schemas not available")

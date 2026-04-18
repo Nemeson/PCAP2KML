@@ -14,7 +14,7 @@ from PyQt6.QtCore import QObject, QUrl, pyqtSignal, pyqtSlot
 from PyQt6.QtWebChannel import QWebChannel
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 
-from data_model import MessageType, V2xMessage
+from .data_model import MessageType, V2xMessage
 
 logger = logging.getLogger(__name__)
 
