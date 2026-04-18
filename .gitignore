@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.spec
+*.exe
+.env
+.venv/
+venv/
+.idea/
+.vscode/
+*.heapsnapshot
+.omc/
