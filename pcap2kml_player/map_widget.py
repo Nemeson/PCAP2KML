@@ -25,6 +25,28 @@ STATION_PALETTE = [
     "#42d4f4", "#f032e6", "#bfef45", "#fabed4", "#469990",
 ]
 
+INFRASTRUCTURE_MESSAGE_COLORS = {
+    MessageType.MAPEM: "#1f9d55",
+    MessageType.SPATEM: "#c026d3",
+}
+INFRASTRUCTURE_MESSAGE_OFFSETS = {
+    MessageType.MAPEM: (0.0, 0.00003),
+    MessageType.SPATEM: (0.0, -0.00003),
+}
+
+
+def _marker_id_for_message(msg: V2xMessage) -> str:
+    """Return a stable marker id, preserving MAP/SPAT overlays separately."""
+    if msg.msg_type in INFRASTRUCTURE_MESSAGE_COLORS:
+        return f"infrastructure_{msg.msg_type.value}_{msg.station_id}"
+    return f"station_{msg.station_id}"
+
+
+def _marker_position_for_message(msg: V2xMessage) -> tuple[float, float]:
+    """Slightly offset infrastructure markers so MAP/SPAT stay visible together."""
+    lat_offset, lon_offset = INFRASTRUCTURE_MESSAGE_OFFSETS.get(msg.msg_type, (0.0, 0.0))
+    return (msg.latitude + lat_offset, msg.longitude + lon_offset)
+
 
 def _js_escape(value: str) -> str:
     """Escape a Python string for safe embedding in single-quoted JS literals."""
@@ -199,6 +221,10 @@ class MapWidget(QWebEngineView):
             self._station_index += 1
         return self._station_color_map[station_id]
 
+    def _color_for_message(self, msg: V2xMessage) -> str:
+        """Pick a marker color, with dedicated infrastructure colors for MAP/SPAT."""
+        return INFRASTRUCTURE_MESSAGE_COLORS.get(msg.msg_type, self._get_station_color(msg.station_id))
+
     def load_messages(self, messages: list[V2xMessage]) -> None:
         """Load all messages onto the map: markers and trajectories."""
         self._run_js("clearAll()")
@@ -212,7 +238,8 @@ class MapWidget(QWebEngineView):
         station_last_msg: dict[str, V2xMessage] = {}
 
         for msg in messages:
-            color = self._get_station_color(msg.station_id)
+            color = self._color_for_message(msg)
+            marker_lat, marker_lon = _marker_position_for_message(msg)
             popup = (
                 f"<b>{msg.msg_type.value}</b><br>"
                 f"Station: {msg.station_id}<br>"
@@ -221,11 +248,11 @@ class MapWidget(QWebEngineView):
             )
 
             # Place marker at latest position
-            marker_id = _js_escape(f"station_{msg.station_id}")
+            marker_id = _js_escape(_marker_id_for_message(msg))
             popup_js = _js_escape(popup)
             color_js = _js_escape(color)
             self._run_js(
-                f"addMarker('{marker_id}', {msg.latitude}, {msg.longitude}, "
+                f"addMarker('{marker_id}', {marker_lat}, {marker_lon}, "
                 f"'{popup_js}', '{color_js}')"
             )
             station_last_msg[msg.station_id] = msg
@@ -246,8 +273,8 @@ class MapWidget(QWebEngineView):
 
     def update_playback_position(self, msg: V2xMessage) -> None:
         """Move the marker for msg.station_id and highlight it."""
-        self._get_station_color(msg.station_id)
-        marker_id = _js_escape(f"station_{msg.station_id}")
+        self._color_for_message(msg)
+        marker_id = _js_escape(_marker_id_for_message(msg))
         self._run_js(f"highlightMarker('{marker_id}')")
 
     def clear(self) -> None:

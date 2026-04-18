@@ -149,6 +149,7 @@ _MOVEMENT_ALLOWED_PHASES = frozenset({
 _TIMEOUT_HIGH_PRIORITY_S = 0.5
 _TIMEOUT_DEFAULT_S = 1.0
 _HIGH_PRIORITY_THRESHOLD = 10
+_FALLBACK_INTERSECTION_RADIUS_M = 250.0
 
 
 def find_overdue_requests(
@@ -228,10 +229,11 @@ def build_scene_snapshot(
         if msg.msg_type == MessageType.CAM:
             cam_history.setdefault(msg.station_id, []).append(msg)
         elif msg.msg_type == MessageType.MAPEM:
-            for intersection in _iter_map_intersections(msg):
-                intersection_id = _extract_intersection_id(intersection)
-                if intersection_id is None:
-                    continue
+            raw_intersections = _iter_map_intersections(msg)
+            if not raw_intersections:
+                raw_intersections = [_fallback_intersection_from_message(msg)]
+            for intersection in raw_intersections:
+                intersection_id = _ensure_intersection_id(intersections, intersection, msg)
                 state = intersections.setdefault(
                     intersection_id,
                     IntersectionState(intersection_id=intersection_id),
@@ -240,10 +242,11 @@ def build_scene_snapshot(
                 state.last_map_time = msg.timestamp
                 state.map_reference_point = _extract_map_reference_point(intersection)
         elif msg.msg_type == MessageType.SPATEM:
-            for intersection in _iter_spat_intersections(msg):
-                intersection_id = _extract_intersection_id(intersection)
-                if intersection_id is None:
-                    continue
+            raw_intersections = _iter_spat_intersections(msg)
+            if not raw_intersections:
+                raw_intersections = [_fallback_intersection_from_message(msg)]
+            for intersection in raw_intersections:
+                intersection_id = _ensure_intersection_id(intersections, intersection, msg)
                 state = intersections.setdefault(
                     intersection_id,
                     IntersectionState(intersection_id=intersection_id),
@@ -324,6 +327,17 @@ def _iter_spat_intersections(msg: V2xMessage) -> list[dict]:
 def _extract_intersection_id(intersection: dict) -> Optional[int]:
     """Extract the numeric intersection id from a MAPEM/SPATEM entry."""
     return _coerce_int(intersection.get("intersectionId", intersection.get("id")))
+
+
+def _fallback_intersection_from_message(msg: V2xMessage) -> dict:
+    """Create a minimal intersection structure from raw MAP/SPAT message position."""
+    return {
+        "referencePosition": {
+            "latitude": int(msg.latitude * 1e7),
+            "longitude": int(msg.longitude * 1e7),
+        },
+        "_fallback_station_id": msg.station_id,
+    }
 
 
 def _build_signal_group_states(
@@ -587,6 +601,40 @@ def _extract_map_reference_point(intersection: dict) -> Optional[tuple[float, fl
         if point is not None:
             return point
     return None
+
+
+def _ensure_intersection_id(
+    intersections: dict[int, IntersectionState],
+    intersection: dict,
+    msg: V2xMessage,
+) -> int:
+    """Resolve or synthesize an intersection id for decoded or raw infrastructure messages."""
+    decoded_id = _extract_intersection_id(intersection)
+    if decoded_id is not None:
+        return decoded_id
+
+    reference_point = _extract_map_reference_point(intersection)
+    if reference_point is None:
+        reference_point = (msg.latitude, msg.longitude)
+
+    for existing_id, existing_state in intersections.items():
+        if existing_state.map_reference_point is None:
+            continue
+        distance = _haversine_meters(
+            reference_point[0],
+            reference_point[1],
+            existing_state.map_reference_point[0],
+            existing_state.map_reference_point[1],
+        )
+        if distance <= _FALLBACK_INTERSECTION_RADIUS_M:
+            return existing_id
+
+    rounded_lat = int(round(reference_point[0] * 1000))
+    rounded_lon = int(round(reference_point[1] * 1000))
+    synthetic_id = -((abs(rounded_lat) * 100000) + abs(rounded_lon))
+    while synthetic_id in intersections:
+        synthetic_id -= 1
+    return synthetic_id
 
 
 def _verify_eta_against_cam(

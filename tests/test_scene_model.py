@@ -1,10 +1,12 @@
 """Tests for scene aggregation and phase forecast logic."""
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
 from pcap2kml_player.data_model import MessageType, V2xMessage
+from pcap2kml_player.pcap_parser import parse_pcap
 from pcap2kml_player.scene_model import (
     ActiveRequest,
     EtaVerification,
@@ -26,6 +28,9 @@ from pcap2kml_player.scene_model import (
 @pytest.fixture
 def now():
     return datetime(2026, 4, 18, 12, 0, 0, tzinfo=timezone.utc)
+
+
+TESTFILES = Path(__file__).resolve().parent.parent / "testfiles"
 
 
 # ---------- find_overdue_requests ----------
@@ -320,6 +325,33 @@ def test_build_scene_snapshot_ignores_future_messages(now):
     assert 99 not in scene.intersections
 
 
+def test_build_scene_snapshot_creates_fallback_intersection_for_raw_map_and_spat(now):
+    map_msg = V2xMessage(
+        timestamp=now - timedelta(seconds=2),
+        station_id="map-rsu",
+        msg_type=MessageType.MAPEM,
+        latitude=52.42797,
+        longitude=13.52680,
+        decoded_data={},
+    )
+    spat_msg = V2xMessage(
+        timestamp=now - timedelta(seconds=1),
+        station_id="spat-rsu",
+        msg_type=MessageType.SPATEM,
+        latitude=52.42798,
+        longitude=13.52682,
+        decoded_data={},
+    )
+
+    scene = build_scene_snapshot([map_msg, spat_msg], now)
+
+    assert len(scene.intersections) == 1
+    intersection = next(iter(scene.intersections.values()))
+    assert intersection.last_map_time == map_msg.timestamp
+    assert intersection.last_spat_time == spat_msg.timestamp
+    assert intersection.map_reference_point is not None
+
+
 def test_build_scene_snapshot_computes_clock_skew_from_spat_dsrc_time(now):
     start_of_year = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
     packet_timestamp = start_of_year + timedelta(minutes=10, seconds=5)
@@ -439,3 +471,13 @@ def test_build_scene_snapshot_skips_eta_verification_without_map_reference(now):
 
     assert scene.eta_verifications == []
     assert get_eta_accuracy_seconds(scene) is None
+
+
+def test_build_scene_snapshot_detects_raw_map_and_spat_in_real_test_pcap():
+    session = parse_pcap(str(TESTFILES / "txa_22082025.pcap"))
+
+    scene = build_scene_snapshot(session.messages, session.messages[200].timestamp)
+
+    assert any(msg.msg_type == MessageType.MAPEM for msg in session.messages)
+    assert any(msg.msg_type == MessageType.SPATEM for msg in session.messages)
+    assert scene.intersections
