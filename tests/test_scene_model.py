@@ -14,11 +14,14 @@ from pcap2kml_player.scene_model import (
     IntersectionState,
     MovementPhaseState,
     PhaseSegment,
+    RequestOperationalStatus,
     SceneSnapshot,
     SignalGroupState,
     SpatForecast,
+    build_request_visuals,
     build_scene_snapshot,
     find_overdue_requests,
+    get_request_operational_status,
     get_clock_skew_warnings,
     get_eta_accuracy_seconds,
     is_flow_allowed,
@@ -66,6 +69,99 @@ def test_answered_request_ignored_even_if_old(now):
         responded_at=now - timedelta(seconds=5),
     )
     assert find_overdue_requests([req], now) == []
+
+
+def test_get_request_operational_status_maps_ssem_processing_to_acknowledged(now):
+    req = ActiveRequest(
+        request_id=4,
+        sequence_number=1,
+        intersection_id=42,
+        station_id="bus-1",
+        requested_at=now - timedelta(milliseconds=300),
+        responded_at=now - timedelta(milliseconds=100),
+        ssem_status="processing",
+    )
+
+    assert get_request_operational_status(req, now) == RequestOperationalStatus.ACKNOWLEDGED
+
+
+def test_build_request_visuals_marks_dominant_and_secondary_requests(now):
+    dominant = ActiveRequest(
+        request_id=10,
+        sequence_number=1,
+        intersection_id=42,
+        station_id="bus-1",
+        importance_level=12,
+        in_lane=4,
+        out_lane=9,
+        requested_at=now - timedelta(milliseconds=200),
+    )
+    secondary = ActiveRequest(
+        request_id=11,
+        sequence_number=1,
+        intersection_id=42,
+        station_id="tram-2",
+        importance_level=7,
+        in_lane=4,
+        out_lane=9,
+        requested_at=now - timedelta(milliseconds=100),
+    )
+    scene = SceneSnapshot(
+        timeline_position=now,
+        request_states=[dominant, secondary],
+    )
+
+    visuals = build_request_visuals(scene)
+
+    assert len(visuals[42]) == 2
+    assert visuals[42][0].request_id == 10
+    assert visuals[42][0].is_dominant is True
+    assert visuals[42][0].status == RequestOperationalStatus.PENDING
+    assert visuals[42][1].request_id == 11
+    assert visuals[42][1].is_dominant is False
+
+
+def test_build_request_visuals_marks_overdue_request_as_timeout(now):
+    overdue = ActiveRequest(
+        request_id=12,
+        sequence_number=1,
+        intersection_id=42,
+        station_id="bus-1",
+        importance_level=2,
+        requested_at=now - timedelta(seconds=2),
+    )
+    scene = SceneSnapshot(
+        timeline_position=now,
+        request_states=[overdue],
+    )
+
+    visuals = build_request_visuals(scene)
+
+    assert visuals[42][0].status == RequestOperationalStatus.TIMEOUT
+
+
+def test_build_request_visuals_keeps_recently_answered_request_visible(now):
+    answered = ActiveRequest(
+        request_id=13,
+        sequence_number=1,
+        intersection_id=42,
+        station_id="bus-1",
+        importance_level=9,
+        in_lane=2,
+        out_lane=7,
+        requested_at=now - timedelta(seconds=3),
+        responded_at=now - timedelta(seconds=2),
+        ssem_status="granted",
+    )
+    scene = SceneSnapshot(
+        timeline_position=now,
+        request_states=[answered],
+    )
+
+    visuals = build_request_visuals(scene)
+
+    assert len(visuals[42]) == 1
+    assert visuals[42][0].status == RequestOperationalStatus.GRANTED
 
 
 # ---------- is_flow_allowed ----------

@@ -103,7 +103,27 @@ def test_extra_fields_mapem_extracts_intersection():
                 {
                     "id": {"id": 1234},
                     "revision": 5,
-                    "laneSet": [{}, {}, {}],
+                    "refPoint": {"lat": 52.4280, "lon": 13.5268},
+                    "laneWidth": 320,
+                    "laneSet": [
+                        {
+                            "laneID": 7,
+                            "ingressApproach": 1,
+                            "nodeList": [
+                                {"lat": 52.4280000, "lon": 13.5268000},
+                                {"delta": {"x": 0, "y": 1800}},
+                            ],
+                            "connectsTo": [
+                                {
+                                    "connectionID": 11,
+                                    "signalGroup": 3,
+                                    "connectingLane": {"lane": 2},
+                                }
+                            ],
+                        },
+                        {},
+                        {},
+                    ],
                     "speedLimits": [{"type": "maxSpeedInSchoolZone"}],
                 }
             ]
@@ -116,6 +136,43 @@ def test_extra_fields_mapem_extracts_intersection():
     assert fields["intersectionCount"] == 1
     assert "speedLimits" in fields
     assert fields["intersections"][0]["revision"] == 5
+    lane = fields["intersections"][0]["laneSet"][0]
+    assert lane["laneId"] == 7
+    assert lane["laneRole"] == "inbound"
+    assert lane["connections"][0]["connectionId"] == 11
+    assert lane["connections"][0]["targetLaneId"] == 2
+    assert lane["connections"][0]["signalGroup"] == 3
+    assert len(lane["nodeList"]["nodes"]) == 2
+    assert len(lane["stopLine"]["points"]) == 2
+
+
+def test_extra_fields_mapem_marks_outbound_lane_without_stopline():
+    decoded = {
+        "map": {
+            "intersections": [
+                {
+                    "id": {"id": 5},
+                    "refPoint": {"lat": 52.4280, "lon": 13.5268},
+                    "laneSet": [
+                        {
+                            "laneID": 2,
+                            "egressApproach": 3,
+                            "nodeList": [
+                                {"lat": 52.4280000, "lon": 13.5268000},
+                                {"delta": {"x": 1000, "y": 0}},
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+
+    fields = _extra_fields_mapem(decoded)
+    lane = fields["intersections"][0]["laneSet"][0]
+
+    assert lane["laneRole"] == "outbound"
+    assert "stopLine" not in lane
 
 
 def test_extra_fields_mapem_no_intersections():

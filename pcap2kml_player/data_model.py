@@ -74,6 +74,9 @@ class V2xMessage:
             ("Zeit", self.timestamp.isoformat()),
             ("Position", f"{self.latitude:.6f}, {self.longitude:.6f}"),
         ]
+        identity_hint = self.details.get("Identitaets-Hinweis")
+        if identity_hint:
+            rows.append(("Identitaets-Hinweis", identity_hint))
         if self.altitude is not None:
             rows.append(("Hoehe", f"{self.altitude:.1f} m"))
         if self.speed is not None:
@@ -81,6 +84,8 @@ class V2xMessage:
         if self.heading is not None:
             rows.append(("Heading", f"{self.heading:.1f} deg"))
         for key, value in self.details.items():
+            if key == "Identitaets-Hinweis":
+                continue
             rows.append((key, value))
         return rows
 

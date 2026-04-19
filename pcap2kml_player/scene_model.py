@@ -37,6 +37,15 @@ class ForecastConfidence(Enum):
     LOW = "low"
 
 
+class RequestOperationalStatus(Enum):
+    """Operator-facing request state derived from SRM/SSEM correlation."""
+    PENDING = "pending"
+    ACKNOWLEDGED = "acknowledged"
+    GRANTED = "granted"
+    REJECTED = "rejected"
+    TIMEOUT = "timeout"
+
+
 @dataclass
 class SignalGroupState:
     """Current state of one signal group within an intersection."""
@@ -113,7 +122,27 @@ class SceneSnapshot:
     intersections: dict[int, IntersectionState] = field(default_factory=dict)
     forecasts: dict[int, SpatForecast] = field(default_factory=dict)
     active_requests: list[ActiveRequest] = field(default_factory=list)
+    request_states: list[ActiveRequest] = field(default_factory=list)
+    request_visuals_by_intersection: dict[int, list["RequestVisualState"]] = field(default_factory=dict)
     eta_verifications: list["EtaVerification"] = field(default_factory=list)
+
+
+@dataclass
+class RequestVisualState:
+    """Map/UI-ready state for rendering one request on lanes and connections."""
+    request_id: int
+    sequence_number: int
+    intersection_id: int
+    station_id: str
+    status: RequestOperationalStatus
+    importance_level: Optional[int] = None
+    in_lane: Optional[int] = None
+    out_lane: Optional[int] = None
+    ssem_status: Optional[str] = None
+    requested_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    responded_at: Optional[datetime] = None
+    is_dominant: bool = False
+    display_rank: int = 0
 
 
 @dataclass
@@ -297,15 +326,85 @@ def build_scene_snapshot(
         if verification is not None:
             eta_verifications.append(verification)
 
-    active_requests = [request for request in requests.values() if request.is_pending]
-    active_requests.sort(key=lambda request: request.requested_at)
-    return SceneSnapshot(
+    all_requests = sorted(requests.values(), key=lambda request: request.requested_at)
+    active_requests = [request for request in all_requests if request.is_pending]
+    snapshot = SceneSnapshot(
         timeline_position=timeline_position,
         intersections=intersections,
         forecasts=forecasts,
         active_requests=active_requests,
+        request_states=all_requests,
         eta_verifications=eta_verifications,
     )
+    snapshot.request_visuals_by_intersection = build_request_visuals(snapshot)
+    return snapshot
+
+
+def get_request_operational_status(
+    request: ActiveRequest,
+    now: datetime,
+) -> RequestOperationalStatus:
+    """Map correlated SRM/SSEM state to a compact operator-facing status."""
+    if request.responded_at is None:
+        return (
+            RequestOperationalStatus.TIMEOUT
+            if request in find_overdue_requests([request], now)
+            else RequestOperationalStatus.PENDING
+        )
+
+    token = (request.ssem_status or "").strip().lower()
+    if any(keyword in token for keyword in ("grant", "green", "allow", "served")):
+        return RequestOperationalStatus.GRANTED
+    if any(keyword in token for keyword in ("reject", "deny", "cancel", "terminated")):
+        return RequestOperationalStatus.REJECTED
+    if any(keyword in token for keyword in ("ack", "process", "receive", "watch", "accept")):
+        return RequestOperationalStatus.ACKNOWLEDGED
+    return RequestOperationalStatus.ACKNOWLEDGED
+
+
+def build_request_visuals(
+    scene: SceneSnapshot,
+    recent_response_seconds: float = 5.0,
+) -> dict[int, list[RequestVisualState]]:
+    """Build per-intersection request visuals with dominant-vs-secondary ordering."""
+    visuals_by_intersection: dict[int, list[RequestVisualState]] = {}
+
+    for request in scene.request_states:
+        status = get_request_operational_status(request, scene.timeline_position)
+        if request.responded_at is not None:
+            age_seconds = (scene.timeline_position - request.responded_at).total_seconds()
+            if age_seconds > recent_response_seconds:
+                continue
+
+        visual = RequestVisualState(
+            request_id=request.request_id,
+            sequence_number=request.sequence_number,
+            intersection_id=request.intersection_id,
+            station_id=request.station_id,
+            status=status,
+            importance_level=request.importance_level,
+            in_lane=request.in_lane,
+            out_lane=request.out_lane,
+            ssem_status=request.ssem_status,
+            requested_at=request.requested_at,
+            responded_at=request.responded_at,
+        )
+        visuals_by_intersection.setdefault(request.intersection_id, []).append(visual)
+
+    for visuals in visuals_by_intersection.values():
+        visuals.sort(
+            key=lambda visual: (
+                -(visual.importance_level if visual.importance_level is not None else -1),
+                -visual.requested_at.timestamp(),
+                -visual.request_id,
+                -visual.sequence_number,
+            )
+        )
+        for index, visual in enumerate(visuals):
+            visual.display_rank = index
+            visual.is_dominant = index == 0
+
+    return visuals_by_intersection
 
 
 def _iter_map_intersections(msg: V2xMessage) -> list[dict]:

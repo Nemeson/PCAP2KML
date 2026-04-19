@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">
+    <Document id="5929">
+        <Style id="5933">
+            <IconStyle id="5934">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="5935">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <name>PCAP2KML - Station 3858003421</name>
+        <description>ASN.1 Schema-Versionen: ETSI-ITS-CDD: V2.1.1; SPATEM-PDU-Descriptions: V2.2.1; SREM-PDU-Descriptions: V2.2.1; SSEM-PDU-Descriptions: V2.2.1</description>
+        <Placemark id="5931">
+            <name>CAM @ 07:34:37.041</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 3858003421&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2025-08-22T07:34:37.041451+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 52.426442, 13.527030&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 16.1 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 93.0°</description>
+            <TimeStamp id="5932">
+                <when>2025-08-22T07:34:37Z</when>
+            </TimeStamp>
+            <styleUrl>#5933</styleUrl>
+            <Point id="5930">
+                <coordinates>13.5270298,52.4264415,0</coordinates>
+            </Point>
+        </Placemark>
+    </Document>
+</kml>

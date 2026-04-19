@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+from math import cos, hypot, radians
 from typing import Optional
 
 from PyQt6.QtCore import QObject, QUrl, pyqtSignal, pyqtSlot
@@ -16,6 +17,7 @@ from PyQt6.QtWebEngineCore import QWebEngineProfile
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 
 from .data_model import MessageType, V2xMessage
+from .scene_model import build_scene_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,18 @@ STATION_PALETTE = [
 INFRASTRUCTURE_MESSAGE_COLORS = {
     MessageType.MAPEM: "#1f9d55",
     MessageType.SPATEM: "#c026d3",
+}
+LANE_ROLE_COLORS = {
+    "inbound": "#0f766e",
+    "outbound": "#2563eb",
+}
+STOPLINE_COLOR = "#f97316"
+REQUEST_STATUS_COLORS = {
+    "pending": "#2563eb",
+    "acknowledged": "#eab308",
+    "granted": "#16a34a",
+    "rejected": "#dc2626",
+    "timeout": "#7f1d1d",
 }
 INFRASTRUCTURE_MESSAGE_OFFSETS = {
     MessageType.MAPEM: (0.0, 0.00003),
@@ -112,6 +126,29 @@ def _extract_map_polyline_points(intersection: dict) -> list[list[tuple[float, f
     return polylines
 
 
+def _lane_points(lane: dict) -> list[tuple[float, float]]:
+    """Return normalized centerline points for a single MAP lane."""
+    node_list = lane.get("nodeList", lane.get("node-list"))
+    if isinstance(node_list, dict):
+        nodes = node_list.get("nodes", node_list.get("nodeSetXY"))
+    else:
+        nodes = node_list
+    if not isinstance(nodes, list):
+        return []
+
+    points: list[tuple[float, float]] = []
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        point = _coerce_lat_lon(node)
+        if point is None:
+            delta = node.get("delta")
+            point = _coerce_lat_lon(delta)
+        if point is not None:
+            points.append(point)
+    return points
+
+
 def _lane_identifier(lane: dict) -> Optional[str]:
     """Return a human-readable lane identifier if one exists."""
     for key in ("laneID", "laneId", "id"):
@@ -119,6 +156,18 @@ def _lane_identifier(lane: dict) -> Optional[str]:
         if value is None:
             continue
         return str(value)
+    return None
+
+
+def _lane_role(lane: dict) -> Optional[str]:
+    """Return a normalized lane role label."""
+    role = lane.get("laneRole")
+    if isinstance(role, str):
+        return role
+    if lane.get("ingressApproach") is not None:
+        return "inbound"
+    if lane.get("egressApproach") is not None:
+        return "outbound"
     return None
 
 
@@ -176,6 +225,142 @@ def _polyline_label_point(points: list[tuple[float, float]]) -> Optional[tuple[f
     if not points:
         return None
     return points[len(points) // 2]
+
+
+def _point_distance_meters(point_a: tuple[float, float], point_b: tuple[float, float]) -> float:
+    """Approximate local distance in meters between two nearby points."""
+    lat_scale = 111_320.0
+    lon_scale = max(1e-6, 111_320.0 * cos(radians((point_a[0] + point_b[0]) / 2.0)))
+    dx = (point_a[1] - point_b[1]) * lon_scale
+    dy = (point_a[0] - point_b[0]) * lat_scale
+    return hypot(dx, dy)
+
+
+def _lane_anchor_points(
+    lane: dict,
+    intersection_point: tuple[float, float],
+) -> Optional[tuple[tuple[float, float], tuple[float, float]]]:
+    """Return (intersection-facing point, outer point) for one lane."""
+    points = _lane_points(lane)
+    if len(points) < 2:
+        return None
+
+    start_distance = _point_distance_meters(points[0], intersection_point)
+    end_distance = _point_distance_meters(points[-1], intersection_point)
+    if start_distance <= end_distance:
+        return (points[0], points[-1])
+    return (points[-1], points[0])
+
+
+def _connection_curve_points(
+    source_lane: dict,
+    target_lane: dict,
+    intersection_point: tuple[float, float],
+) -> Optional[list[tuple[float, float]]]:
+    """Build a simple schematic curve between inbound and outbound lanes."""
+    source_anchors = _lane_anchor_points(source_lane, intersection_point)
+    target_anchors = _lane_anchor_points(target_lane, intersection_point)
+    if source_anchors is None or target_anchors is None:
+        return None
+
+    source_inner, _ = source_anchors
+    target_inner, _ = target_anchors
+    control_point = (
+        (source_inner[0] + target_inner[0] + intersection_point[0]) / 3.0,
+        (source_inner[1] + target_inner[1] + intersection_point[1]) / 3.0,
+    )
+    return [source_inner, control_point, target_inner]
+
+
+def _lane_popup_text(lane: dict, role: Optional[str]) -> str:
+    """Build a compact popup for a MAP lane."""
+    parts = ["MAPEM Lane"]
+    lane_id = _lane_identifier(lane)
+    if lane_id:
+        parts.append(f"Lane {lane_id}")
+    if role:
+        parts.append(role)
+    return " | ".join(parts)
+
+
+def _stopline_points(lane: dict) -> Optional[list[tuple[float, float]]]:
+    """Extract normalized stopline points from a normalized lane."""
+    stop_line = lane.get("stopLine")
+    if not isinstance(stop_line, dict):
+        return None
+    points = stop_line.get("points")
+    if not isinstance(points, list):
+        return None
+    normalized_points: list[tuple[float, float]] = []
+    for point in points:
+        if not isinstance(point, dict):
+            continue
+        lat_lon = _coerce_lat_lon(point)
+        if lat_lon is not None:
+            normalized_points.append(lat_lon)
+    return normalized_points if len(normalized_points) >= 2 else None
+
+
+def _request_overlay_style(status: str, is_dominant: bool) -> dict[str, object]:
+    """Return line style parameters for one request overlay."""
+    return {
+        "color": REQUEST_STATUS_COLORS.get(status, "#2563eb"),
+        "weight": 6 if is_dominant else 4,
+        "opacity": 0.95 if is_dominant else 0.65,
+        "dashArray": "" if is_dominant else "6 6",
+    }
+
+
+def _request_overlay_offset_m(display_rank: int) -> float:
+    """Spread overlapping request overlays sideways by display rank."""
+    if display_rank <= 0:
+        return 0.0
+    step = ((display_rank + 1) // 2) * 2.5
+    return step if display_rank % 2 == 1 else -step
+
+
+def _offset_polyline(coords: list[tuple[float, float]], offset_m: float) -> list[tuple[float, float]]:
+    """Shift a short polyline sideways to avoid complete overlap."""
+    if abs(offset_m) < 0.01 or len(coords) < 2:
+        return coords
+
+    shifted: list[tuple[float, float]] = []
+    for index, point in enumerate(coords):
+        prev_point = coords[index - 1] if index > 0 else coords[index]
+        next_point = coords[index + 1] if index < len(coords) - 1 else coords[index]
+        lat_scale = 111_320.0
+        lon_scale = max(1e-6, 111_320.0 * cos(radians(point[0])))
+        dx = (next_point[1] - prev_point[1]) * lon_scale
+        dy = (next_point[0] - prev_point[0]) * lat_scale
+        length = hypot(dx, dy)
+        if length < 0.1:
+            shifted.append(point)
+            continue
+        perp_x = -dy / length
+        perp_y = dx / length
+        shifted.append(
+            (
+                point[0] + ((perp_y * offset_m) / lat_scale),
+                point[1] + ((perp_x * offset_m) / lon_scale),
+            )
+        )
+    return shifted
+
+
+def _request_popup_parts(request_visual: dict[str, object]) -> list[str]:
+    """Build popup parts for a request overlay."""
+    parts = ["Priorisierung"]
+    parts.append(
+        f"{request_visual['request_id']}/{request_visual['sequence_number']}"
+    )
+    parts.append(str(request_visual["status"]))
+    if request_visual.get("station_id"):
+        parts.append(f"Station {request_visual['station_id']}")
+    if request_visual.get("importance_level") is not None:
+        parts.append(f"Prio {request_visual['importance_level']}")
+    if request_visual.get("ssem_status"):
+        parts.append(f"SSM {request_visual['ssem_status']}")
+    return parts
 
 
 def _spat_intersection_phase(intersection: dict) -> Optional[str]:
@@ -329,17 +514,30 @@ def _infrastructure_overlays_for_message(msg: V2xMessage) -> list[dict[str, obje
                 lane_set = intersection.get("laneSet")
                 if not isinstance(lane_set, list):
                     lane_set = []
-                for polyline_index, points in enumerate(_extract_map_polyline_points(intersection)):
+                for polyline_index, lane in enumerate(lane_set):
+                    if not isinstance(lane, dict):
+                        continue
+                    points = _lane_points(lane)
+                    if len(points) < 2:
+                        continue
+                    role = _lane_role(lane)
+                    lane_color = LANE_ROLE_COLORS.get(role, base_color)
+                    lane_layer = (
+                        "map_inbound"
+                        if role == "inbound"
+                        else "map_outbound"
+                        if role == "outbound"
+                        else layer
+                    )
                     overlays.append({
                         "kind": "polyline",
                         "id": f"{msg.msg_type.value}_{msg.station_id}_{index}_lane_{polyline_index}",
                         "coords": [[lat, lon] for lat, lon in points],
-                        "color": base_color,
-                        "popup": "MAPEM Lane Geometry",
-                        "layer": layer,
+                        "color": lane_color,
+                        "popup": _lane_popup_text(lane, role),
+                        "layer": lane_layer,
                     })
-                    lane = lane_set[polyline_index] if polyline_index < len(lane_set) else {}
-                    lane_id = _lane_identifier(lane) if isinstance(lane, dict) else None
+                    lane_id = _lane_identifier(lane)
                     label_point = _polyline_label_point(points)
                     if lane_id and label_point is not None:
                         overlays.append({
@@ -348,8 +546,18 @@ def _infrastructure_overlays_for_message(msg: V2xMessage) -> list[dict[str, obje
                             "lat": label_point[0],
                             "lon": label_point[1],
                             "text": f"Lane {lane_id}",
-                            "color": base_color,
-                            "layer": layer,
+                            "color": lane_color,
+                            "layer": lane_layer,
+                        })
+                    stopline_points = _stopline_points(lane)
+                    if stopline_points is not None:
+                        overlays.append({
+                            "kind": "polyline",
+                            "id": f"{msg.msg_type.value}_{msg.station_id}_{index}_lane_{polyline_index}_stopline",
+                            "coords": [[lat, lon] for lat, lon in stopline_points],
+                            "color": STOPLINE_COLOR,
+                            "popup": f"Stopline | Lane {lane_id}" if lane_id else "Stopline",
+                            "layer": "map_stoplines",
                         })
     else:
         raw_popup = f"{msg.msg_type.value} raw infrastructure position"
@@ -378,8 +586,13 @@ def _infrastructure_overlays_for_message(msg: V2xMessage) -> list[dict[str, obje
 
 def _infrastructure_overlays_for_messages(messages: list[V2xMessage]) -> list[dict[str, object]]:
     """Aggregate the latest MAP/SPAT context per intersection into render overlays."""
+    if not messages:
+        return []
+
     latest_map: dict[str, tuple[V2xMessage, dict]] = {}
     latest_spat: dict[str, tuple[V2xMessage, dict]] = {}
+    scene = build_scene_snapshot(messages, messages[-1].timestamp)
+    request_visuals = scene.request_visuals_by_intersection
 
     for msg in messages:
         if msg.msg_type not in INFRASTRUCTURE_MESSAGE_COLORS:
@@ -400,6 +613,14 @@ def _infrastructure_overlays_for_messages(messages: list[V2xMessage]) -> list[di
             map_msg, map_intersection = map_entry
             map_point = _intersection_point(map_intersection, map_msg)
             map_popup = _intersection_popup(map_msg, map_intersection, "MAPEM Intersection")
+            intersection_numeric_id = _coerce_int(
+                map_intersection.get("intersectionId", map_intersection.get("id"))
+            )
+            intersection_requests = (
+                request_visuals.get(intersection_numeric_id, [])
+                if intersection_numeric_id is not None
+                else []
+            )
             overlays.append({
                 "kind": "circle",
                 "id": f"{key}_map_circle",
@@ -424,49 +645,42 @@ def _infrastructure_overlays_for_messages(messages: list[V2xMessage]) -> list[di
             if not isinstance(lane_set, list):
                 lane_set = []
             spat_states = _spat_states_by_group(spat_entry[1]) if spat_entry is not None else {}
-            map_polylines = _extract_map_polyline_points(map_intersection)
-            for polyline_index, points in enumerate(map_polylines):
-                lane = lane_set[polyline_index] if polyline_index < len(lane_set) else {}
-                lane_id = _lane_identifier(lane) if isinstance(lane, dict) else None
-                signal_groups = _lane_signal_group_ids(lane) if isinstance(lane, dict) else []
-                matched_signal_group = next(
-                    (signal_group for signal_group in signal_groups if signal_group in spat_states),
-                    None,
+            lane_by_id = {
+                _coerce_int(lane.get("laneId", lane.get("laneID", lane.get("id")))): lane
+                for lane in lane_set
+                if isinstance(lane, dict)
+            }
+            for polyline_index, lane in enumerate(lane_set):
+                if not isinstance(lane, dict):
+                    continue
+                points = _lane_points(lane)
+                if len(points) < 2:
+                    continue
+                lane_id = _lane_identifier(lane)
+                role = _lane_role(lane)
+                lane_color = LANE_ROLE_COLORS.get(role, INFRASTRUCTURE_MESSAGE_COLORS[MessageType.MAPEM])
+                lane_layer = (
+                    "map_inbound"
+                    if role == "inbound"
+                    else "map_outbound"
+                    if role == "outbound"
+                    else "map"
                 )
-                matched_phase = (
-                    spat_states.get(matched_signal_group)
-                    if matched_signal_group is not None
-                    else None
-                )
-                lane_color = (
-                    SPAT_PHASE_COLORS.get(matched_phase, INFRASTRUCTURE_MESSAGE_COLORS[MessageType.MAPEM])
-                    if matched_phase is not None
-                    else INFRASTRUCTURE_MESSAGE_COLORS[MessageType.MAPEM]
-                )
-                lane_popup_parts = ["MAPEM Lane Geometry"]
-                if lane_id:
-                    lane_popup_parts.append(f"Lane {lane_id}")
-                if matched_signal_group is not None:
-                    lane_popup_parts.append(f"SG {matched_signal_group}")
-                if matched_phase:
-                    lane_popup_parts.append(matched_phase)
                 overlays.append({
                     "kind": "polyline",
                     "id": f"{key}_lane_{polyline_index}",
                     "coords": [[lat, lon] for lat, lon in points],
                     "color": lane_color,
-                    "popup": " | ".join(lane_popup_parts),
-                    "layer": "map",
+                    "popup": _lane_popup_text(lane, role),
+                    "layer": lane_layer,
                 })
                 label_point = _polyline_label_point(points)
                 if label_point is not None:
                     label_parts = []
                     if lane_id:
                         label_parts.append(f"Lane {lane_id}")
-                    if matched_signal_group is not None:
-                        label_parts.append(f"SG {matched_signal_group}")
-                    if matched_phase:
-                        label_parts.append(matched_phase)
+                    if role:
+                        label_parts.append(role)
                     if label_parts:
                         overlays.append({
                             "kind": "label",
@@ -475,8 +689,138 @@ def _infrastructure_overlays_for_messages(messages: list[V2xMessage]) -> list[di
                             "lon": label_point[1],
                             "text": " | ".join(label_parts),
                             "color": lane_color,
-                            "layer": "map",
+                            "layer": lane_layer,
                         })
+                stopline_points = _stopline_points(lane)
+                if stopline_points is not None:
+                    overlays.append({
+                        "kind": "polyline",
+                        "id": f"{key}_lane_{polyline_index}_stopline",
+                        "coords": [[lat, lon] for lat, lon in stopline_points],
+                        "color": STOPLINE_COLOR,
+                        "popup": f"Stopline | Lane {lane_id}" if lane_id else "Stopline",
+                        "layer": "map_stoplines",
+                    })
+
+                connections = lane.get("connections", lane.get("connectsTo"))
+                if not isinstance(connections, list):
+                    continue
+                for connection in connections:
+                    if not isinstance(connection, dict):
+                        continue
+                    target_lane_id = _coerce_int(connection.get("targetLaneId", connection.get("connectingLane")))
+                    if target_lane_id is None:
+                        continue
+                    target_lane = lane_by_id.get(target_lane_id)
+                    if not isinstance(target_lane, dict):
+                        continue
+                    connection_points = _connection_curve_points(lane, target_lane, map_point)
+                    if connection_points is None:
+                        continue
+                    signal_group = _coerce_int(connection.get("signalGroup"))
+                    matched_phase = spat_states.get(signal_group) if signal_group is not None else None
+                    connection_color = (
+                        SPAT_PHASE_COLORS.get(
+                            matched_phase,
+                            INFRASTRUCTURE_MESSAGE_COLORS[MessageType.MAPEM],
+                        )
+                        if matched_phase is not None
+                        else INFRASTRUCTURE_MESSAGE_COLORS[MessageType.MAPEM]
+                    )
+                    popup_parts = ["MAPEM Connection"]
+                    if lane_id:
+                        popup_parts.append(f"Lane {lane_id}")
+                    popup_parts.append(f"to Lane {target_lane_id}")
+                    if signal_group is not None:
+                        popup_parts.append(f"SG {signal_group}")
+                    if matched_phase:
+                        popup_parts.append(matched_phase)
+                    overlays.append({
+                        "kind": "polyline",
+                        "id": f"{key}_lane_{polyline_index}_connection_{target_lane_id}",
+                        "coords": [[lat, lon] for lat, lon in connection_points],
+                        "color": connection_color,
+                        "popup": " | ".join(popup_parts),
+                        "layer": "map_connections",
+                    })
+                    matching_requests = [
+                        visual
+                        for visual in intersection_requests
+                        if visual.in_lane == _coerce_int(lane.get("laneId", lane.get("laneID", lane.get("id"))))
+                        and visual.out_lane == target_lane_id
+                    ]
+                    for request_visual in matching_requests:
+                        style = _request_overlay_style(request_visual.status.value, request_visual.is_dominant)
+                        request_coords = _offset_polyline(
+                            connection_points,
+                            _request_overlay_offset_m(request_visual.display_rank),
+                        )
+                        popup_parts = _request_popup_parts(
+                            {
+                                "request_id": request_visual.request_id,
+                                "sequence_number": request_visual.sequence_number,
+                                "status": request_visual.status.value,
+                                "station_id": request_visual.station_id,
+                                "importance_level": request_visual.importance_level,
+                                "ssem_status": request_visual.ssem_status,
+                            }
+                        )
+                        overlays.append({
+                            "kind": "polyline",
+                            "id": (
+                                f"{key}_lane_{polyline_index}_connection_{target_lane_id}"
+                                f"_request_{request_visual.request_id}_{request_visual.sequence_number}"
+                            ),
+                            "coords": [[lat, lon] for lat, lon in request_coords],
+                            "color": style["color"],
+                            "weight": style["weight"],
+                            "opacity": style["opacity"],
+                            "dashArray": style["dashArray"],
+                            "popup": " | ".join(popup_parts),
+                            "layer": "map_requests",
+                        })
+
+                lane_requests = [
+                    visual
+                    for visual in intersection_requests
+                    if visual.in_lane == _coerce_int(lane.get("laneId", lane.get("laneID", lane.get("id"))))
+                    or visual.out_lane == _coerce_int(lane.get("laneId", lane.get("laneID", lane.get("id"))))
+                ]
+                for request_visual in lane_requests:
+                    style = _request_overlay_style(request_visual.status.value, request_visual.is_dominant)
+                    request_coords = _offset_polyline(
+                        points,
+                        _request_overlay_offset_m(request_visual.display_rank),
+                    )
+                    lane_popup_parts = _request_popup_parts(
+                        {
+                            "request_id": request_visual.request_id,
+                            "sequence_number": request_visual.sequence_number,
+                            "status": request_visual.status.value,
+                            "station_id": request_visual.station_id,
+                            "importance_level": request_visual.importance_level,
+                            "ssem_status": request_visual.ssem_status,
+                        }
+                    )
+                    lane_popup_parts.append(
+                        "Inbound-Lane" if request_visual.in_lane == _coerce_int(lane.get("laneId", lane.get("laneID", lane.get("id"))))
+                        else "Outbound-Lane"
+                    )
+                    overlays.append({
+                        "kind": "polyline",
+                        "id": (
+                            f"{key}_lane_{polyline_index}_request_"
+                            f"{request_visual.request_id}_{request_visual.sequence_number}_"
+                            f"{request_visual.status.value}"
+                        ),
+                        "coords": [[lat, lon] for lat, lon in request_coords],
+                        "color": style["color"],
+                        "weight": style["weight"],
+                        "opacity": style["opacity"],
+                        "dashArray": style["dashArray"],
+                        "popup": " | ".join(lane_popup_parts),
+                        "layer": "map_requests",
+                    })
 
         if spat_entry is not None:
             spat_msg, spat_intersection = spat_entry
@@ -565,12 +909,22 @@ LEAFLET_HTML = """<!DOCTYPE html>
             markers: L.layerGroup().addTo(map),
             trajectories: L.layerGroup().addTo(map),
             map: L.layerGroup().addTo(map),
+            map_inbound: L.layerGroup().addTo(map),
+            map_outbound: L.layerGroup().addTo(map),
+            map_connections: L.layerGroup().addTo(map),
+            map_stoplines: L.layerGroup().addTo(map),
+            map_requests: L.layerGroup().addTo(map),
             spat: L.layerGroup().addTo(map)
         };
         var overlayControl = L.control.layers(null, {
             'Stationen': overlayGroups.markers,
             'Trajektorien': overlayGroups.trajectories,
             'MAP-Infrastruktur': overlayGroups.map,
+            'Inbound-Lanes': overlayGroups.map_inbound,
+            'Outbound-Lanes': overlayGroups.map_outbound,
+            'Connections': overlayGroups.map_connections,
+            'Stoplines': overlayGroups.map_stoplines,
+            'Requests': overlayGroups.map_requests,
             'SPAT-Status': overlayGroups.spat
         }, {collapsed: false}).addTo(map);
         var stationColors = {};
@@ -630,17 +984,22 @@ LEAFLET_HTML = """<!DOCTYPE html>
             }
         }
 
-        function addInfrastructurePolyline(id, coords, color, popup, layerName) {
+        function addInfrastructurePolyline(id, coords, color, popup, layerName, weight, opacity, dashArray) {
             if (infrastructureLayers[id]) {
                 infrastructureLayers[id].setLatLngs(coords);
-                infrastructureLayers[id].setStyle({color: color});
+                infrastructureLayers[id].setStyle({
+                    color: color,
+                    weight: weight || 3,
+                    opacity: opacity || 0.85,
+                    dashArray: dashArray || '8 6'
+                });
                 infrastructureLayers[id].bindPopup(popup);
             } else {
                 infrastructureLayers[id] = L.polyline(coords, {
                     color: color,
-                    weight: 3,
-                    opacity: 0.85,
-                    dashArray: '8 6'
+                    weight: weight || 3,
+                    opacity: opacity || 0.85,
+                    dashArray: dashArray || '8 6'
                 }).addTo(infrastructureGroup(layerName)).bindPopup(popup);
             }
         }
@@ -707,6 +1066,11 @@ LEAFLET_HTML = """<!DOCTYPE html>
             }
             for (var key in infrastructureLayers) {
                 overlayGroups.map.removeLayer(infrastructureLayers[key]);
+                overlayGroups.map_inbound.removeLayer(infrastructureLayers[key]);
+                overlayGroups.map_outbound.removeLayer(infrastructureLayers[key]);
+                overlayGroups.map_connections.removeLayer(infrastructureLayers[key]);
+                overlayGroups.map_stoplines.removeLayer(infrastructureLayers[key]);
+                overlayGroups.map_requests.removeLayer(infrastructureLayers[key]);
                 overlayGroups.spat.removeLayer(infrastructureLayers[key]);
             }
             markers = {};
@@ -823,10 +1187,14 @@ class MapWidget(QWebEngineView):
             elif overlay["kind"] == "polyline":
                 overlay_popup = _js_escape(str(overlay.get("popup", "")))
                 coords_js = json.dumps(overlay["coords"])
+                overlay_weight = overlay.get("weight", 3)
+                overlay_opacity = overlay.get("opacity", 0.85)
+                overlay_dash = _js_escape(str(overlay.get("dashArray", "8 6")))
                 self._run_js(
                     "addInfrastructurePolyline("
                     f"'{overlay_id}', {coords_js}, '{overlay_color}', '{overlay_popup}', "
-                    f"'{_js_escape(str(overlay['layer']))}')"
+                    f"'{_js_escape(str(overlay['layer']))}', {overlay_weight}, {overlay_opacity}, "
+                    f"'{overlay_dash}')"
                 )
             elif overlay["kind"] == "label":
                 self._run_js(

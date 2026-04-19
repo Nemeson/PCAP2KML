@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import logging
 import shutil
-from math import cos, radians
+from math import cos, hypot, radians
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from collections import Counter
 
 from scapy.layers.dot11 import Dot11
 from scapy.layers.l2 import SNAP
@@ -358,6 +359,27 @@ def _safe_get(obj, *keys, default=None):
     return cur if cur != {} else default
 
 
+def _coerce_int(value: object) -> Optional[int]:
+    """Best-effort integer normalization for nested decoded fields."""
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    if isinstance(value, dict):
+        for key in ("id", "lane", "value", "timeStamp"):
+            coerced = _coerce_int(value.get(key))
+            if coerced is not None:
+                return coerced
+    return None
+
+
 def _normalize_geo_point(point: object) -> Optional[dict[str, float]]:
     """Normalize ASN.1 coordinate dicts to {'lat', 'lon'} in decimal degrees."""
     if not isinstance(point, dict):
@@ -435,6 +457,119 @@ def _normalize_node_list(node_list: object, ref_point: Optional[dict[str, float]
     return {"nodes": normalized_nodes} if normalized_nodes else None
 
 
+def _lane_role(lane: dict) -> Optional[str]:
+    """Classify a normalized MAP lane into a simple directional role."""
+    if lane.get("ingressApproach") is not None:
+        return "inbound"
+    if lane.get("egressApproach") is not None:
+        return "outbound"
+    return None
+
+
+def _normalize_map_connection(connection: object) -> Optional[dict]:
+    """Normalize one MAP connectsTo entry to a compact app-friendly shape."""
+    if not isinstance(connection, dict):
+        return None
+    normalized = dict(connection)
+    connection_id = _coerce_int(connection.get("connectionID", connection.get("connectionId")))
+    if connection_id is not None:
+        normalized["connectionId"] = connection_id
+
+    target_lane = _coerce_int(_safe_get(connection, "connectingLane", "lane"))
+    if target_lane is not None:
+        normalized["targetLaneId"] = target_lane
+
+    signal_group = _coerce_int(connection.get("signalGroup"))
+    if signal_group is not None:
+        normalized["signalGroup"] = signal_group
+    return normalized
+
+
+def _perpendicular_stopline(
+    anchor: tuple[float, float],
+    neighbor: tuple[float, float],
+    width_m: float,
+) -> Optional[list[dict[str, float]]]:
+    """Build a short stopline perpendicular to a lane centerline."""
+    lat_scale = 111_320.0
+    lon_scale = max(1e-6, 111_320.0 * cos(radians(anchor[0])))
+    dx = (neighbor[1] - anchor[1]) * lon_scale
+    dy = (neighbor[0] - anchor[0]) * lat_scale
+    length = hypot(dx, dy)
+    if length < 0.1:
+        return None
+
+    half_width = max(2.0, width_m / 2.0)
+    perp_x = -dy / length
+    perp_y = dx / length
+
+    point_a = {
+        "lat": anchor[0] + ((perp_y * half_width) / lat_scale),
+        "lon": anchor[1] + ((perp_x * half_width) / lon_scale),
+    }
+    point_b = {
+        "lat": anchor[0] - ((perp_y * half_width) / lat_scale),
+        "lon": anchor[1] - ((perp_x * half_width) / lon_scale),
+    }
+    return [point_a, point_b]
+
+
+def _derive_stopline(
+    lane: dict,
+    ref_point: Optional[dict[str, float]],
+    default_lane_width_cm: Optional[int],
+) -> Optional[dict]:
+    """Derive a simple stopline near the intersection-facing end of an inbound lane."""
+    if _lane_role(lane) != "inbound":
+        return None
+    node_list = lane.get("nodeList")
+    if not isinstance(node_list, dict):
+        return None
+    nodes = node_list.get("nodes")
+    if not isinstance(nodes, list) or len(nodes) < 2:
+        return None
+
+    points = [
+        _normalize_geo_point(node) if isinstance(node, dict) else None
+        for node in nodes
+    ]
+    points = [point for point in points if point is not None]
+    if len(points) < 2:
+        return None
+
+    intersection_anchor = points[0]
+    direction_neighbor = points[1]
+    if ref_point is not None:
+        start_distance = hypot(
+            (points[0]["lat"] - ref_point["lat"]) * 111_320.0,
+            (points[0]["lon"] - ref_point["lon"]) * max(1e-6, 111_320.0 * cos(radians(ref_point["lat"]))),
+        )
+        end_distance = hypot(
+            (points[-1]["lat"] - ref_point["lat"]) * 111_320.0,
+            (points[-1]["lon"] - ref_point["lon"]) * max(1e-6, 111_320.0 * cos(radians(ref_point["lat"]))),
+        )
+        if end_distance < start_distance:
+            intersection_anchor = points[-1]
+            direction_neighbor = points[-2]
+
+    width_cm = _coerce_int(lane.get("laneWidth"))
+    if width_cm is None:
+        width_cm = default_lane_width_cm
+    width_m = (width_cm / 100.0) if width_cm is not None else 3.0
+    stopline_points = _perpendicular_stopline(
+        (intersection_anchor["lat"], intersection_anchor["lon"]),
+        (direction_neighbor["lat"], direction_neighbor["lon"]),
+        width_m=width_m,
+    )
+    if stopline_points is None:
+        return None
+
+    return {
+        "source": "derived",
+        "points": stopline_points,
+    }
+
+
 def _normalize_map_intersection(intersection: dict) -> dict:
     """Normalize decoded MAP intersection fields to the app's expected shape."""
     normalized = dict(intersection)
@@ -446,6 +581,7 @@ def _normalize_map_intersection(intersection: dict) -> dict:
     lane_set = intersection.get("laneSet")
     if isinstance(lane_set, list):
         normalized_lanes = []
+        default_lane_width_cm = _coerce_int(intersection.get("laneWidth"))
         for lane in lane_set:
             if not isinstance(lane, dict):
                 continue
@@ -453,6 +589,30 @@ def _normalize_map_intersection(intersection: dict) -> dict:
             normalized_node_list = _normalize_node_list(lane.get("nodeList"), ref_point)
             if normalized_node_list is not None:
                 normalized_lane["nodeList"] = normalized_node_list
+            lane_id = _coerce_int(lane.get("laneID", lane.get("laneId", lane.get("id"))))
+            if lane_id is not None:
+                normalized_lane["laneId"] = lane_id
+            role = _lane_role(lane)
+            if role is not None:
+                normalized_lane["laneRole"] = role
+            connects_to = lane.get("connectsTo", lane.get("connectsto"))
+            if isinstance(connects_to, dict):
+                connects_to = connects_to.get("connections", connects_to.get("connectsTo"))
+            if isinstance(connects_to, list):
+                normalized_connections = [
+                    normalized_connection
+                    for normalized_connection in (
+                        _normalize_map_connection(connection)
+                        for connection in connects_to
+                    )
+                    if normalized_connection is not None
+                ]
+                if normalized_connections:
+                    normalized_lane["connections"] = normalized_connections
+                    normalized_lane["connectsTo"] = normalized_connections
+            stopline = _derive_stopline(normalized_lane, ref_point, default_lane_width_cm)
+            if stopline is not None:
+                normalized_lane["stopLine"] = stopline
             normalized_lanes.append(normalized_lane)
         normalized["laneSet"] = normalized_lanes
     return normalized
@@ -767,6 +927,33 @@ def _decode_its_message(
     )
 
 
+def _annotate_cam_identity_outliers(session: SessionData) -> None:
+    """Mark one-off CAM station-id outliers without silently rewriting them."""
+    station_counts = Counter(
+        msg.station_id
+        for msg in session.messages
+        if msg.msg_type == MessageType.CAM and msg.station_id != "unknown"
+    )
+    if len(station_counts) < 2:
+        return
+
+    dominant_station_id, dominant_count = station_counts.most_common(1)[0]
+    total = sum(station_counts.values())
+    if dominant_count < 3 or (dominant_count / total) < 0.8:
+        return
+
+    for msg in session.messages:
+        if msg.msg_type != MessageType.CAM or msg.station_id == dominant_station_id:
+            continue
+        observed_count = station_counts.get(msg.station_id, 0)
+        if observed_count != 1:
+            continue
+        msg.details["Identitaets-Hinweis"] = (
+            f"Einzelne CAM-Station-ID {msg.station_id} weicht von dominanter "
+            f"Session-ID {dominant_station_id} ab; keine automatische Korrektur"
+        )
+
+
 # ─── Pyshark Backend ──────────────────────────────────────────────
 
 def _parse_with_pyshark(
@@ -1020,6 +1207,7 @@ def parse_pcap(
             cancel_check=cancel_check,
         )
 
+    _annotate_cam_identity_outliers(session)
     session.finalize()
     logger.info("Parsed %d messages from %s", count, path.name)
     return session

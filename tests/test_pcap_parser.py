@@ -61,6 +61,31 @@ def test_parse_txa_22082025_pcap_decodes_mapem_and_spatem_payloads() -> None:
     assert "stateTimeSpeed" in spat_state
 
 
+def test_parse_txa_22082025_pcap_normalizes_map_lane_roles_connections_and_stoplines() -> None:
+    session = parse_pcap(str(TESTFILES / "txa_22082025.pcap"))
+
+    map_messages = [msg for msg in session.messages if msg.msg_type == MessageType.MAPEM and msg.decoded_data]
+
+    assert map_messages
+    map_intersection = map_messages[0].decoded_data["intersections"][0]
+    lanes = map_intersection["laneSet"]
+    inbound_lanes = [lane for lane in lanes if lane.get("laneRole") == "inbound"]
+    outbound_lanes = [lane for lane in lanes if lane.get("laneRole") == "outbound"]
+
+    assert inbound_lanes
+    assert outbound_lanes
+    assert any(lane.get("connections") for lane in inbound_lanes)
+    assert any("stopLine" in lane for lane in inbound_lanes)
+    assert all("stopLine" not in lane for lane in outbound_lanes)
+
+    first_connected_lane = next(lane for lane in inbound_lanes if lane.get("connections"))
+    first_connection = first_connected_lane["connections"][0]
+
+    assert "laneId" in first_connected_lane
+    assert "targetLaneId" in first_connection
+    assert "signalGroup" in first_connection
+
+
 def test_parse_rxa_22082025_cam_extracts_partial_header_without_fake_security() -> None:
     session = parse_pcap(str(TESTFILES / "rxa_22082025.pcap"))
 
@@ -79,3 +104,17 @@ def test_parse_rxa_22082025_cam_extracts_partial_header_without_fake_security() 
     assert partial_cam.speed is not None
     assert partial_cam.heading is not None
     assert partial_cam.details["Fallback-Quelle"] == "GeoNetworking Long Position Vector"
+
+
+def test_parse_rxa_22082025_marks_cam_station_id_outlier_without_rewriting_it() -> None:
+    session = parse_pcap(str(TESTFILES / "rxa_22082025.pcap"))
+
+    cam_messages = [msg for msg in session.messages if msg.msg_type == MessageType.CAM]
+    flagged = [msg for msg in cam_messages if "Identitaets-Hinweis" in msg.details]
+
+    assert flagged
+    assert {msg.station_id for msg in cam_messages} == {"7153", "3858003421"}
+    assert len(flagged) == 1
+    assert flagged[0].station_id == "3858003421"
+    assert flagged[0].decoded_data["stationId"] == 3858003421
+    assert "dominanter Session-ID 7153" in flagged[0].details["Identitaets-Hinweis"]

@@ -42,8 +42,10 @@ from ..parsing_worker import ParsingWorker
 from ..player_controller import SPEED_OPTIONS, PlayerController
 from ..scene_model import (
     ActiveRequest,
+    RequestOperationalStatus,
     SceneSnapshot,
     build_scene_snapshot,
+    get_request_operational_status,
     find_overdue_requests,
     get_clock_skew_warnings,
     get_eta_accuracy_seconds,
@@ -324,6 +326,14 @@ class MainWindow(QMainWindow):
         self._scene_legend.setWordWrap(True)
         self._scene_legend.setStyleSheet("color: #667891; font-size: 11px;")
         scene_layout.addWidget(self._scene_legend)
+
+        self._scene_request_legend = QLabel(
+            "Request-Legende: pending=blau, acknowledged=gelb, granted=gruen, "
+            "rejected=rot, timeout=dunkelrot | dominante Anfrage = kraeftig, weitere = gestrichelt"
+        )
+        self._scene_request_legend.setWordWrap(True)
+        self._scene_request_legend.setStyleSheet("color: #667891; font-size: 11px;")
+        scene_layout.addWidget(self._scene_request_legend)
 
         self._scene_intersection_table = QTableWidget(0, len(SCENE_INTERSECTION_HEADERS))
         self._scene_intersection_table.setHorizontalHeaderLabels(SCENE_INTERSECTION_HEADERS)
@@ -791,7 +801,8 @@ class MainWindow(QMainWindow):
             "Zeitpunkt: "
             f"{scene.timeline_position.strftime('%H:%M:%S.%f')[:-3]} | "
             f"{len(intersections)} Kreuzung(en), "
-            f"{len(scene.active_requests)} offene Anforderung(en)"
+            f"{len(scene.active_requests)} offene Anforderung(en), "
+            f"{max(0, len(scene.request_states) - len(scene.active_requests))} kuerzlich beantwortet"
         )
         self._scene_metrics.setText(
             "Forecasts: "
@@ -857,37 +868,59 @@ class MainWindow(QMainWindow):
                 row, 4, QTableWidgetItem(self._format_forecast_timeline(forecast))
             )
 
-        active_requests = sorted(
-            scene.active_requests,
-            key=lambda request: (request.importance_level or 0, request.requested_at),
-            reverse=True,
+        request_visuals = [
+            visual
+            for visuals in scene.request_visuals_by_intersection.values()
+            for visual in visuals
+        ]
+        request_visuals.sort(
+            key=lambda visual: (
+                visual.display_rank,
+                -(visual.importance_level or 0),
+                -visual.requested_at.timestamp(),
+            )
         )
-        self._scene_requests_table.setRowCount(len(active_requests))
+        self._scene_requests_table.setRowCount(len(request_visuals))
         overdue_keys = {
             (request.intersection_id, request.request_id, request.sequence_number)
             for request in overdue_requests
         }
-        for row, request in enumerate(active_requests):
+        for row, request_visual in enumerate(request_visuals):
             request_key = (
-                request.intersection_id,
-                request.request_id,
-                request.sequence_number,
+                request_visual.intersection_id,
+                request_visual.request_id,
+                request_visual.sequence_number,
             )
-            status = request.ssem_status or ("timeout" if request_key in overdue_keys else "pending")
-            verification = self._find_eta_verification(scene, request)
+            status = request_visual.status.value
+            if request_key in overdue_keys:
+                status = "timeout"
+            if request_visual.is_dominant:
+                status = f"{status} / dominant"
+            elif request_visual.display_rank > 0:
+                status = f"{status} / sekundar"
+            verification = self._find_eta_verification_by_key(
+                scene,
+                request_visual.intersection_id,
+                request_visual.request_id,
+                request_visual.sequence_number,
+            )
             if verification is not None:
                 status += f" / ETA {verification.delta_seconds:+.1f}s"
-            lane_text = self._format_lane_text(request)
+            lane_text = self._format_visual_lane_text(request_visual)
             request_text = (
-                f"{request.intersection_id}/{request.request_id}/{request.sequence_number}"
+                f"{request_visual.intersection_id}/{request_visual.request_id}/{request_visual.sequence_number}"
             )
 
             self._scene_requests_table.setItem(row, 0, QTableWidgetItem(request_text))
-            self._scene_requests_table.setItem(row, 1, QTableWidgetItem(request.station_id))
+            self._scene_requests_table.setItem(row, 1, QTableWidgetItem(request_visual.station_id))
             self._scene_requests_table.setItem(
                 row,
                 2,
-                QTableWidgetItem(str(request.importance_level) if request.importance_level is not None else "-"),
+                QTableWidgetItem(
+                    str(request_visual.importance_level)
+                    if request_visual.importance_level is not None
+                    else "-"
+                ),
             )
             self._scene_requests_table.setItem(row, 3, QTableWidgetItem(status))
             self._scene_requests_table.setItem(row, 4, QTableWidgetItem(lane_text))
@@ -984,6 +1017,12 @@ class MainWindow(QMainWindow):
         out_lane = "-" if request.out_lane is None else str(request.out_lane)
         return f"{in_lane} -> {out_lane}"
 
+    def _format_visual_lane_text(self, request_visual) -> str:
+        """Render lane information for a request visual state."""
+        in_lane = "-" if request_visual.in_lane is None else str(request_visual.in_lane)
+        out_lane = "-" if request_visual.out_lane is None else str(request_visual.out_lane)
+        return f"{in_lane} -> {out_lane}"
+
     def _find_eta_verification(self, scene: SceneSnapshot, request: ActiveRequest):
         """Find ETA verification data for one active request."""
         for verification in scene.eta_verifications:
@@ -991,6 +1030,23 @@ class MainWindow(QMainWindow):
                 verification.intersection_id == request.intersection_id
                 and verification.request_id == request.request_id
                 and verification.sequence_number == request.sequence_number
+            ):
+                return verification
+        return None
+
+    def _find_eta_verification_by_key(
+        self,
+        scene: SceneSnapshot,
+        intersection_id: int,
+        request_id: int,
+        sequence_number: int,
+    ):
+        """Find ETA verification data by explicit request correlation key."""
+        for verification in scene.eta_verifications:
+            if (
+                verification.intersection_id == intersection_id
+                and verification.request_id == request_id
+                and verification.sequence_number == sequence_number
             ):
                 return verification
         return None

@@ -109,12 +109,19 @@ def test_infrastructure_overlays_create_lane_polylines_for_decoded_map_geometry(
                     "laneSet": [
                         {
                             "laneID": 17,
+                            "laneRole": "inbound",
                             "nodeList": {
                                 "nodes": [
                                     {"lat": 52.0000, "lon": 13.0000},
                                     {"lat": 52.0001, "lon": 13.0002},
                                 ]
-                            }
+                            },
+                            "stopLine": {
+                                "points": [
+                                    {"lat": 52.0000, "lon": 13.0000},
+                                    {"lat": 52.0000, "lon": 13.0001},
+                                ]
+                            },
                         }
                     ],
                 }
@@ -126,6 +133,10 @@ def test_infrastructure_overlays_create_lane_polylines_for_decoded_map_geometry(
 
     assert any(overlay["kind"] == "circle" for overlay in overlays)
     assert any(overlay["kind"] == "polyline" for overlay in overlays)
+    assert any(
+        overlay["kind"] == "polyline" and overlay["layer"] == "map_stoplines"
+        for overlay in overlays
+    )
     assert any(
         overlay["kind"] == "label" and overlay["text"] == "Lane 17"
         for overlay in overlays
@@ -181,7 +192,7 @@ def test_infrastructure_overlays_create_spat_label_and_phase_color():
     assert "stop-And-Remain" in label["text"]
 
 
-def test_infrastructure_overlays_for_messages_colors_map_lane_by_matching_spat_group():
+def test_infrastructure_overlays_for_messages_colors_connection_by_matching_spat_group():
     map_msg = V2xMessage(
         timestamp=datetime(2026, 4, 18, 12, 0, 0, tzinfo=timezone.utc),
         station_id="rsu-1",
@@ -196,14 +207,25 @@ def test_infrastructure_overlays_for_messages_colors_map_lane_by_matching_spat_g
                     "laneSet": [
                         {
                             "laneID": 17,
-                            "connectsTo": [{"signalGroup": 5}],
+                            "laneRole": "inbound",
+                            "connections": [{"signalGroup": 5, "targetLaneId": 18}],
                             "nodeList": {
                                 "nodes": [
                                     {"lat": 52.0000, "lon": 13.0000},
                                     {"lat": 52.0001, "lon": 13.0002},
                                 ]
                             },
-                        }
+                        },
+                        {
+                            "laneID": 18,
+                            "laneRole": "outbound",
+                            "nodeList": {
+                                "nodes": [
+                                    {"lat": 52.0002, "lon": 13.0003},
+                                    {"lat": 52.0003, "lon": 13.0004},
+                                ]
+                            },
+                        },
                     ],
                 }
             ]
@@ -234,19 +256,208 @@ def test_infrastructure_overlays_for_messages_colors_map_lane_by_matching_spat_g
 
     overlays = _infrastructure_overlays_for_messages([map_msg, spat_msg])
 
-    lane_overlay = next(overlay for overlay in overlays if overlay["kind"] == "polyline")
+    inbound_lane_overlay = next(
+        overlay
+        for overlay in overlays
+        if overlay["kind"] == "polyline" and overlay["layer"] == "map_inbound"
+    )
+    connection_overlay = next(
+        overlay
+        for overlay in overlays
+        if overlay["kind"] == "polyline" and overlay["layer"] == "map_connections"
+    )
     lane_label = next(
         overlay
         for overlay in overlays
         if overlay["kind"] == "label" and "Lane 17" in overlay["text"]
     )
-    assert lane_overlay["color"] == "#dc2626"
-    assert "SG 5" in lane_overlay["popup"]
-    assert "stop-And-Remain" in lane_label["text"]
+    assert inbound_lane_overlay["color"] == "#0f766e"
+    assert connection_overlay["color"] == "#dc2626"
+    assert "SG 5" in connection_overlay["popup"]
+    assert "stop-And-Remain" in connection_overlay["popup"]
+    assert "inbound" in lane_label["text"]
+
+
+def test_infrastructure_overlays_for_messages_create_stopline_layer_for_inbound_lane():
+    map_msg = V2xMessage(
+        timestamp=datetime(2026, 4, 18, 12, 0, 0, tzinfo=timezone.utc),
+        station_id="rsu-1",
+        msg_type=MessageType.MAPEM,
+        latitude=52.0,
+        longitude=13.0,
+        decoded_data={
+            "intersections": [
+                {
+                    "id": {"id": 42},
+                    "refPoint": {"lat": 52.0, "lon": 13.0},
+                    "laneSet": [
+                        {
+                            "laneID": 17,
+                            "laneRole": "inbound",
+                            "nodeList": {
+                                "nodes": [
+                                    {"lat": 52.0000, "lon": 13.0000},
+                                    {"lat": 52.0001, "lon": 13.0002},
+                                ]
+                            },
+                            "stopLine": {
+                                "points": [
+                                    {"lat": 52.0000, "lon": 13.0000},
+                                    {"lat": 52.0000, "lon": 13.0001},
+                                ]
+                            },
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+
+    overlays = _infrastructure_overlays_for_messages([map_msg])
+
+    stopline_overlay = next(
+        overlay
+        for overlay in overlays
+        if overlay["kind"] == "polyline" and overlay["layer"] == "map_stoplines"
+    )
+
+    assert stopline_overlay["color"] == "#f97316"
+    assert "Stopline" in stopline_overlay["popup"]
+
+
+def test_infrastructure_overlays_for_messages_create_request_overlays_for_lane_and_connection():
+    map_msg = V2xMessage(
+        timestamp=datetime(2026, 4, 18, 12, 0, 0, tzinfo=timezone.utc),
+        station_id="rsu-1",
+        msg_type=MessageType.MAPEM,
+        latitude=52.0,
+        longitude=13.0,
+        decoded_data={
+            "intersections": [
+                {
+                    "id": {"id": 42},
+                    "refPoint": {"lat": 52.0, "lon": 13.0},
+                    "laneSet": [
+                        {
+                            "laneID": 17,
+                            "laneId": 17,
+                            "laneRole": "inbound",
+                            "connections": [{"signalGroup": 5, "targetLaneId": 18}],
+                            "nodeList": {
+                                "nodes": [
+                                    {"lat": 52.0000, "lon": 13.0000},
+                                    {"lat": 52.0001, "lon": 13.0002},
+                                ]
+                            },
+                        },
+                        {
+                            "laneID": 18,
+                            "laneId": 18,
+                            "laneRole": "outbound",
+                            "nodeList": {
+                                "nodes": [
+                                    {"lat": 52.0002, "lon": 13.0003},
+                                    {"lat": 52.0003, "lon": 13.0004},
+                                ]
+                            },
+                        },
+                    ],
+                }
+            ]
+        },
+    )
+    spat_msg = V2xMessage(
+        timestamp=datetime(2026, 4, 18, 12, 0, 1, tzinfo=timezone.utc),
+        station_id="rsu-1",
+        msg_type=MessageType.SPATEM,
+        latitude=52.0,
+        longitude=13.0,
+        decoded_data={
+            "intersections": [
+                {
+                    "id": {"id": 42},
+                    "states": [
+                        {
+                            "signalGroup": 5,
+                            "stateTimeSpeed": [{"eventState": "stop-And-Remain"}],
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    dominant_request = V2xMessage(
+        timestamp=datetime(2026, 4, 18, 12, 0, 2, tzinfo=timezone.utc),
+        station_id="bus-1",
+        msg_type=MessageType.SREM,
+        latitude=52.0,
+        longitude=13.0,
+        decoded_data={
+            "intersectionId": 42,
+            "requestId": 7,
+            "sequenceNumber": 1,
+            "importanceLevel": 12,
+            "inLane": 17,
+            "outLane": 18,
+        },
+    )
+    secondary_request = V2xMessage(
+        timestamp=datetime(2026, 4, 18, 12, 0, 2, 500000, tzinfo=timezone.utc),
+        station_id="tram-2",
+        msg_type=MessageType.SREM,
+        latitude=52.0,
+        longitude=13.0,
+        decoded_data={
+            "intersectionId": 42,
+            "requestId": 8,
+            "sequenceNumber": 1,
+            "importanceLevel": 8,
+            "inLane": 17,
+            "outLane": 18,
+        },
+    )
+    ssem_msg = V2xMessage(
+        timestamp=datetime(2026, 4, 18, 12, 0, 3, tzinfo=timezone.utc),
+        station_id="rsu-1",
+        msg_type=MessageType.SSEM,
+        latitude=52.0,
+        longitude=13.0,
+        decoded_data={
+            "intersectionId": 42,
+            "requestId": 7,
+            "sequenceNumber": 1,
+            "requestState": "granted",
+        },
+    )
+
+    overlays = _infrastructure_overlays_for_messages(
+        [map_msg, spat_msg, dominant_request, secondary_request, ssem_msg]
+    )
+
+    request_overlays = [
+        overlay
+        for overlay in overlays
+        if overlay["kind"] == "polyline" and overlay["layer"] == "map_requests"
+    ]
+
+    assert request_overlays
+    assert any(overlay["weight"] == 6 and overlay["color"] == "#16a34a" for overlay in request_overlays)
+    assert any(overlay["weight"] == 4 and overlay["dashArray"] == "6 6" for overlay in request_overlays)
+    assert any("Priorisierung" in overlay["popup"] and "granted" in overlay["popup"] for overlay in request_overlays)
+    connection_request_overlays = [
+        overlay for overlay in request_overlays if "connection" in overlay["id"]
+    ]
+    assert len(connection_request_overlays) >= 2
+    assert connection_request_overlays[0]["coords"] != connection_request_overlays[1]["coords"]
 
 
 def test_leaflet_html_exposes_layer_toggles_and_label_renderer():
     assert "MAP-Infrastruktur" in LEAFLET_HTML
+    assert "Inbound-Lanes" in LEAFLET_HTML
+    assert "Outbound-Lanes" in LEAFLET_HTML
+    assert "Connections" in LEAFLET_HTML
+    assert "Requests" in LEAFLET_HTML
+    assert "Stoplines" in LEAFLET_HTML
     assert "SPAT-Status" in LEAFLET_HTML
     assert "addInfrastructureLabel" in LEAFLET_HTML
 

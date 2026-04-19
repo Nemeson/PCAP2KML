@@ -71,3 +71,23 @@ def test_kml_description_contains_optional_fields() -> None:
     assert "52.428065" in description
     assert "34.2 m" in description
     assert "12.3 m/s" in description
+
+
+def test_detail_rows_surface_identity_hint_early() -> None:
+    msg = V2xMessage(
+        timestamp=datetime(2025, 8, 22, 12, 0, 0),
+        station_id="car-7",
+        msg_type=MessageType.CAM,
+        latitude=52.4280646,
+        longitude=13.5282899,
+        details={
+            "Identitaets-Hinweis": "Einzelne CAM-Station-ID weicht von der dominanten Session-ID ab",
+            "Quelle": "lpv",
+        },
+    )
+
+    rows = msg.to_detail_rows()
+
+    assert rows[4][0] == "Identitaets-Hinweis"
+    assert "dominanten Session-ID" in rows[4][1]
+    assert rows[-1] == ("Quelle", "lpv")
