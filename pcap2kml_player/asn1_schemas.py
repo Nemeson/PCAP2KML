@@ -19,8 +19,10 @@ import hashlib
 import logging
 import pickle
 import subprocess
+import tempfile
 from collections import Counter
 from pathlib import Path
+import shutil
 from typing import Optional
 
 try:
@@ -238,34 +240,73 @@ def update_from_git() -> bool:
     Returns True if update succeeded, False otherwise.
     """
     aggregate_repo = "https://github.com/ika-rwth-aachen/etsi_its_messages.git"
+    _ensure_schema_dir()
 
-    if not SCHEMAS_DIR.exists() or not list(SCHEMAS_DIR.glob(".git")):
-        try:
-            subprocess.run(
-                ["git", "clone", "--depth", "1", aggregate_repo,
-                 str(SCHEMAS_DIR)],
-                capture_output=True, text=True, timeout=120,
-                check=True,
-            )
-            logger.info("Cloned ASN.1 schemas from %s", aggregate_repo)
-            return True
-        except (subprocess.CalledProcessError, FileNotFoundError,
-                subprocess.TimeoutExpired) as e:
-            logger.warning("Failed to clone ASN.1 schemas: %s", e)
-            return False
-    else:
+    git_dir = SCHEMAS_DIR / ".git"
+    if git_dir.exists():
         try:
             subprocess.run(
                 ["git", "-C", str(SCHEMAS_DIR), "pull"],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True,
+                text=True,
+                timeout=30,
                 check=True,
             )
+            _invalidate_schema_caches()
             logger.info("Updated ASN.1 schemas from %s", aggregate_repo)
             return True
-        except (subprocess.CalledProcessError, FileNotFoundError,
-                subprocess.TimeoutExpired) as e:
-            logger.warning("Failed to update ASN.1 schemas: %s", e)
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
+            logger.warning("Failed to update ASN.1 schemas in-place: %s", e)
             return False
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="pcap2kml_asn1_") as temp_dir:
+            checkout_dir = Path(temp_dir) / "repo"
+            subprocess.run(
+                ["git", "clone", "--depth", "1", aggregate_repo, str(checkout_dir)],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=True,
+            )
+            copied = _copy_schema_payloads_from_checkout(checkout_dir, SCHEMAS_DIR)
+            if copied == 0:
+                logger.warning("No ASN.1 schema files found in cloned repository")
+                return False
+        _invalidate_schema_caches()
+        logger.info("Refreshed %d ASN.1 schema files from %s", copied, aggregate_repo)
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired, OSError) as e:
+        logger.warning("Failed to refresh ASN.1 schemas from clone: %s", e)
+        return False
+
+
+def _copy_schema_payloads_from_checkout(source_dir: Path, target_dir: Path) -> int:
+    """Copy only the relevant .asn files from a temporary checkout into the schema dir."""
+    copied = 0
+    needed_files = {CDD_FILE, DSRC_FILE, ERI_FILE, *MSG_TYPE_MODULES.values()}
+    for file_name in sorted(needed_files):
+        candidates = list(source_dir.rglob(file_name))
+        if not candidates:
+            logger.debug("Schema file %s not found in checkout", file_name)
+            continue
+        source_path = candidates[0]
+        target_path = target_dir / file_name
+        shutil.copy2(source_path, target_path)
+        copied += 1
+    return copied
+
+
+def _invalidate_schema_caches() -> None:
+    """Drop in-memory and on-disk compiled schema caches after schema updates."""
+    _compiled_schemas.clear()
+    if not SCHEMA_CACHE_DIR.exists():
+        return
+    for cache_path in SCHEMA_CACHE_DIR.glob("*.pkl"):
+        try:
+            cache_path.unlink()
+        except OSError as exc:
+            logger.debug("Could not remove schema cache %s: %s", cache_path.name, exc)
 
 
 def get_compiled_schema(msg_type: str) -> Optional[object]:
