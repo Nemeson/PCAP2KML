@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
     QSlider,
     QSplitter,
     QStatusBar,
+    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QToolBar,
@@ -250,10 +251,11 @@ class MainWindow(QMainWindow):
         parent_layout.addWidget(filter_widget)
 
     def _setup_message_list(self) -> QWidget:
-        """Create the message table and detail panel."""
+        """Create the message table plus a tabbed context area."""
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
 
         self._msg_table = QTableWidget(0, NUM_COLUMNS)
         self._msg_table.setHorizontalHeaderLabels(TABLE_HEADERS)
@@ -264,9 +266,23 @@ class MainWindow(QMainWindow):
         self._msg_table.verticalHeader().setVisible(False)
         layout.addWidget(self._msg_table, stretch=3)
 
+        self._context_tabs = QTabWidget()
+        self._context_tabs.setDocumentMode(True)
+        self._context_tabs.setTabPosition(QTabWidget.TabPosition.North)
+        self._context_tabs.setStyleSheet(
+            "QTabWidget::pane { border: 1px solid #d7dde8; border-radius: 10px; background: #ffffff; }"
+            "QTabBar::tab { padding: 8px 12px; color: #42546b; }"
+            "QTabBar::tab:selected { color: #10233f; font-weight: 700; }"
+        )
+
+        details_tab = QWidget()
+        details_layout = QVBoxLayout(details_tab)
+        details_layout.setContentsMargins(10, 10, 10, 10)
+        details_layout.setSpacing(6)
+
         detail_label = QLabel("Nachrichten- und PKI-Details")
-        detail_label.setStyleSheet("font-weight: 700; color: #10233f; padding-top: 4px;")
-        layout.addWidget(detail_label)
+        detail_label.setStyleSheet("font-weight: 700; color: #10233f;")
+        details_layout.addWidget(detail_label)
 
         self._detail_table = QTableWidget(0, 2)
         self._detail_table.setHorizontalHeaderLabels(["Feld", "Wert"])
@@ -280,11 +296,18 @@ class MainWindow(QMainWindow):
         self._detail_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._detail_table.verticalHeader().setVisible(False)
         self._detail_table.setAlternatingRowColors(True)
-        self._detail_table.setMaximumHeight(250)
         self._detail_table.hide()
-        layout.addWidget(self._detail_table, stretch=2)
+        details_layout.addWidget(self._detail_table, stretch=1)
+        self._context_tabs.addTab(details_tab, "Details")
 
-        self._setup_scene_panel(layout)
+        scene_tab = QWidget()
+        scene_layout = QVBoxLayout(scene_tab)
+        scene_layout.setContentsMargins(10, 10, 10, 10)
+        scene_layout.setSpacing(6)
+        self._setup_scene_panel(scene_layout)
+        self._context_tabs.addTab(scene_tab, "Szene")
+
+        layout.addWidget(self._context_tabs, stretch=2)
 
         return panel
 
@@ -775,6 +798,7 @@ class MainWindow(QMainWindow):
             self._detail_table.setItem(index, 0, QTableWidgetItem(field))
             self._detail_table.setItem(index, 1, QTableWidgetItem(value))
         self._detail_table.show()
+        self._context_tabs.setCurrentIndex(0)
 
     def _update_scene_for_message(self, msg: Optional[V2xMessage]) -> None:
         """Rebuild and display the current scene snapshot for one playback position."""
@@ -1147,6 +1171,8 @@ class MainWindow(QMainWindow):
         self._msg_table.setRowCount(0)
         self._detail_table.hide()
         self._clear_scene_panel()
+        if hasattr(self, "_context_tabs"):
+            self._context_tabs.setCurrentIndex(1)
         self._player.set_filtered_messages([])
         self._all_station_ids.clear()
         self._active_stations.clear()
