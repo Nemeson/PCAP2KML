@@ -1013,6 +1013,12 @@ LEAFLET_HTML = """<!DOCTYPE html>
         function addInfrastructureLabel(id, lat, lon, text, color, layerName) {
             if (infrastructureLayers[id]) {
                 infrastructureLayers[id].setLatLng([lat, lon]);
+                infrastructureLayers[id].setIcon(L.divIcon({
+                    className: 'infrastructure-label',
+                    html: '<div style="color:' + color + ';font:600 11px Segoe UI, sans-serif;text-shadow:0 0 4px white, 0 0 4px white;">' + text + '</div>',
+                    iconSize: [160, 18],
+                    iconAnchor: [8, -6]
+                }));
             } else {
                 infrastructureLayers[id] = L.marker([lat, lon], {
                     interactive: false,
@@ -1023,6 +1029,58 @@ LEAFLET_HTML = """<!DOCTYPE html>
                         iconAnchor: [8, -6]
                     })
                 }).addTo(infrastructureGroup(layerName));
+            }
+        }
+
+        function removeInfrastructureLayer(id) {
+            if (!infrastructureLayers[id]) {
+                return;
+            }
+            overlayGroups.map.removeLayer(infrastructureLayers[id]);
+            overlayGroups.map_inbound.removeLayer(infrastructureLayers[id]);
+            overlayGroups.map_outbound.removeLayer(infrastructureLayers[id]);
+            overlayGroups.map_connections.removeLayer(infrastructureLayers[id]);
+            overlayGroups.map_stoplines.removeLayer(infrastructureLayers[id]);
+            overlayGroups.map_requests.removeLayer(infrastructureLayers[id]);
+            overlayGroups.spat.removeLayer(infrastructureLayers[id]);
+            delete infrastructureLayers[id];
+        }
+
+        function syncMarkers(activeIds) {
+            var active = {};
+            for (var index = 0; index < activeIds.length; index++) {
+                active[activeIds[index]] = true;
+            }
+            for (var key in markers) {
+                if (!active[key]) {
+                    overlayGroups.markers.removeLayer(markers[key]);
+                    delete markers[key];
+                }
+            }
+        }
+
+        function syncTrajectories(activeIds) {
+            var active = {};
+            for (var index = 0; index < activeIds.length; index++) {
+                active[activeIds[index]] = true;
+            }
+            for (var key in trajectories) {
+                if (!active[key]) {
+                    overlayGroups.trajectories.removeLayer(trajectories[key]);
+                    delete trajectories[key];
+                }
+            }
+        }
+
+        function syncInfrastructure(activeIds) {
+            var active = {};
+            for (var index = 0; index < activeIds.length; index++) {
+                active[activeIds[index]] = true;
+            }
+            for (var key in infrastructureLayers) {
+                if (!active[key]) {
+                    removeInfrastructureLayer(key);
+                }
             }
         }
 
@@ -1079,13 +1137,7 @@ LEAFLET_HTML = """<!DOCTYPE html>
                 overlayGroups.trajectories.removeLayer(trajectories[key]);
             }
             for (var key in infrastructureLayers) {
-                overlayGroups.map.removeLayer(infrastructureLayers[key]);
-                overlayGroups.map_inbound.removeLayer(infrastructureLayers[key]);
-                overlayGroups.map_outbound.removeLayer(infrastructureLayers[key]);
-                overlayGroups.map_connections.removeLayer(infrastructureLayers[key]);
-                overlayGroups.map_stoplines.removeLayer(infrastructureLayers[key]);
-                overlayGroups.map_requests.removeLayer(infrastructureLayers[key]);
-                overlayGroups.spat.removeLayer(infrastructureLayers[key]);
+                removeInfrastructureLayer(key);
             }
             markers = {};
             trajectories = {};
@@ -1151,7 +1203,7 @@ class MapWidget(QWebEngineView):
     def load_messages(self, messages: list[V2xMessage]) -> None:
         """Load all messages onto the map: markers, trajectories, and overlays."""
         self._follow_station_id = None
-        self._render_messages(messages, fit_view=True, short_trails=False)
+        self._render_messages(messages, fit_view=True, short_trails=False, clear_first=True)
 
     def render_playback_slice(self, messages: list[V2xMessage], current_index: int) -> None:
         """Render only the state visible up to the current playback index."""
@@ -1159,18 +1211,30 @@ class MapWidget(QWebEngineView):
             self.clear()
             return
         safe_index = max(0, min(current_index, len(messages) - 1))
-        self._render_messages(messages[: safe_index + 1], fit_view=False, short_trails=True)
+        self._render_messages(
+            messages[: safe_index + 1],
+            fit_view=False,
+            short_trails=True,
+            clear_first=False,
+        )
 
-    def _render_messages(self, messages: list[V2xMessage], *, fit_view: bool, short_trails: bool) -> None:
+    def _render_messages(
+        self,
+        messages: list[V2xMessage],
+        *,
+        fit_view: bool,
+        short_trails: bool,
+        clear_first: bool,
+    ) -> None:
         """Internal renderer for a full load or a playback time slice."""
-        self._run_js("clearAll()")
+        if clear_first:
+            self._run_js("clearAll()")
 
         # Assign colors and set them in JS
-        colors_js = json.dumps(self._station_color_map)
-        self._run_js(f"setStationColors({colors_js})")
-
         # Group by station for trajectories
         station_coords: dict[str, list] = {}
+        active_marker_ids: list[str] = []
+        active_trajectory_ids: list[str] = []
 
         for msg in messages:
             color = self._color_for_message(msg)
@@ -1184,10 +1248,12 @@ class MapWidget(QWebEngineView):
 
             if msg.msg_type not in INFRASTRUCTURE_MESSAGE_COLORS:
                 # Place/update the current dynamic marker at the latest visible position.
-                marker_id = _js_escape(_marker_id_for_message(msg))
+                marker_id_raw = _marker_id_for_message(msg)
+                marker_id = _js_escape(marker_id_raw)
                 station_id_js = _js_escape(msg.station_id)
                 popup_js = _js_escape(popup)
                 color_js = _js_escape(color)
+                active_marker_ids.append(marker_id_raw)
                 self._run_js(
                     f"addMarker('{marker_id}', '{station_id_js}', {marker_lat}, {marker_lon}, "
                     f"'{popup_js}', '{color_js}', 'markers')"
@@ -1199,7 +1265,12 @@ class MapWidget(QWebEngineView):
                     [msg.latitude, msg.longitude]
                 )
 
+        colors_js = json.dumps(self._station_color_map)
+        self._run_js(f"setStationColors({colors_js})")
+
+        active_infrastructure_ids: list[str] = []
         for overlay in _infrastructure_overlays_for_messages(messages):
+            active_infrastructure_ids.append(str(overlay["id"]))
             overlay_id = _js_escape(str(overlay["id"]))
             overlay_color = _js_escape(str(overlay["color"]))
             if overlay["kind"] == "circle":
@@ -1235,7 +1306,15 @@ class MapWidget(QWebEngineView):
                 coords = coords[-PLAYBACK_TRAIL_POINTS:]
             color = _js_escape(self._get_station_color(station_id))
             coords_js = json.dumps(coords)
+            active_trajectory_ids.append(station_id)
             self._run_js(f"addTrajectory('{_js_escape(station_id)}', {coords_js}, '{color}')")
+
+        markers_js = json.dumps(active_marker_ids)
+        trajectories_js = json.dumps(active_trajectory_ids)
+        infrastructure_js = json.dumps(active_infrastructure_ids)
+        self._run_js(f"syncMarkers({markers_js})")
+        self._run_js(f"syncTrajectories({trajectories_js})")
+        self._run_js(f"syncInfrastructure({infrastructure_js})")
 
         # Fit map to all markers
         if fit_view:

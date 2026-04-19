@@ -88,6 +88,8 @@ class PlayerController(QObject):
         self._state = "playing"
         self._timer.start()
         self.tick.emit(self._messages[self._current_index])
+        self.position_changed.emit(self._current_index)
+        self.time_updated.emit(self._playback_time_seconds)
         self.state_changed.emit("playing")
 
     def pause(self) -> None:
@@ -105,8 +107,10 @@ class PlayerController(QObject):
         self.state_changed.emit("stopped")
         if self._messages:
             self.tick.emit(self._messages[0])
+            self.position_changed.emit(0)
         else:
             self.tick.emit(None)
+        self.time_updated.emit(self._playback_time_seconds)
 
     def set_speed(self, speed: float) -> None:
         """Set playback speed multiplier."""
@@ -137,6 +141,7 @@ class PlayerController(QObject):
             self.pause()
             return
 
+        previous_index = self._current_index
         self._playback_time_seconds += (TICK_INTERVAL_MS / 1000.0) * self._speed
 
         while self._current_index + 1 < len(self._messages):
@@ -148,9 +153,10 @@ class PlayerController(QObject):
                 break
             self._current_index += 1
 
-        current_msg = self._messages[self._current_index]
-        self.tick.emit(current_msg)
-        self.position_changed.emit(self._current_index)
+        if self._current_index != previous_index:
+            current_msg = self._messages[self._current_index]
+            self.tick.emit(current_msg)
+            self.position_changed.emit(self._current_index)
         self.time_updated.emit(self._playback_time_seconds)
 
         if self._current_index >= len(self._messages) - 1:

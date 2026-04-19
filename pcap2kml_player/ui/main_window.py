@@ -86,6 +86,8 @@ class MainWindow(QMainWindow):
         self._all_station_ids: set[str] = set()
         self._loader_thread: Optional[QThread] = None
         self._loader_worker: Optional[ParsingWorker] = None
+        self._message_row_lookup: dict[tuple[str, str], int] = {}
+        self._last_highlighted_row: Optional[int] = None
 
         self._setup_ui()
         self._setup_player()
@@ -450,6 +452,7 @@ class MainWindow(QMainWindow):
         self._player.tick.connect(self._on_playback_tick)
         self._player.state_changed.connect(self._on_player_state_changed)
         self._player.position_changed.connect(self._on_player_position_changed)
+        self._player.time_updated.connect(self._on_player_time_updated)
         self._player.duration_changed.connect(self._on_duration_changed)
 
     def _on_load_pcap(self) -> None:
@@ -688,12 +691,16 @@ class MainWindow(QMainWindow):
         elif messages is None:
             messages = []
 
+        self._message_row_lookup = {}
+        self._last_highlighted_row = None
         self._msg_table.setRowCount(len(messages))
         for row, msg in enumerate(messages):
+            timestamp_text = msg.timestamp.strftime("%H:%M:%S.%f")[:-3]
+            self._message_row_lookup[(timestamp_text, msg.station_id)] = row
             self._msg_table.setItem(
                 row,
                 COL_TIMESTAMP,
-                QTableWidgetItem(msg.timestamp.strftime("%H:%M:%S.%f")[:-3]),
+                QTableWidgetItem(timestamp_text),
             )
             self._msg_table.setItem(row, COL_STATION, QTableWidgetItem(msg.station_id))
             self._msg_table.setItem(row, COL_MSGTYPE, QTableWidgetItem(msg.msg_type.value))
@@ -711,7 +718,7 @@ class MainWindow(QMainWindow):
             )
 
     def _on_playback_tick(self, msg: Optional[V2xMessage]) -> None:
-        """Update the view on each playback tick."""
+        """Update map and details when the visible playback message changes."""
         if msg is None:
             return
 
@@ -721,25 +728,31 @@ class MainWindow(QMainWindow):
         self._show_security_detail(msg)
         self._update_scene_for_message(msg)
 
-        current_time = self._player.get_current_playback_time()
-        total_time = self._session.duration_seconds if self._session else 0.0
-        self._lbl_time.setText(
-            f"{self._player.format_time(current_time)} / {self._player.format_time(total_time)}"
-        )
-
     def _highlight_table_row(self, msg: V2xMessage) -> None:
-        """Select and scroll the matching row for the current playback message."""
-        target_timestamp = msg.timestamp.strftime("%H:%M:%S.%f")[:-3]
-        for row in range(self._msg_table.rowCount()):
-            ts_item = self._msg_table.item(row, COL_TIMESTAMP)
-            station_item = self._msg_table.item(row, COL_STATION)
-            if ts_item and station_item and ts_item.text() == target_timestamp and station_item.text() == msg.station_id:
-                self._msg_table.selectRow(row)
-                self._msg_table.scrollToItem(
-                    self._msg_table.item(row, COL_TIMESTAMP),
-                    QTableWidget.ScrollHint.EnsureVisible,
-                )
-                return
+        """Select the matching row and only scroll when it leaves the viewport."""
+        row = self._message_row_lookup.get(self._message_lookup_key(msg))
+        if row is None or row == self._last_highlighted_row:
+            return
+
+        self._msg_table.selectRow(row)
+        item = self._msg_table.item(row, COL_TIMESTAMP)
+        if item is not None and not self._is_table_item_visible(item):
+            self._msg_table.scrollToItem(
+                item,
+                QTableWidget.ScrollHint.PositionAtCenter,
+            )
+        self._last_highlighted_row = row
+
+    def _message_lookup_key(self, msg: V2xMessage) -> tuple[str, str]:
+        """Return the table lookup key for a playback message."""
+        return (msg.timestamp.strftime("%H:%M:%S.%f")[:-3], msg.station_id)
+
+    def _is_table_item_visible(self, item: QTableWidgetItem) -> bool:
+        """Return whether the table item is already inside the visible viewport."""
+        rect = self._msg_table.visualItemRect(item)
+        if not rect.isValid():
+            return False
+        return self._msg_table.viewport().rect().intersects(rect)
 
     def _on_player_state_changed(self, state: str) -> None:
         """Update button states based on the player state."""
@@ -757,6 +770,13 @@ class MainWindow(QMainWindow):
     def _on_duration_changed(self, seconds: float) -> None:
         """Refresh the duration label."""
         self._lbl_time.setText(f"00:00.0 / {self._player.format_time(seconds)}")
+
+    def _on_player_time_updated(self, seconds: float) -> None:
+        """Refresh the time label without forcing a full map rerender."""
+        total_time = self._session.duration_seconds if self._session else 0.0
+        self._lbl_time.setText(
+            f"{self._player.format_time(seconds)} / {self._player.format_time(total_time)}"
+        )
 
     def _on_speed_changed(self, index: int) -> None:
         """Handle speed selector changes."""
@@ -1170,6 +1190,8 @@ class MainWindow(QMainWindow):
         """Reset map, tables, and playback to the empty state."""
         self._map_widget.clear()
         self._msg_table.setRowCount(0)
+        self._message_row_lookup = {}
+        self._last_highlighted_row = None
         self._detail_table.hide()
         self._clear_scene_panel()
         if hasattr(self, "_context_tabs"):

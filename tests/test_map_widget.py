@@ -565,6 +565,10 @@ def test_render_playback_slice_uses_only_messages_up_to_current_index(monkeypatc
     assert not any("52.1, 13.1" in script for script in marker_scripts)
     assert trajectory_scripts
     assert "52.1" not in trajectory_scripts[-1]
+    assert not any(script == "clearAll()" for script in captured_scripts)
+    assert any("syncMarkers(" in script for script in captured_scripts)
+    assert any("syncTrajectories(" in script for script in captured_scripts)
+    assert any("syncInfrastructure(" in script for script in captured_scripts)
 
 
 def test_render_playback_slice_limits_trail_to_recent_points(monkeypatch):
@@ -625,3 +629,35 @@ def test_update_playback_position_follows_selected_station(monkeypatch):
 
     assert any("highlightMarker('station_car-1')" in script for script in captured_scripts)
     assert any("followMarker('station_car-1')" in script for script in captured_scripts)
+
+
+def test_load_messages_clears_before_full_reload(monkeypatch):
+    captured_scripts = []
+
+    def fake_run_js(self, script):
+        captured_scripts.append(script)
+
+    monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
+    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
+
+    widget = MapWidget()
+    widget._station_color_map = {}
+    widget._station_index = 0
+
+    cam_msg = V2xMessage(
+        timestamp=datetime(2026, 4, 18, 12, 0, 0, tzinfo=timezone.utc),
+        station_id="car-1",
+        msg_type=MessageType.CAM,
+        latitude=52.0,
+        longitude=13.0,
+    )
+
+    widget.load_messages([cam_msg])
+
+    assert captured_scripts[0] == "clearAll()"
+
+
+def test_leaflet_html_exposes_incremental_sync_helpers():
+    assert "syncMarkers(activeIds)" in LEAFLET_HTML
+    assert "syncTrajectories(activeIds)" in LEAFLET_HTML
+    assert "syncInfrastructure(activeIds)" in LEAFLET_HTML
