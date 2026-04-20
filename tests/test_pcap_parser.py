@@ -64,6 +64,21 @@ def test_parse_txa_22082025_pcap_decodes_mapem_and_spatem_payloads() -> None:
     assert "stateTimeSpeed" in spat_state
 
 
+def test_parse_rsu_rxa_preserves_denm_null_island_when_lpv_is_not_trusted() -> None:
+    session = parse_pcap(
+        str(TESTFILES / "2024-04-24_LB72_RSU_PCAP" / "10.28_srem_oev" / "rsu_rxa.pcap")
+    )
+
+    denm_messages = [msg for msg in session.messages if msg.msg_type == MessageType.DENM]
+
+    assert denm_messages
+    assert any(
+        abs(msg.latitude) < 1e-9 and abs(msg.longitude) < 1e-9
+        for msg in denm_messages
+    )
+    assert not any("Positions-Fallback" in msg.details for msg in denm_messages)
+
+
 def test_parse_txa_22082025_pcap_normalizes_map_lane_roles_connections_and_stoplines() -> None:
     session = parse_pcap(str(TESTFILES / "txa_22082025.pcap"))
 

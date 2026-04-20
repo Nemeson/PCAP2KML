@@ -5,6 +5,9 @@ from datetime import datetime, timezone
 from pcap2kml_player.data_model import MessageType, V2xMessage
 from pcap2kml_player.map_widget import (
     MapWidget,
+    _display_anchor_points,
+    _has_display_position,
+    _is_near_display_anchors,
     _infrastructure_overlays_for_message,
     _infrastructure_overlays_for_messages,
     _js_escape,
@@ -73,6 +76,18 @@ def test_marker_position_offsets_map_and_spat_to_keep_both_visible():
     )
 
     assert _marker_position_for_message(map_msg) != _marker_position_for_message(spat_msg)
+
+
+def test_has_display_position_rejects_null_island_sentinel():
+    msg = V2xMessage(
+        timestamp=datetime(2026, 4, 18, 12, 0, 0, tzinfo=timezone.utc),
+        station_id="denm-rsu",
+        msg_type=MessageType.DENM,
+        latitude=0.0,
+        longitude=0.0,
+    )
+
+    assert _has_display_position(msg) is False
 
 
 def test_infrastructure_overlays_create_raw_circle_for_undecoded_map_message():
@@ -655,6 +670,89 @@ def test_load_messages_clears_before_full_reload(monkeypatch):
     widget.load_messages([cam_msg])
 
     assert captured_scripts[0] == "clearAll()"
+
+
+def test_load_messages_skips_null_island_markers(monkeypatch):
+    captured_scripts = []
+
+    def fake_run_js(self, script):
+        captured_scripts.append(script)
+
+    monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
+    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
+
+    widget = MapWidget()
+    widget._station_color_map = {}
+    widget._station_index = 0
+
+    null_msg = V2xMessage(
+        timestamp=datetime(2026, 4, 18, 12, 0, 0, tzinfo=timezone.utc),
+        station_id="bad-denm",
+        msg_type=MessageType.DENM,
+        latitude=0.0,
+        longitude=0.0,
+    )
+    good_msg = V2xMessage(
+        timestamp=datetime(2026, 4, 18, 12, 0, 1, tzinfo=timezone.utc),
+        station_id="good-cam",
+        msg_type=MessageType.CAM,
+        latitude=48.894068,
+        longitude=9.208135,
+    )
+
+    widget.load_messages([null_msg, good_msg])
+
+    marker_scripts = [script for script in captured_scripts if "addMarker(" in script]
+    assert marker_scripts
+    assert not any("bad-denm" in script for script in marker_scripts)
+    assert any("good-cam" in script for script in marker_scripts)
+
+
+def test_load_messages_skips_far_outliers_when_infrastructure_anchor_exists(monkeypatch):
+    captured_scripts = []
+
+    def fake_run_js(self, script):
+        captured_scripts.append(script)
+
+    monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
+    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
+
+    widget = MapWidget()
+    widget._station_color_map = {}
+    widget._station_index = 0
+
+    map_msg = V2xMessage(
+        timestamp=datetime(2026, 4, 18, 12, 0, 0, tzinfo=timezone.utc),
+        station_id="rsu-map",
+        msg_type=MessageType.MAPEM,
+        latitude=48.894068,
+        longitude=9.208135,
+        decoded_data={"intersections": [{"refPoint": {"lat": 48.894068, "lon": 9.208135}}]},
+    )
+    outlier_msg = V2xMessage(
+        timestamp=datetime(2026, 4, 18, 12, 0, 1, tzinfo=timezone.utc),
+        station_id="bad-denm",
+        msg_type=MessageType.DENM,
+        latitude=10.745933,
+        longitude=-53.4697692,
+    )
+    local_msg = V2xMessage(
+        timestamp=datetime(2026, 4, 18, 12, 0, 2, tzinfo=timezone.utc),
+        station_id="local-cam",
+        msg_type=MessageType.CAM,
+        latitude=48.8941,
+        longitude=9.2082,
+    )
+
+    anchors = _display_anchor_points([map_msg, outlier_msg, local_msg])
+    assert _is_near_display_anchors(outlier_msg, anchors) is False
+    assert _is_near_display_anchors(local_msg, anchors) is True
+
+    widget.load_messages([map_msg, outlier_msg, local_msg])
+
+    marker_scripts = [script for script in captured_scripts if "addMarker(" in script]
+    assert not any("bad-denm" in script for script in marker_scripts)
+    assert any("local-cam" in script for script in marker_scripts)
 
 
 def test_leaflet_html_exposes_incremental_sync_helpers():

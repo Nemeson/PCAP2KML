@@ -880,6 +880,15 @@ def _decode_its_message(
         station_id = fallback_station_id or "unknown"
     else:
         lat, lon, alt, speed, heading, station_id = result
+        if (
+            _is_null_island_position(lat, lon)
+            and fallback_position is not None
+            and msg_type != MessageType.DENM
+        ):
+            lat, lon = fallback_position
+            details_position_source = "GeoNetworking Long Position Vector (0/0 ersetzt)"
+        else:
+            details_position_source = None
         if station_id == "unknown" and fallback_station_id is not None:
             station_id = fallback_station_id
         if speed is None:
@@ -910,6 +919,8 @@ def _decode_its_message(
         if len(display) > 80:
             display = display[:77] + "..."
         details[key] = display
+    if "details_position_source" in locals() and details_position_source is not None:
+        details["Positions-Fallback"] = details_position_source
 
     return V2xMessage(
         timestamp=datetime.now(tz=timezone.utc),
@@ -925,6 +936,11 @@ def _decode_its_message(
         security_info=security_info,
         decoded_data=extra_fields,
     )
+
+
+def _is_null_island_position(lat: float, lon: float) -> bool:
+    """Return whether a decoded position is the common unavailable 0/0 sentinel."""
+    return abs(lat) < 1e-9 and abs(lon) < 1e-9
 
 
 def _annotate_cam_identity_outliers(session: SessionData) -> None:

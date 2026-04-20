@@ -21,6 +21,7 @@ from .scene_model import build_scene_snapshot
 
 logger = logging.getLogger(__name__)
 PLAYBACK_TRAIL_POINTS = 8
+DISPLAY_CLUSTER_RADIUS_M = 5000.0
 
 # Color palette for station markers (hex strings for Leaflet)
 STATION_PALETTE = [
@@ -73,6 +74,15 @@ def _marker_position_for_message(msg: V2xMessage) -> tuple[float, float]:
     """Slightly offset infrastructure markers so MAP/SPAT stay visible together."""
     lat_offset, lon_offset = INFRASTRUCTURE_MESSAGE_OFFSETS.get(msg.msg_type, (0.0, 0.0))
     return (msg.latitude + lat_offset, msg.longitude + lon_offset)
+
+
+def _has_display_position(msg: V2xMessage) -> bool:
+    """Return whether a message has a useful map position."""
+    if not (-90 <= msg.latitude <= 90 and -180 <= msg.longitude <= 180):
+        return False
+    if abs(msg.latitude) < 1e-9 and abs(msg.longitude) < 1e-9:
+        return False
+    return True
 
 
 def _coerce_lat_lon(value: object) -> Optional[tuple[float, float]]:
@@ -235,6 +245,29 @@ def _point_distance_meters(point_a: tuple[float, float], point_b: tuple[float, f
     dx = (point_a[1] - point_b[1]) * lon_scale
     dy = (point_a[0] - point_b[0]) * lat_scale
     return hypot(dx, dy)
+
+
+def _display_anchor_points(messages: list[V2xMessage]) -> list[tuple[float, float]]:
+    """Return stable infrastructure points used to reject far-away display outliers."""
+    anchors: list[tuple[float, float]] = []
+    for msg in messages:
+        if msg.msg_type not in INFRASTRUCTURE_MESSAGE_COLORS or not _has_display_position(msg):
+            continue
+        for intersection in _iter_message_intersections(msg):
+            anchors.append(_intersection_point(intersection, msg))
+    return anchors
+
+
+def _is_near_display_anchors(
+    msg: V2xMessage,
+    anchors: list[tuple[float, float]],
+    radius_m: float = DISPLAY_CLUSTER_RADIUS_M,
+) -> bool:
+    """Keep local V2X points near the loaded infrastructure cluster."""
+    if not anchors or msg.msg_type in INFRASTRUCTURE_MESSAGE_COLORS:
+        return True
+    point = (msg.latitude, msg.longitude)
+    return any(_point_distance_meters(point, anchor) <= radius_m for anchor in anchors)
 
 
 def _lane_anchor_points(
@@ -1235,8 +1268,11 @@ class MapWidget(QWebEngineView):
         station_coords: dict[str, list] = {}
         active_marker_ids: list[str] = []
         active_trajectory_ids: list[str] = []
+        display_anchors = _display_anchor_points(messages)
 
         for msg in messages:
+            if not _has_display_position(msg) or not _is_near_display_anchors(msg, display_anchors):
+                continue
             color = self._color_for_message(msg)
             marker_lat, marker_lon = _marker_position_for_message(msg)
             popup = (
