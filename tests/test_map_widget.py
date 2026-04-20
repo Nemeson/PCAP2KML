@@ -475,6 +475,35 @@ def test_leaflet_html_exposes_layer_toggles_and_label_renderer():
     assert "Stoplines" in LEAFLET_HTML
     assert "SPAT-Status" in LEAFLET_HTML
     assert "addInfrastructureLabel" in LEAFLET_HTML
+    assert "qrc:///qtwebchannel/qwebchannel.js" in LEAFLET_HTML
+    assert "typeof QWebChannel !== 'undefined'" in LEAFLET_HTML
+    assert "map.invalidateSize(false)" in LEAFLET_HTML
+
+
+class _FakePage:
+    def __init__(self):
+        self.scripts: list[str] = []
+
+    def runJavaScript(self, script: str, _world_id: int) -> None:
+        self.scripts.append(script)
+
+
+def test_run_js_queues_until_map_page_is_loaded():
+    widget = MapWidget.__new__(MapWidget)
+    fake_page = _FakePage()
+    widget._page_ready = False
+    widget._pending_scripts = []
+    widget.page = lambda: fake_page
+
+    widget._run_js("first()")
+
+    assert widget._pending_scripts == ["first()"]
+    assert fake_page.scripts == []
+
+    widget._on_load_finished(True)
+
+    assert widget._pending_scripts == []
+    assert fake_page.scripts == ["first()"]
 
 
 def test_load_messages_handles_label_overlays_without_popup(monkeypatch):

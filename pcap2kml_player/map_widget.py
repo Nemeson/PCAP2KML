@@ -902,6 +902,7 @@ LEAFLET_HTML = """<!DOCTYPE html>
     <title>PCAP2KML Map</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
     <style>
         html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; }
     </style>
@@ -910,6 +911,9 @@ LEAFLET_HTML = """<!DOCTYPE html>
     <div id="map"></div>
     <script>
         var map = L.map('map').setView([48.0, 11.0], 13);
+        map.whenReady(function() {
+            map.invalidateSize(false);
+        });
 
         // Primary tile layer (OpenStreetMap with proper attribution)
         var osmLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -1138,6 +1142,7 @@ LEAFLET_HTML = """<!DOCTYPE html>
 
         // Called from Python to fit the map view to all markers
         function fitToMarkers() {
+            map.invalidateSize(false);
             var bounds = [];
             for (var key in markers) {
                 var markerLatLng = markers[key].getLatLng();
@@ -1157,7 +1162,11 @@ LEAFLET_HTML = """<!DOCTYPE html>
                 }
             }
             if (bounds.length > 0) {
-                map.fitBounds(bounds, { padding: [30, 30], maxZoom: 16 });
+                try {
+                    map.fitBounds(bounds, { padding: [30, 30], maxZoom: 16 });
+                } catch (error) {
+                    console.warn('fitToMarkers skipped:', error);
+                }
             }
         }
 
@@ -1177,10 +1186,15 @@ LEAFLET_HTML = """<!DOCTYPE html>
             infrastructureLayers = {};
         }
 
-        // Bridge for Python communication
-        new QWebChannel(qt.webChannelTransport, function(channel) {
-            window.bridge = channel.objects.bridge;
-        });
+        // Bridge for Python communication. The qrc script is available only
+        // inside Qt WebEngine; keep the map usable even if the bridge is absent.
+        if (typeof QWebChannel !== 'undefined' && typeof qt !== 'undefined') {
+            new QWebChannel(qt.webChannelTransport, function(channel) {
+                window.bridge = channel.objects.bridge;
+            });
+        } else {
+            console.warn('Qt WebChannel unavailable; marker click follow mode disabled.');
+        }
     </script>
 </body>
 </html>"""
@@ -1215,8 +1229,11 @@ class MapWidget(QWebEngineView):
         self._station_color_map: dict[str, str] = {}
         self._station_index = 0
         self._follow_station_id: Optional[str] = None
+        self._page_ready = False
+        self._pending_scripts: list[str] = []
 
         self._bridge.message_clicked.connect(self._on_marker_clicked)
+        self.loadFinished.connect(self._on_load_finished)
 
         self.setHtml(LEAFLET_HTML, QUrl("about:blank"))
 
@@ -1375,6 +1392,20 @@ class MapWidget(QWebEngineView):
         """Remember which dynamic object should be followed during playback."""
         self._follow_station_id = station_id
 
+    def _on_load_finished(self, ok: bool) -> None:
+        """Flush queued JavaScript once the embedded map page is ready."""
+        self._page_ready = ok
+        if not ok:
+            logger.warning("Leaflet map page did not finish loading")
+            return
+        pending = self._pending_scripts
+        self._pending_scripts = []
+        for script in pending:
+            self.page().runJavaScript(script, 0)
+
     def _run_js(self, script: str) -> None:
         """Execute JavaScript in the web page."""
+        if not self._page_ready:
+            self._pending_scripts.append(script)
+            return
         self.page().runJavaScript(script, 0)
