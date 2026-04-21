@@ -204,6 +204,35 @@ cd C:\PythonTools\PCAP2KML
 py pcap2kml_player\main.py
 ```
 
+Alternativ kann der Windows-Launcher verwendet werden. Er prueft zuerst die
+Python-Requirements und bietet bei fehlenden Paketen eine optionale
+Nachinstallation per `pip` an:
+
+```powershell
+cd C:\PythonTools\PCAP2KML
+py pcap2kml_launcher.py
+```
+
+## Windows-EXE erstellen
+
+Die Anwendung kann als einfache Start-EXE gebaut werden. Die EXE ist ein
+Bootstrapper: sie prueft beim Start die Requirements, kann fehlende Pakete nach
+Bestaetigung nachinstallieren und startet danach die eigentliche PyQt-App.
+
+```powershell
+cd C:\PythonTools\PCAP2KML
+powershell -ExecutionPolicy Bypass -File .\scripts\build_exe.ps1 -InstallMissing
+```
+
+Ergebnis:
+
+```text
+dist\PCAP2KML-Player.exe
+```
+
+Ohne `-InstallMissing` bricht das Buildskript mit einer Liste fehlender Pakete ab,
+statt automatisch etwas nachzuladen.
+
 ## Abhaengigkeiten
 
 | Paket | Zweck |
