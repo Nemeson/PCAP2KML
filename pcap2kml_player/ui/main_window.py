@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -111,6 +112,12 @@ class MainWindow(QMainWindow):
         self._issue_filter_intersection = "all"
         self._problem_replay_indices: list[int] = []
         self._message_table_maximized = False
+        self._last_scene_update_monotonic = 0.0
+        self._last_scene_cache_key: Optional[tuple[int, str]] = None
+        self._last_scene_cache_snapshot: Optional[SceneSnapshot] = None
+        self._last_map_slice_update_monotonic = 0.0
+        self._last_map_slice_index: Optional[int] = None
+        self._last_map_messages_id: Optional[int] = None
 
         self._setup_ui()
         self._setup_player()
@@ -743,11 +750,12 @@ class MainWindow(QMainWindow):
         self._populate_station_list()
         self._populate_message_table(session.messages)
         self._map_widget.load_messages(session.messages)
+        self._reset_playback_render_caches()
         self._player.set_session(session)
         self._refresh_problem_replay_indices(session.messages)
         self._refresh_eta_analysis(session.messages)
         self._detail_table.hide()
-        self._update_scene_for_message(session.messages[0])
+        self._update_scene_for_message(session.messages[0], force=True)
         self._update_controls_enabled(True)
         self._update_overview_for_session(paths, session)
 
@@ -908,9 +916,10 @@ class MainWindow(QMainWindow):
         )
         self._populate_message_table(filtered)
         self._map_widget.load_messages(filtered)
+        self._reset_playback_render_caches()
         self._player.set_filtered_messages(filtered)
         self._refresh_problem_replay_indices(filtered)
-        self._update_scene_for_message(filtered[0] if filtered else None)
+        self._update_scene_for_message(filtered[0] if filtered else None, force=True)
         self._lbl_filter_hint.setText(
             f"{len(filtered)} von {len(self._session.messages)} Nachrichten sichtbar"
         )
@@ -940,49 +949,83 @@ class MainWindow(QMainWindow):
         self._last_highlighted_row = None
         self._last_detail_key = None
         self._pending_detail_message = None
-        self._msg_table.setRowCount(len(messages))
-        for row, msg in enumerate(messages):
-            timestamp_text = msg.timestamp.strftime("%H:%M:%S.%f")[:-3]
-            self._message_row_lookup[(timestamp_text, msg.station_id)] = row
-            self._msg_table.setItem(
-                row,
-                COL_TIMESTAMP,
-                QTableWidgetItem(timestamp_text),
-            )
-            self._msg_table.setItem(row, COL_STATION, QTableWidgetItem(msg.station_id))
-            self._msg_table.setItem(row, COL_MSGTYPE, QTableWidgetItem(msg.msg_type.value))
-            self._msg_table.setItem(
-                row,
-                COL_LATLON,
-                QTableWidgetItem(f"{msg.latitude:.6f}, {msg.longitude:.6f}"),
-            )
-            speed_str = f"{msg.speed:.1f} m/s" if msg.speed is not None else "-"
-            heading_str = f"{msg.heading:.0f} deg" if msg.heading is not None else "-"
-            self._msg_table.setItem(
-                row,
-                COL_SPEED_HEADING,
-                QTableWidgetItem(f"{speed_str} / {heading_str}"),
-            )
-            source_text = msg.source.display_name() if msg.source is not None else "-"
-            merge_text = "-"
-            if msg.merge_group_id:
-                merge_text = msg.merge_group_id
-                if msg.merge_confidence is not None:
-                    merge_text += f" ({msg.merge_confidence:.2f})"
-            self._msg_table.setItem(row, COL_SOURCE, QTableWidgetItem(source_text))
-            self._msg_table.setItem(row, COL_MERGE, QTableWidgetItem(merge_text))
+        self._set_table_updates_enabled(self._msg_table, False)
+        try:
+            self._msg_table.setRowCount(len(messages))
+            for row, msg in enumerate(messages):
+                timestamp_text = msg.timestamp.strftime("%H:%M:%S.%f")[:-3]
+                self._message_row_lookup[(timestamp_text, msg.station_id)] = row
+                self._msg_table.setItem(row, COL_TIMESTAMP, QTableWidgetItem(timestamp_text))
+                self._msg_table.setItem(row, COL_STATION, QTableWidgetItem(msg.station_id))
+                self._msg_table.setItem(row, COL_MSGTYPE, QTableWidgetItem(msg.msg_type.value))
+                self._msg_table.setItem(
+                    row,
+                    COL_LATLON,
+                    QTableWidgetItem(f"{msg.latitude:.6f}, {msg.longitude:.6f}"),
+                )
+                speed_str = f"{msg.speed:.1f} m/s" if msg.speed is not None else "-"
+                heading_str = f"{msg.heading:.0f} deg" if msg.heading is not None else "-"
+                self._msg_table.setItem(
+                    row,
+                    COL_SPEED_HEADING,
+                    QTableWidgetItem(f"{speed_str} / {heading_str}"),
+                )
+                source_text = msg.source.display_name() if msg.source is not None else "-"
+                merge_text = "-"
+                if msg.merge_group_id:
+                    merge_text = msg.merge_group_id
+                    if msg.merge_confidence is not None:
+                        merge_text += f" ({msg.merge_confidence:.2f})"
+                self._msg_table.setItem(row, COL_SOURCE, QTableWidgetItem(source_text))
+                self._msg_table.setItem(row, COL_MERGE, QTableWidgetItem(merge_text))
+        finally:
+            self._set_table_updates_enabled(self._msg_table, True)
+
+    def _set_table_updates_enabled(self, table: QTableWidget, enabled: bool) -> None:
+        """Toggle expensive table repaint/sort work if the backing widget supports it."""
+        if hasattr(table, "setUpdatesEnabled"):
+            table.setUpdatesEnabled(enabled)
+        if hasattr(table, "setSortingEnabled"):
+            table.setSortingEnabled(False)
 
     def _on_playback_tick(self, msg: Optional[V2xMessage]) -> None:
         """Update map and details when the visible playback message changes."""
         if msg is None:
             return
 
-        self._map_widget.render_playback_slice(self._player._messages, self._player.current_index)
+        if self._should_render_full_map_slice(msg):
+            self._map_widget.render_playback_slice(self._player._messages, self._player.current_index)
         self._map_widget.update_playback_position(msg)
         self._highlight_table_row(msg)
         self._show_security_detail(msg, auto_focus=False)
         self._update_scene_for_message(msg)
         self._eta_graph.set_current_time(msg.timestamp)
+
+    def _should_render_full_map_slice(self, msg: V2xMessage) -> bool:
+        """Throttle expensive map layer sync while keeping critical states immediate."""
+        messages_id = id(self._player._messages)
+        index = self._player.current_index
+        now = time.perf_counter()
+        if self._last_map_messages_id != messages_id:
+            should_render = True
+        elif self._last_map_slice_index is None or index < self._last_map_slice_index:
+            should_render = True
+        elif msg.msg_type in {MessageType.MAPEM, MessageType.SPATEM, MessageType.SREM, MessageType.SSEM}:
+            should_render = True
+        elif now - self._last_map_slice_update_monotonic >= 0.25:
+            should_render = True
+        else:
+            should_render = False
+
+        if should_render:
+            self._last_map_messages_id = messages_id
+            self._last_map_slice_index = index
+            self._last_map_slice_update_monotonic = now
+        return should_render
+
+    def _reset_playback_render_caches(self) -> None:
+        """Reset throttling/caches after loading, filtering, or clearing a session."""
+        self._reset_playback_render_caches()
 
     def _highlight_table_row(self, msg: V2xMessage) -> None:
         """Select the matching row and only scroll when it leaves the viewport."""
@@ -1176,14 +1219,31 @@ class MainWindow(QMainWindow):
         if auto_focus:
             self._context_tabs.setCurrentIndex(0)
 
-    def _update_scene_for_message(self, msg: Optional[V2xMessage]) -> None:
+    def _update_scene_for_message(self, msg: Optional[V2xMessage], *, force: bool = False) -> None:
         """Rebuild and display the current scene snapshot for one playback position."""
         if msg is None or not self._player._messages:
             self._clear_scene_panel()
             self._refresh_prioritization_issues([])
+            self._last_scene_cache_key = None
+            self._last_scene_cache_snapshot = None
             return
 
-        scene = build_scene_snapshot(self._player._messages, msg.timestamp)
+        now = time.perf_counter()
+        if (
+            not force
+            and self._player.state == "playing"
+            and now - self._last_scene_update_monotonic < 0.25
+        ):
+            return
+
+        scene_key = (id(self._player._messages), msg.timestamp.isoformat())
+        if scene_key == self._last_scene_cache_key and self._last_scene_cache_snapshot is not None:
+            scene = self._last_scene_cache_snapshot
+        else:
+            scene = build_scene_snapshot(self._player._messages, msg.timestamp)
+            self._last_scene_cache_key = scene_key
+            self._last_scene_cache_snapshot = scene
+        self._last_scene_update_monotonic = now
         self._render_scene_snapshot(scene)
         self._refresh_prioritization_issues(build_prioritization_issues(scene))
 
@@ -1727,6 +1787,12 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_right_splitter"):
             self._right_splitter.setSizes([460, 280])
         self._message_table_maximized = False
+        self._last_scene_update_monotonic = 0.0
+        self._last_scene_cache_key = None
+        self._last_scene_cache_snapshot = None
+        self._last_map_slice_update_monotonic = 0.0
+        self._last_map_slice_index = None
+        self._last_map_messages_id = None
         self._issue_filter_mode = "all"
         self._issue_filter_intersection = "all"
         if hasattr(self, "_issue_filter_combo"):

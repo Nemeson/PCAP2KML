@@ -1486,8 +1486,22 @@ class MapWidget(QWebEngineView):
 
     def update_playback_position(self, msg: V2xMessage) -> None:
         """Move the marker for msg.station_id and highlight it."""
-        self._color_for_message(msg)
-        marker_id = _js_escape(_marker_id_for_message(msg))
+        color = self._color_for_message(msg)
+        marker_id_raw = _marker_id_for_message(msg)
+        marker_id = _js_escape(marker_id_raw)
+        if msg.msg_type not in NON_STATION_MARKER_TYPES and _has_display_position(msg):
+            marker_lat, marker_lon = _marker_position_for_message(msg)
+            popup = (
+                f"<b>{msg.msg_type.value}</b><br>"
+                f"Station: {msg.station_id}<br>"
+                f"Time: {msg.timestamp.strftime('%H:%M:%S.%f')[:-3]}<br>"
+                f"Pos: {msg.latitude:.6f}, {msg.longitude:.6f}"
+            )
+            self._run_js(
+                f"addMarker('{marker_id}', '{_js_escape(msg.station_id)}', "
+                f"{marker_lat}, {marker_lon}, '{_js_escape(popup)}', "
+                f"'{_js_escape(color)}', 'markers')"
+            )
         self._run_js(f"highlightMarker('{marker_id}')")
         if self._follow_station_id and msg.station_id == self._follow_station_id:
             self._run_js(f"followMarker('{_js_escape(marker_id)}')")

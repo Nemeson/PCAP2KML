@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Optional
+from typing import Iterable, Optional
 
 from .data_model import MessageType, V2xMessage
 
@@ -565,29 +565,51 @@ def collect_prioritization_issue_occurrences(
 def _collect_prioritization_issue_occurrences_uncached(
     messages: list[V2xMessage],
 ) -> list[PrioritizationIssueOccurrence]:
-    """Collect first visible stream index for each prioritization issue.
+    """Collect first visible stream index for each prioritization issue in one pass.
 
     The function is intentionally the shared basis for export and problem replay,
     so both surfaces highlight the same first occurrence in large TXA/RXA merges.
     """
     occurrences: list[PrioritizationIssueOccurrence] = []
     seen_issue_keys: set[tuple[str, int, int, int, str]] = set()
+    requests: dict[tuple[int, int, int], ActiveRequest] = {}
+
     for index, msg in enumerate(messages):
-        if msg.msg_type not in {MessageType.SREM, MessageType.SSEM, MessageType.CAM}:
-            continue
-        scene = build_scene_snapshot(messages, msg.timestamp)
-        for issue in build_prioritization_issues(scene):
-            issue_key = (
-                issue.issue_type,
-                issue.intersection_id,
-                issue.request_id,
-                issue.sequence_number,
-                issue.station_id,
-            )
-            if issue_key in seen_issue_keys:
+        if msg.msg_type == MessageType.SREM:
+            request = _build_active_request(msg)
+            if request is not None:
+                requests[(request.intersection_id, request.request_id, request.sequence_number)] = request
+        elif msg.msg_type == MessageType.SSEM:
+            response = _extract_ssem_response(msg)
+            if response is None:
                 continue
-            seen_issue_keys.add(issue_key)
-            occurrences.append(PrioritizationIssueOccurrence(issue=issue, message_index=index))
+            request = requests.get(
+                (response["intersection_id"], response["request_id"], response["sequence_number"])
+            )
+            if request is None:
+                continue
+            request.responded_at = msg.timestamp
+            request.ssem_status = response["status"]
+            _merge_request_provenance(request, msg)
+            _append_response_issues(
+                occurrences,
+                seen_issue_keys,
+                request,
+                msg.timestamp,
+                index,
+            )
+        elif msg.msg_type != MessageType.CAM:
+            continue
+
+        _append_timeout_issues(
+            occurrences,
+            seen_issue_keys,
+            requests.values(),
+            msg.timestamp,
+            index,
+        )
+
+    _append_final_eta_issues(occurrences, seen_issue_keys, messages)
     return sorted(
         occurrences,
         key=lambda occurrence: (
@@ -623,6 +645,149 @@ def _cached_prioritization_issue_occurrences(
     _ISSUE_HISTORY_CACHE.clear()
     _ISSUE_HISTORY_CACHE[cache_key] = occurrences
     return occurrences
+
+
+def _append_response_issues(
+    occurrences: list[PrioritizationIssueOccurrence],
+    seen_issue_keys: set[tuple[str, int, int, int, str]],
+    request: ActiveRequest,
+    timestamp: datetime,
+    message_index: int,
+) -> None:
+    """Append SSEM-derived issues without rebuilding the whole scene."""
+    status = get_request_operational_status(request, timestamp)
+    response_delay = (
+        (request.responded_at - request.requested_at).total_seconds()
+        if request.responded_at is not None
+        else None
+    )
+
+    if status == RequestOperationalStatus.REJECTED:
+        _append_issue_once(
+            occurrences,
+            seen_issue_keys,
+            _issue_from_request(
+                request,
+                issue_type="REJECTED",
+                severity="error",
+                message=f"SSEM lehnt Priorisierung ab: {request.ssem_status}.",
+                timestamp=timestamp,
+                status=request.ssem_status,
+                delay_seconds=response_delay,
+            ),
+            message_index,
+        )
+    elif (
+        status == RequestOperationalStatus.GRANTED
+        and response_delay is not None
+        and response_delay > _TIMEOUT_DEFAULT_S
+    ):
+        _append_issue_once(
+            occurrences,
+            seen_issue_keys,
+            _issue_from_request(
+                request,
+                issue_type="LATE_GRANTED",
+                severity="warning",
+                message=f"SSEM granted kam verspaetet ({response_delay:.2f}s).",
+                timestamp=timestamp,
+                status=request.ssem_status,
+                delay_seconds=response_delay,
+            ),
+            message_index,
+        )
+
+    if request.in_lane is None or request.out_lane is None:
+        _append_issue_once(
+            occurrences,
+            seen_issue_keys,
+            _issue_from_request(
+                request,
+                issue_type="MISSING_MAP_MATCH",
+                severity="warning",
+                message="SREM-Lanes koennen nicht vollstaendig auf MAP-Geometrie gemappt werden.",
+                timestamp=timestamp,
+                status=request.ssem_status,
+                delay_seconds=response_delay,
+            ),
+            message_index,
+        )
+
+
+def _append_timeout_issues(
+    occurrences: list[PrioritizationIssueOccurrence],
+    seen_issue_keys: set[tuple[str, int, int, int, str]],
+    requests: Iterable[ActiveRequest],
+    timestamp: datetime,
+    message_index: int,
+) -> None:
+    """Append newly visible timeout issues for still-pending requests."""
+    for request in find_overdue_requests(list(requests), timestamp):
+        delay_seconds = (timestamp - request.requested_at).total_seconds()
+        _append_issue_once(
+            occurrences,
+            seen_issue_keys,
+            _issue_from_request(
+                request,
+                issue_type="TIMEOUT",
+                severity="error",
+                message=f"SREM ohne rechtzeitige SSEM-Antwort ({delay_seconds:.2f}s).",
+                timestamp=timestamp,
+                status=RequestOperationalStatus.TIMEOUT.value,
+                delay_seconds=delay_seconds,
+            ),
+            message_index,
+        )
+
+
+def _append_final_eta_issues(
+    occurrences: list[PrioritizationIssueOccurrence],
+    seen_issue_keys: set[tuple[str, int, int, int, str]],
+    messages: list[V2xMessage],
+) -> None:
+    """Append ETA/stopline issues using one final scene build instead of many."""
+    if not messages:
+        return
+    final_scene = build_scene_snapshot(messages, messages[-1].timestamp)
+    for issue in build_prioritization_issues(final_scene):
+        if issue.issue_type not in {"ETA_CONFLICT", "STOPLINE_WITHOUT_GRANTED"}:
+            continue
+        _append_issue_once(
+            occurrences,
+            seen_issue_keys,
+            issue,
+            _find_message_index_at_or_after(messages, issue.timestamp),
+        )
+
+
+def _append_issue_once(
+    occurrences: list[PrioritizationIssueOccurrence],
+    seen_issue_keys: set[tuple[str, int, int, int, str]],
+    issue: PrioritizationIssue,
+    message_index: int,
+) -> None:
+    issue_key = _prioritization_issue_key(issue)
+    if issue_key in seen_issue_keys:
+        return
+    seen_issue_keys.add(issue_key)
+    occurrences.append(PrioritizationIssueOccurrence(issue=issue, message_index=message_index))
+
+
+def _prioritization_issue_key(issue: PrioritizationIssue) -> tuple[str, int, int, int, str]:
+    return (
+        issue.issue_type,
+        issue.intersection_id,
+        issue.request_id,
+        issue.sequence_number,
+        issue.station_id,
+    )
+
+
+def _find_message_index_at_or_after(messages: list[V2xMessage], timestamp: datetime) -> int:
+    for index, msg in enumerate(messages):
+        if msg.timestamp >= timestamp:
+            return index
+    return max(0, len(messages) - 1)
 
 
 def _issue_from_request(
