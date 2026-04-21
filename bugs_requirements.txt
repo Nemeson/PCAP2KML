@@ -1,0 +1,7 @@
+Bugs PCAP2KML Player:
+- CSV Export wiederholt die Headline in der Datei bei jeder Spalte und zählt dabei hoch anstatt nur die korrekte Spalte zu benennen.
+- Die App freezed nach einiger Zeit. RAM überwachung und VRAM überwachung ergänzen
+	- Fehler besteht seit letztem Release
+	
+Requirements:
+- Match von MAPEM und SPaTEM Signalgruppen (Lane - Connection - Signalgroup)Nachn
