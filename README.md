@@ -89,6 +89,24 @@ Das Panel bietet Filter fuer `Alle`, `Nur kritisch`, `Aktuelle Kreuzung` und ein
 Kreuzungsauswahl. Kritische Fehler koennen dadurch gezielt pro Intersection
 isoliert werden, ohne die Karte mit zusaetzlichen Markern zu ueberladen.
 
+### Layout fuer kleine Bildschirme
+
+Die Toolbar enthaelt einen Layoutmodus:
+
+```text
+Auto | Desktop | Kompakt
+```
+
+`Auto` schaltet unterhalb von ca. 1320 px Fensterbreite in den Kompaktmodus. Der
+Kompaktmodus ist auf 1280x720 optimiert und priorisiert die Karte:
+
+- Kopfbereich ist einklappbar
+- Nachrichtentabelle zeigt kompakt nur `Timestamp`, `Station ID`, `Msg Type` und
+  `Speed / Heading`
+- Toolbar- und Playback-Beschriftungen werden verkuerzt
+- Priorisierungsfehler-Panel klappt ohne kritische Fehler automatisch ein
+- Kritische Priorisierungsfehler klappen das Panel wieder auf
+
 Das Szenenpanel zeigt derzeit:
 
 - Kreuzungen mit MAP-/SPAT-Revisionen
@@ -213,6 +231,24 @@ cd C:\PythonTools\PCAP2KML
 py pcap2kml_launcher.py
 ```
 
+### QtWebEngine/Grafiktreiber-Hinweis
+
+Auf manchen Windows-Rechnern schreibt QtWebEngine/Chromium Meldungen wie
+`QueryVideoProcessorCustomExtForHDR: Failed to retrieve D3D11 device` ins
+Terminal. Die App setzt beim Start konservative Chromium-Flags gegen fragile
+DirectComposition-/HDR-Pfade. Falls Karte oder WebEngine auf einem Rechner
+trotzdem instabil laufen, kann Software-Rendering erzwungen werden:
+
+```powershell
+$env:PCAP2KML_DISABLE_GPU="1"
+py pcap2kml_launcher.py
+```
+
+Die Meldung `The cached device pixel ratio value was stale on window expose` ist
+eine QtWebEngine/DPI-Warnung. Die Karte invalidiert ihre Leaflet-Groesse bei
+Show/Resize erneut, damit Fensterwechsel und Remote-Desktop-Skalierung robuster
+werden.
+
 ## Windows-EXE erstellen
 
 Die Anwendung kann als einfache Start-EXE gebaut werden. Die EXE ist ein
@@ -289,7 +325,7 @@ statt automatisch etwas nachzuladen.
 
 Die aktuelle Testsuite deckt Parser, Kartenlogik, Playback, Export, Sicherheitsparser und Szenenmodell breit ab.
 
-- Aktueller Stand: `179 passed`
+- Aktueller Stand: `187 passed`
 - Vorhandene Testbereiche:
   - App-Memory
   - ASN.1-Schema-Update

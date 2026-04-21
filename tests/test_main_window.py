@@ -4,7 +4,16 @@ from datetime import datetime, timezone
 
 from pcap2kml_player.data_model import MessageType, V2xMessage
 from pcap2kml_player.scene_model import PrioritizationIssue
-from pcap2kml_player.ui.main_window import COL_TIMESTAMP, MainWindow
+from pcap2kml_player.ui.main_window import (
+    COL_LATLON,
+    COL_MERGE,
+    COL_MSGTYPE,
+    COL_SOURCE,
+    COL_SPEED_HEADING,
+    COL_STATION,
+    COL_TIMESTAMP,
+    MainWindow,
+)
 
 
 def _message(second: int, station_id: str = "car-1") -> V2xMessage:
@@ -39,6 +48,7 @@ class _FakeTable:
         self.selected_rows: list[int] = []
         self.scrolled_rows: list[int] = []
         self._items: dict[tuple[int, int], object] = {}
+        self.hidden_columns: dict[int, bool] = {}
 
     def setRowCount(self, _count: int) -> None:
         return None
@@ -66,6 +76,9 @@ class _FakeTable:
 
     def viewport(self) -> _Viewport:
         return _Viewport()
+
+    def setColumnHidden(self, column: int, hidden: bool) -> None:
+        self.hidden_columns[column] = hidden
 
 
 class _FakeTabs:
@@ -103,6 +116,9 @@ class _FakeButton:
     def setChecked(self, checked: bool) -> None:
         self.checked = checked
 
+    def setFixedWidth(self, _width: int) -> None:
+        return None
+
 
 class _FakePanel:
     def __init__(self):
@@ -134,6 +150,14 @@ class _FakeLabel:
 
     def setToolTip(self, text: str) -> None:
         self.tooltip = text
+
+
+class _FakeSettings:
+    def __init__(self):
+        self.values: dict[str, object] = {}
+
+    def setValue(self, key: str, value: object) -> None:
+        self.values[key] = value
 
 
 class _FakeSplitter:
@@ -346,3 +370,77 @@ def test_toggle_issue_panel_collapses_and_expands_content():
     assert window._issue_panel.minimum_width == 260
     assert window._issue_panel_title.text == "Priorisierungsfehler"
     assert window._btn_toggle_issue_panel.text == "Einklappen"
+
+
+def test_apply_compact_message_columns_hides_non_compact_columns():
+    window = MainWindow.__new__(MainWindow)
+    table = _FakeTable()
+    window._msg_table = table
+
+    window._apply_compact_message_columns(True)
+
+    assert table.hidden_columns[COL_TIMESTAMP] is False
+    assert table.hidden_columns[COL_STATION] is False
+    assert table.hidden_columns[COL_MSGTYPE] is False
+    assert table.hidden_columns[COL_SPEED_HEADING] is False
+    assert table.hidden_columns[COL_LATLON] is True
+    assert table.hidden_columns[COL_SOURCE] is True
+    assert table.hidden_columns[COL_MERGE] is True
+
+    window._apply_compact_message_columns(False)
+
+    assert all(hidden is False for hidden in table.hidden_columns.values())
+
+
+def test_issue_panel_policy_collapses_only_without_critical_in_compact_mode():
+    window = MainWindow.__new__(MainWindow)
+    window._is_compact_layout = True
+    window._issue_panel_collapsed = False
+    window._issue_panel = _FakePanel()
+    window._issue_content = _FakeVisibleWidget()
+    window._issue_panel_title = _FakeLabel()
+    window._btn_toggle_issue_panel = _FakeButton()
+    warning = PrioritizationIssue(
+        issue_type="ETA_CONFLICT",
+        severity="warning",
+        intersection_id=42,
+        request_id=1,
+        sequence_number=1,
+        station_id="bus-1",
+        message="warning",
+        timestamp=datetime(2026, 4, 19, 12, 0, 0, tzinfo=timezone.utc),
+    )
+    critical = PrioritizationIssue(
+        issue_type="TIMEOUT",
+        severity="error",
+        intersection_id=42,
+        request_id=2,
+        sequence_number=1,
+        station_id="bus-2",
+        message="critical",
+        timestamp=datetime(2026, 4, 19, 12, 0, 0, tzinfo=timezone.utc),
+    )
+
+    window._apply_issue_panel_policy([warning])
+
+    assert window._issue_panel_collapsed is True
+
+    window._apply_issue_panel_policy([critical])
+
+    assert window._issue_panel_collapsed is False
+
+
+def test_set_overview_collapsed_hides_content_and_persists_setting():
+    window = MainWindow.__new__(MainWindow)
+    window._settings = _FakeSettings()
+    window._overview_content = _FakeVisibleWidget()
+    window._overview_compact_label = _FakeLabel()
+    window._btn_toggle_overview = _FakeButton()
+    window._session = None
+
+    window._set_overview_collapsed(True)
+
+    assert window._overview_collapsed is True
+    assert window._overview_content.visible is False
+    assert window._btn_toggle_overview.text == "Header anzeigen"
+    assert window._settings.values["ui/header_collapsed"] is True

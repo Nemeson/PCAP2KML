@@ -11,7 +11,8 @@ import logging
 from math import cos, hypot, radians
 from typing import Optional
 
-from PyQt6.QtCore import QObject, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QObject, QTimer, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QResizeEvent, QShowEvent
 from PyQt6.QtWebChannel import QWebChannel
 from PyQt6.QtWebEngineCore import QWebEngineProfile
 from PyQt6.QtWebEngineWidgets import QWebEngineView
@@ -1514,12 +1515,26 @@ class MapWidget(QWebEngineView):
         """Focus the map around one rendered intersection."""
         self._run_js(f"focusIntersection({intersection_id})")
 
+    def showEvent(self, event: QShowEvent) -> None:
+        """Refresh Leaflet sizing after Qt exposes the WebEngine view."""
+        super().showEvent(event)
+        self._schedule_map_resize()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        """Refresh Leaflet sizing after DPI/window-size changes."""
+        super().resizeEvent(event)
+        self._schedule_map_resize()
+
     def clear(self) -> None:
         """Remove all markers and trajectories from the map."""
         self._run_js("clearAll()")
         self._station_color_map.clear()
         self._station_index = 0
         self._follow_station_id = None
+
+    def _schedule_map_resize(self) -> None:
+        """Defer Leaflet invalidateSize until Qt has delivered expose/resize."""
+        QTimer.singleShot(0, lambda: self._run_js("map.invalidateSize(false)"))
 
     def _on_marker_clicked(self, station_id: str) -> None:
         """Remember which dynamic object should be followed during playback."""

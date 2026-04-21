@@ -111,6 +111,9 @@ def launch_app() -> int:
     """Import and start the real PyQt application."""
     if str(PROJECT_ROOT) not in sys.path:
         sys.path.insert(0, str(PROJECT_ROOT))
+    from pcap2kml_player.qt_runtime import configure_qt_runtime_environment
+
+    configure_qt_runtime_environment()
     from pcap2kml_player.main import main
 
     return main()

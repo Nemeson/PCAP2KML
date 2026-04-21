@@ -11,13 +11,17 @@ import sys
 import traceback
 from pathlib import Path
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication, QMessageBox
-
 # Add the parent directory to Python path so pcap2kml_player is importable
 project_root = Path(__file__).resolve().parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
+
+from pcap2kml_player.qt_runtime import configure_qt_runtime_environment
+
+configure_qt_runtime_environment()
+
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from pcap2kml_player.ui.main_window import MainWindow
 

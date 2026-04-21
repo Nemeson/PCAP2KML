@@ -14,6 +14,23 @@ $SpecFile = Join-Path $ProjectRoot "PCAP2KML-Player.spec"
 
 Set-Location $ProjectRoot
 
+function Test-PipPackage {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PackageName
+    )
+
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & py -m pip show $PackageName > $null 2> $null
+        return $LASTEXITCODE -eq 0
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+}
+
 if ($Clean) {
     foreach ($path in @($DistDir, $BuildDir, $SpecFile)) {
         if (Test-Path -LiteralPath $path) {
@@ -37,22 +54,12 @@ foreach ($line in Get-Content -LiteralPath $Requirements) {
         continue
     }
     $package = ($requirement -split "==|>=|<=|~=|!=|>|<|\[")[0].Trim()
-    $probe = @"
-import importlib.metadata
-import sys
-try:
-    importlib.metadata.version("$package")
-except importlib.metadata.PackageNotFoundError:
-    sys.exit(1)
-"@
-    py -c $probe
-    if ($LASTEXITCODE -ne 0) {
+    if (-not (Test-PipPackage -PackageName $package)) {
         $missing += $requirement
     }
 }
 
-py -c "import PyInstaller" 2>$null
-if ($LASTEXITCODE -ne 0) {
+if (-not (Test-PipPackage -PackageName "pyinstaller")) {
     $missing += "pyinstaller>=6.0"
 }
 

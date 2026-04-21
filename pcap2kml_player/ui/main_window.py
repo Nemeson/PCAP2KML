@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import QSettings, QThread, Qt
-from PyQt6.QtGui import QCloseEvent, QDragEnterEvent, QDropEvent
+from PyQt6.QtGui import QCloseEvent, QDragEnterEvent, QDropEvent, QResizeEvent
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -81,6 +81,11 @@ TABLE_HEADERS = [
 SCENE_INTERSECTION_HEADERS = ["Intersection", "Revision", "Signalgruppen", "Prognose", "30s Timeline"]
 SCENE_REQUEST_HEADERS = ["Request", "Station", "Prio", "Status", "Lanes"]
 FORECAST_TIMELINE_BUCKETS = 15
+COMPACT_LAYOUT_WIDTH = 1320
+LAYOUT_MODE_AUTO = "auto"
+LAYOUT_MODE_DESKTOP = "desktop"
+LAYOUT_MODE_COMPACT = "compact"
+COMPACT_MESSAGE_COLUMNS = {COL_TIMESTAMP, COL_STATION, COL_MSGTYPE, COL_SPEED_HEADING}
 
 
 class MainWindow(QMainWindow):
@@ -95,6 +100,19 @@ class MainWindow(QMainWindow):
 
         self._memory = AppMemory.load()
         self._settings = QSettings("PCAP2KML", "Player")
+        self._layout_preference = str(self._settings.value("ui/layout_mode", LAYOUT_MODE_AUTO))
+        if self._layout_preference not in {
+            LAYOUT_MODE_AUTO,
+            LAYOUT_MODE_DESKTOP,
+            LAYOUT_MODE_COMPACT,
+        }:
+            self._layout_preference = LAYOUT_MODE_AUTO
+        self._is_compact_layout = False
+        self._overview_collapsed = self._settings.value(
+            "ui/header_collapsed",
+            False,
+            type=bool,
+        )
 
         self._session: Optional[SessionData] = None
         self._active_types: set[MessageType] = set(MessageType)
@@ -126,6 +144,7 @@ class MainWindow(QMainWindow):
         self._restore_window_state()
         self._refresh_memory_banner()
         self._update_controls_enabled(False)
+        self._apply_responsive_layout(force=True)
 
     def _setup_ui(self) -> None:
         """Build the complete UI layout."""
@@ -225,9 +244,18 @@ class MainWindow(QMainWindow):
         self._issue_list = QListWidget()
         self._issue_list.setAlternatingRowColors(True)
         self._issue_list.setStyleSheet(
-            "QListWidget { background: transparent; border: none; }"
-            "QListWidget::item { margin: 3px 0; padding: 7px; border-radius: 7px; }"
-            "QListWidget::item:selected { background: #dbeafe; color: #111827; }"
+            "QListWidget {"
+            " background: #ffffff;"
+            " alternate-background-color: #eaf5ff;"
+            " color: #10233f;"
+            " border: 1px solid #d7dde8;"
+            " border-radius: 10px;"
+            " selection-background-color: #cfe8ff;"
+            " selection-color: #000000;"
+            "}"
+            "QListWidget::item { padding: 7px; border: none; color: #10233f; }"
+            "QListWidget::item:alternate { background: #eaf5ff; color: #10233f; }"
+            "QListWidget::item:selected { background: #cfe8ff; color: #000000; }"
         )
         self._issue_list.itemClicked.connect(self._on_prioritization_issue_clicked)
         issue_content_layout.addWidget(self._issue_list, stretch=1)
@@ -271,14 +299,49 @@ class MainWindow(QMainWindow):
         self._btn_update_schemas.setToolTip("ASN.1-Schemadateien aus dem Git-Repo aktualisieren")
         toolbar.addWidget(self._btn_update_schemas)
 
+        toolbar.addSeparator()
+        toolbar.addWidget(QLabel("Layout:"))
+        self._layout_mode_combo = QComboBox()
+        self._layout_mode_combo.addItem("Auto", LAYOUT_MODE_AUTO)
+        self._layout_mode_combo.addItem("Desktop", LAYOUT_MODE_DESKTOP)
+        self._layout_mode_combo.addItem("Kompakt", LAYOUT_MODE_COMPACT)
+        self._layout_mode_combo.setToolTip("Layoutmodus automatisch oder manuell waehlen")
+        self._layout_mode_combo.setFixedWidth(110)
+        for index in range(self._layout_mode_combo.count()):
+            if self._layout_mode_combo.itemData(index) == self._layout_preference:
+                self._layout_mode_combo.setCurrentIndex(index)
+                break
+        toolbar.addWidget(self._layout_mode_combo)
+
     def _setup_overview_panel(self, parent_layout: QVBoxLayout) -> None:
         """Create the SWARCO-inspired overview header."""
         panel = QFrame()
+        self._overview_panel = panel
         panel.setStyleSheet(
             "QFrame { background: #ffffff; border: 1px solid #d7dde8; border-radius: 16px; }"
         )
-        layout = QHBoxLayout(panel)
-        layout.setContentsMargins(18, 16, 18, 16)
+        outer_layout = QVBoxLayout(panel)
+        outer_layout.setContentsMargins(12, 10, 12, 10)
+        outer_layout.setSpacing(8)
+
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.setSpacing(8)
+        self._overview_compact_label = QLabel("PCAP2KML Player")
+        self._overview_compact_label.setStyleSheet(
+            "font-weight: 700; color: #10233f;"
+        )
+        self._btn_toggle_overview = QPushButton("Header einklappen")
+        self._btn_toggle_overview.setCheckable(True)
+        self._btn_toggle_overview.setToolTip("Kopfbereich ein- oder ausklappen")
+        self._btn_toggle_overview.toggled.connect(self._set_overview_collapsed)
+        header_row.addWidget(self._overview_compact_label, stretch=1)
+        header_row.addWidget(self._btn_toggle_overview)
+        outer_layout.addLayout(header_row)
+
+        self._overview_content = QWidget()
+        layout = QHBoxLayout(self._overview_content)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         text_layout = QVBoxLayout()
         text_layout.setSpacing(3)
@@ -307,7 +370,9 @@ class MainWindow(QMainWindow):
 
         layout.addLayout(text_layout, stretch=1)
         layout.addLayout(stats_layout)
+        outer_layout.addWidget(self._overview_content)
         parent_layout.addWidget(panel)
+        self._set_overview_collapsed(self._overview_collapsed)
 
     def _create_stat_card(self, title: str, value: str) -> QFrame:
         """Create a compact summary card."""
@@ -332,6 +397,35 @@ class MainWindow(QMainWindow):
         label = card.findChild(QLabel, "value")
         if label:
             label.setText(value)
+        self._update_compact_overview_text()
+
+    def _set_overview_collapsed(self, collapsed: bool) -> None:
+        """Collapse or expand the overview header."""
+        self._overview_collapsed = collapsed
+        self._settings.setValue("ui/header_collapsed", collapsed)
+        if hasattr(self, "_overview_content"):
+            self._overview_content.setVisible(not collapsed)
+        if hasattr(self, "_btn_toggle_overview"):
+            self._btn_toggle_overview.setText(
+                "Header anzeigen" if collapsed else "Header einklappen"
+            )
+            self._btn_toggle_overview.setChecked(collapsed)
+        self._update_compact_overview_text()
+
+    def _update_compact_overview_text(self) -> None:
+        """Render a compact one-line session summary for small screens."""
+        if not hasattr(self, "_overview_compact_label"):
+            return
+        if self._session is not None:
+            text = (
+                "PCAP2KML | "
+                f"{len(self._session.sources) or 1} Datei(en) | "
+                f"{len(self._session.messages)} Nachrichten | "
+                f"{len(self._session.station_ids)} Stationen"
+            )
+        else:
+            text = "PCAP2KML Player | Bereit zum Laden einer PCAP-Sitzung"
+        self._overview_compact_label.setText(text)
 
     def _setup_filter_row(self, parent_layout: QVBoxLayout) -> None:
         """Create the filter row with type and station filters."""
@@ -660,6 +754,7 @@ class MainWindow(QMainWindow):
         self._btn_export_kml.clicked.connect(self._on_export_kml)
         self._btn_export_issues.clicked.connect(self._on_export_prioritization_issues)
         self._btn_update_schemas.clicked.connect(self._on_update_schemas)
+        self._layout_mode_combo.currentIndexChanged.connect(self._on_layout_mode_changed)
 
         self._btn_play.clicked.connect(self._player.play)
         self._btn_pause.clicked.connect(self._player.pause)
@@ -680,6 +775,66 @@ class MainWindow(QMainWindow):
         self._player.position_changed.connect(self._on_player_position_changed)
         self._player.time_updated.connect(self._on_player_time_updated)
         self._player.duration_changed.connect(self._on_duration_changed)
+
+    def _on_layout_mode_changed(self, *_args) -> None:
+        """Persist and apply the selected responsive layout mode."""
+        self._layout_preference = str(self._layout_mode_combo.currentData() or LAYOUT_MODE_AUTO)
+        self._settings.setValue("ui/layout_mode", self._layout_preference)
+        self._apply_responsive_layout(force=True)
+
+    def _effective_layout_mode(self) -> str:
+        """Return the concrete layout mode for the current window size."""
+        if self._layout_preference == LAYOUT_MODE_COMPACT:
+            return LAYOUT_MODE_COMPACT
+        if self._layout_preference == LAYOUT_MODE_DESKTOP:
+            return LAYOUT_MODE_DESKTOP
+        return LAYOUT_MODE_COMPACT if self.width() < COMPACT_LAYOUT_WIDTH else LAYOUT_MODE_DESKTOP
+
+    def _apply_responsive_layout(self, *, force: bool = False) -> None:
+        """Apply compact/desktop presentation tweaks without reparenting widgets."""
+        compact = self._effective_layout_mode() == LAYOUT_MODE_COMPACT
+        if not force and compact == self._is_compact_layout:
+            return
+        self._is_compact_layout = compact
+        self._apply_compact_message_columns(compact)
+        self._apply_compact_control_sizes(compact)
+        self._apply_issue_panel_policy(getattr(self, "_current_prioritization_issues", []))
+        if compact and hasattr(self, "_right_splitter"):
+            self._right_splitter.setSizes([360, 220])
+        elif hasattr(self, "_right_splitter") and not self._message_table_maximized:
+            self._right_splitter.setSizes([460, 280])
+
+    def _apply_compact_message_columns(self, compact: bool) -> None:
+        """Show only the chosen compact message columns on small screens."""
+        if not hasattr(self, "_msg_table"):
+            return
+        for column in range(NUM_COLUMNS):
+            self._msg_table.setColumnHidden(
+                column,
+                compact and column not in COMPACT_MESSAGE_COLUMNS,
+            )
+
+    def _apply_compact_control_sizes(self, compact: bool) -> None:
+        """Reduce fixed widths and button labels in compact layout."""
+        if not hasattr(self, "_btn_play"):
+            return
+        button_width = 58 if compact else 72
+        self._btn_play.setFixedWidth(button_width)
+        self._btn_pause.setFixedWidth(button_width)
+        self._btn_stop.setFixedWidth(button_width)
+        self._speed_combo.setFixedWidth(74 if compact else 84)
+        self._lbl_time.setFixedWidth(118 if compact else 140)
+        self._btn_prev_issue.setText("Fehler <" if compact else "Fehler zurueck")
+        self._btn_next_issue.setText("Fehler >" if compact else "Naechster Fehler")
+        self._btn_export_kml.setText("KML" if compact else "KML exportieren")
+        self._btn_export_issues.setText("Fehler Export" if compact else "Fehler exportieren")
+        self._btn_update_schemas.setText("Schemas" if compact else "ASN.1-Schemas aktualisieren")
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        """Switch Auto layout when the window crosses compact width."""
+        super().resizeEvent(event)
+        if getattr(self, "_layout_preference", LAYOUT_MODE_AUTO) == LAYOUT_MODE_AUTO:
+            self._apply_responsive_layout()
 
     def _on_load_pcap(self) -> None:
         """Open a file dialog and load selected PCAP files."""
@@ -775,6 +930,7 @@ class MainWindow(QMainWindow):
         self._update_scene_for_message(session.messages[0], force=True)
         self._update_controls_enabled(True)
         self._update_overview_for_session(paths, session)
+        self._apply_responsive_layout(force=True)
 
         self._memory.remember_files(paths)
         self._memory.remember_session_summary(
@@ -1414,6 +1570,7 @@ class MainWindow(QMainWindow):
         self._current_prioritization_issues = issues
         if not hasattr(self, "_issue_list"):
             return
+        self._apply_issue_panel_policy(issues)
         self._issue_list.clear()
         self._refresh_issue_intersection_filter(issues)
         if not issues:
@@ -1437,8 +1594,22 @@ class MainWindow(QMainWindow):
             item = QListWidgetItem(self._format_issue_item(issue))
             item.setData(Qt.ItemDataRole.UserRole, issue)
             item.setToolTip(issue.message)
-            item.setForeground(Qt.GlobalColor.darkRed if issue.severity == "error" else Qt.GlobalColor.darkYellow)
             self._issue_list.addItem(item)
+
+    def _apply_issue_panel_policy(self, issues: list[PrioritizationIssue]) -> None:
+        """Keep issue panel visible only when critical errors need attention."""
+        if not hasattr(self, "_issue_panel"):
+            return
+        has_critical = any(issue.severity == "error" for issue in issues)
+        should_collapse = not has_critical and self._is_compact_layout
+        if has_critical:
+            should_collapse = False
+        if getattr(self, "_issue_panel_collapsed", False) != should_collapse:
+            if hasattr(self, "_btn_toggle_issue_panel"):
+                self._btn_toggle_issue_panel.blockSignals(True)
+                self._btn_toggle_issue_panel.setChecked(should_collapse)
+                self._btn_toggle_issue_panel.blockSignals(False)
+            self._toggle_issue_panel_collapsed(should_collapse)
 
     def _toggle_issue_panel_collapsed(self, collapsed: bool) -> None:
         """Collapse or expand the prioritization issue panel without losing state."""
@@ -1757,6 +1928,7 @@ class MainWindow(QMainWindow):
         self._set_stat_card_value(self._stat_messages, str(len(session.messages)))
         self._set_stat_card_value(self._stat_stations, str(len(session.station_ids)))
         self._update_status_metrics(len(session.messages))
+        self._update_compact_overview_text()
 
     def _refresh_memory_banner(self) -> None:
         """Show a startup banner based on persistent memory."""
@@ -1779,6 +1951,7 @@ class MainWindow(QMainWindow):
                 self._stat_stations, str(self._memory.last_session_station_count)
             )
             self._status_metrics.setText("Bereit fuer letzte Sitzung")
+            self._update_compact_overview_text()
             return
 
         self._lbl_memory.setText("Noch keine persistente Sitzung gespeichert")
@@ -1786,6 +1959,7 @@ class MainWindow(QMainWindow):
         self._set_stat_card_value(self._stat_messages, "0")
         self._set_stat_card_value(self._stat_stations, "0")
         self._status_metrics.setText("Noch keine Sitzung geladen")
+        self._update_compact_overview_text()
 
     def _update_status_metrics(self, visible_messages: int) -> None:
         """Update the compact status metrics label."""
@@ -1830,20 +2004,10 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_right_splitter"):
             self._right_splitter.setSizes([460, 280])
         self._message_table_maximized = False
-        self._last_scene_update_monotonic = 0.0
-        self._last_scene_cache_key = None
-        self._last_scene_cache_snapshot = None
-        self._last_map_slice_update_monotonic = 0.0
-        self._last_map_slice_index = None
-        self._last_map_messages_id = None
+        self._reset_playback_render_caches()
         self._issue_filter_mode = "all"
         self._issue_filter_intersection = "all"
-        self._issue_panel_collapsed = False
-        if hasattr(self, "_btn_toggle_issue_panel"):
-            self._btn_toggle_issue_panel.blockSignals(True)
-            self._btn_toggle_issue_panel.setChecked(False)
-            self._btn_toggle_issue_panel.blockSignals(False)
-            self._toggle_issue_panel_collapsed(False)
+        self._apply_issue_panel_policy([])
         if hasattr(self, "_issue_filter_combo"):
             self._issue_filter_combo.blockSignals(True)
             self._issue_filter_combo.setCurrentIndex(0)
