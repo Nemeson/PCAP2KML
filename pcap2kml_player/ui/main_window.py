@@ -110,6 +110,7 @@ class MainWindow(QMainWindow):
         self._current_prioritization_issues: list[PrioritizationIssue] = []
         self._issue_filter_mode = "all"
         self._issue_filter_intersection = "all"
+        self._issue_panel_collapsed = False
         self._problem_replay_indices: list[int] = []
         self._message_table_maximized = False
         self._last_scene_update_monotonic = 0.0
@@ -168,6 +169,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._map_widget, stretch=1)
 
         issue_panel = QFrame()
+        self._issue_panel = issue_panel
         issue_panel.setObjectName("PrioritizationIssuePanel")
         issue_panel.setMinimumWidth(260)
         issue_panel.setMaximumWidth(320)
@@ -180,14 +182,28 @@ class MainWindow(QMainWindow):
         issue_layout.setContentsMargins(10, 10, 10, 10)
         issue_layout.setSpacing(6)
 
-        title = QLabel("Priorisierungsfehler")
-        title.setStyleSheet("font-weight: 700; color: #10233f;")
-        issue_layout.addWidget(title)
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.setSpacing(6)
+        self._issue_panel_title = QLabel("Priorisierungsfehler")
+        self._issue_panel_title.setStyleSheet("font-weight: 700; color: #10233f;")
+        self._btn_toggle_issue_panel = QPushButton("Einklappen")
+        self._btn_toggle_issue_panel.setCheckable(True)
+        self._btn_toggle_issue_panel.setToolTip("Priorisierungsfehler-Panel ein- oder ausklappen")
+        self._btn_toggle_issue_panel.toggled.connect(self._toggle_issue_panel_collapsed)
+        header_row.addWidget(self._issue_panel_title, stretch=1)
+        header_row.addWidget(self._btn_toggle_issue_panel)
+        issue_layout.addLayout(header_row)
+
+        self._issue_content = QWidget()
+        issue_content_layout = QVBoxLayout(self._issue_content)
+        issue_content_layout.setContentsMargins(0, 0, 0, 0)
+        issue_content_layout.setSpacing(6)
 
         self._issue_summary = QLabel("Keine Fehler.")
         self._issue_summary.setWordWrap(True)
         self._issue_summary.setStyleSheet("color: #42546b; font-size: 11px;")
-        issue_layout.addWidget(self._issue_summary)
+        issue_content_layout.addWidget(self._issue_summary)
 
         filter_row = QHBoxLayout()
         filter_row.setContentsMargins(0, 0, 0, 0)
@@ -204,7 +220,7 @@ class MainWindow(QMainWindow):
         self._issue_intersection_combo.currentIndexChanged.connect(self._on_issue_filter_changed)
         filter_row.addWidget(self._issue_filter_combo, stretch=1)
         filter_row.addWidget(self._issue_intersection_combo, stretch=1)
-        issue_layout.addLayout(filter_row)
+        issue_content_layout.addLayout(filter_row)
 
         self._issue_list = QListWidget()
         self._issue_list.setAlternatingRowColors(True)
@@ -214,7 +230,8 @@ class MainWindow(QMainWindow):
             "QListWidget::item:selected { background: #dbeafe; color: #111827; }"
         )
         self._issue_list.itemClicked.connect(self._on_prioritization_issue_clicked)
-        issue_layout.addWidget(self._issue_list, stretch=1)
+        issue_content_layout.addWidget(self._issue_list, stretch=1)
+        issue_layout.addWidget(self._issue_content, stretch=1)
 
         layout.addWidget(issue_panel)
         return container
@@ -1423,6 +1440,27 @@ class MainWindow(QMainWindow):
             item.setForeground(Qt.GlobalColor.darkRed if issue.severity == "error" else Qt.GlobalColor.darkYellow)
             self._issue_list.addItem(item)
 
+    def _toggle_issue_panel_collapsed(self, collapsed: bool) -> None:
+        """Collapse or expand the prioritization issue panel without losing state."""
+        self._issue_panel_collapsed = collapsed
+        if hasattr(self, "_issue_content"):
+            self._issue_content.setVisible(not collapsed)
+        if hasattr(self, "_issue_panel"):
+            self._issue_panel.setMinimumWidth(44 if collapsed else 260)
+            self._issue_panel.setMaximumWidth(44 if collapsed else 320)
+        if hasattr(self, "_issue_panel_title"):
+            self._issue_panel_title.setText("!" if collapsed else "Priorisierungsfehler")
+            self._issue_panel_title.setToolTip(
+                "Priorisierungsfehler" if collapsed else ""
+            )
+        if hasattr(self, "_btn_toggle_issue_panel"):
+            self._btn_toggle_issue_panel.setText(">" if collapsed else "Einklappen")
+            self._btn_toggle_issue_panel.setToolTip(
+                "Priorisierungsfehler-Panel ausklappen"
+                if collapsed
+                else "Priorisierungsfehler-Panel einklappen"
+            )
+
     def _refresh_issue_intersection_filter(self, issues: list[PrioritizationIssue]) -> None:
         """Keep the intersection filter options aligned with the current issues."""
         if not hasattr(self, "_issue_intersection_combo"):
@@ -1800,6 +1838,12 @@ class MainWindow(QMainWindow):
         self._last_map_messages_id = None
         self._issue_filter_mode = "all"
         self._issue_filter_intersection = "all"
+        self._issue_panel_collapsed = False
+        if hasattr(self, "_btn_toggle_issue_panel"):
+            self._btn_toggle_issue_panel.blockSignals(True)
+            self._btn_toggle_issue_panel.setChecked(False)
+            self._btn_toggle_issue_panel.blockSignals(False)
+            self._toggle_issue_panel_collapsed(False)
         if hasattr(self, "_issue_filter_combo"):
             self._issue_filter_combo.blockSignals(True)
             self._issue_filter_combo.setCurrentIndex(0)

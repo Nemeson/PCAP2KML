@@ -88,9 +88,52 @@ class _FakeTabs:
 class _FakeButton:
     def __init__(self):
         self.text = ""
+        self.tooltip = ""
+        self.checked = False
 
     def setText(self, text: str) -> None:
         self.text = text
+
+    def setToolTip(self, text: str) -> None:
+        self.tooltip = text
+
+    def blockSignals(self, _blocked: bool) -> None:
+        return None
+
+    def setChecked(self, checked: bool) -> None:
+        self.checked = checked
+
+
+class _FakePanel:
+    def __init__(self):
+        self.minimum_width = None
+        self.maximum_width = None
+
+    def setMinimumWidth(self, width: int) -> None:
+        self.minimum_width = width
+
+    def setMaximumWidth(self, width: int) -> None:
+        self.maximum_width = width
+
+
+class _FakeVisibleWidget:
+    def __init__(self):
+        self.visible = True
+
+    def setVisible(self, visible: bool) -> None:
+        self.visible = visible
+
+
+class _FakeLabel:
+    def __init__(self):
+        self.text = ""
+        self.tooltip = ""
+
+    def setText(self, text: str) -> None:
+        self.text = text
+
+    def setToolTip(self, text: str) -> None:
+        self.tooltip = text
 
 
 class _FakeSplitter:
@@ -279,3 +322,27 @@ def test_reset_playback_render_caches_clears_state_without_recursion():
     assert window._last_map_slice_update_monotonic == 0.0
     assert window._last_map_slice_index is None
     assert window._last_map_messages_id is None
+
+
+def test_toggle_issue_panel_collapses_and_expands_content():
+    window = MainWindow.__new__(MainWindow)
+    window._issue_panel = _FakePanel()
+    window._issue_content = _FakeVisibleWidget()
+    window._issue_panel_title = _FakeLabel()
+    window._btn_toggle_issue_panel = _FakeButton()
+
+    window._toggle_issue_panel_collapsed(True)
+
+    assert window._issue_panel_collapsed is True
+    assert window._issue_content.visible is False
+    assert window._issue_panel.maximum_width == 44
+    assert window._issue_panel_title.text == "!"
+    assert window._btn_toggle_issue_panel.text == ">"
+
+    window._toggle_issue_panel_collapsed(False)
+
+    assert window._issue_panel_collapsed is False
+    assert window._issue_content.visible is True
+    assert window._issue_panel.minimum_width == 260
+    assert window._issue_panel_title.text == "Priorisierungsfehler"
+    assert window._btn_toggle_issue_panel.text == "Einklappen"
