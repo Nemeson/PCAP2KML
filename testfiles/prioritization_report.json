@@ -1,0 +1,35 @@
+{
+  "total_issues": 106,
+  "issues_by_type": {
+    "LATE_GRANTED": 32,
+    "TIMEOUT": 74
+  },
+  "issues_by_severity": {
+    "error": 74,
+    "warning": 32
+  },
+  "issues_by_intersection": {
+    "68": {
+      "TIMEOUT": 8
+    },
+    "69": {
+      "TIMEOUT": 2
+    },
+    "70": {
+      "LATE_GRANTED": 3,
+      "TIMEOUT": 8
+    },
+    "71": {
+      "LATE_GRANTED": 29,
+      "TIMEOUT": 53
+    },
+    "95": {
+      "TIMEOUT": 3
+    }
+  },
+  "source_roles": {
+    "RXA": 106,
+    "TXA": 29
+  },
+  "mean_late_grant_delay_seconds": 3.641146
+}
