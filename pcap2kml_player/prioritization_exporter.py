@@ -30,6 +30,26 @@ ISSUE_EXPORT_FIELDS = [
     "merge_confidence",
 ]
 
+ISSUE_EXPORT_HEADERS = {
+    "timestamp": "Zeitstempel",
+    "issue_type": "Fehlertyp",
+    "severity": "Schweregrad",
+    "intersection_id": "Kreuzung",
+    "request_id": "Request-ID",
+    "sequence_number": "Sequenznummer",
+    "station_id": "Station",
+    "in_lane": "Einfahrts-Lane",
+    "out_lane": "Ausfahrts-Lane",
+    "status": "SSEM-Status",
+    "delay_seconds": "Verzoegerung [s]",
+    "message": "Beschreibung",
+    "source_summary": "Quelle",
+    "source_roles": "Quellrollen",
+    "source_files": "Quelldateien",
+    "merge_group_id": "Merge-Gruppe",
+    "merge_confidence": "Merge-Konfidenz",
+}
+
 
 def export_prioritization_issues(
     messages: list[V2xMessage],
@@ -47,6 +67,16 @@ def export_prioritization_issues(
     report_path = output_dir / f"{basename.replace('issues', 'report')}.json"
 
     with csv_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=ISSUE_EXPORT_FIELDS,
+            restval="",
+        )
+        writer.writerow(ISSUE_EXPORT_HEADERS)
+        writer.writerows(rows)
+
+    machine_csv_path = output_dir / f"{basename}_machine.csv"
+    with machine_csv_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=ISSUE_EXPORT_FIELDS)
         writer.writeheader()
         writer.writerows(rows)
@@ -57,7 +87,7 @@ def export_prioritization_issues(
     with report_path.open("w", encoding="utf-8") as handle:
         json.dump(_build_report(issues), handle, ensure_ascii=False, indent=2)
 
-    return [csv_path, json_path, report_path]
+    return [csv_path, machine_csv_path, json_path, report_path]
 
 
 def _issue_to_row(issue: PrioritizationIssue) -> dict[str, object]:

@@ -59,6 +59,8 @@ Die Kartenlogik ist inzwischen deutlich ueber Marker und einfache Trajektorien h
 - Mehrere Requests auf derselben Connection werden seitlich entzerrt
 - Karten-Updates werden gebuendelt an QtWebEngine uebergeben und Leaflet rendert Linien per Canvas,
   damit grosse TXA/RXA-Merges beim Laden nicht durch viele einzelne JavaScript-Aufrufe einfrieren
+- Im Playback werden grosse Karten-Slices gedrosselt und laufende Render-Payloads zusammengefasst,
+  damit langsame Notebooks keine wachsende QtWebEngine-Warteschlange aufbauen
 - MAP-/SPAT-Punktlayer sind standardmaessig deaktiviert
 - SSEM/SSM erzeugt keine Punktmarker oder Trajektorien
 - Connections zeigen per Mouseover den aktiven MovementState und Timing-Felder
@@ -314,8 +316,12 @@ statt automatisch etwas nachzuladen.
 - Exportierte Dokumente enthalten die verwendeten ASN.1-Schemaversionen
 - `Fehler exportieren` schreibt die Priorisierungsfehler als CSV und JSON:
   - `prioritization_issues.csv`
+  - `prioritization_issues_machine.csv`
   - `prioritization_issues.json`
   - `prioritization_report.json`
+- `prioritization_issues.csv` nutzt bedienerlesbare deutsche Spaltenueberschriften
+- `prioritization_issues_machine.csv` und `prioritization_issues.json` behalten die stabilen
+  technischen Feldnamen fuer Weiterverarbeitung
 - Die Issue-Zeilen enthalten `source_roles`, `source_files`, `merge_group_id` und
   `merge_confidence`
 - Der Report fasst `issues_by_type`, `issues_by_severity`,
@@ -333,7 +339,7 @@ statt automatisch etwas nachzuladen.
 
 Die aktuelle Testsuite deckt Parser, Kartenlogik, Playback, Export, Sicherheitsparser und Szenenmodell breit ab.
 
-- Aktueller Stand: `190 passed`
+- Aktueller Stand: `194 passed`
 - Vorhandene Testbereiche:
   - App-Memory
   - ASN.1-Schema-Update

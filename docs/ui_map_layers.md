@@ -93,3 +93,16 @@ Naechster Fehler
 
 Der Modus springt nur zu Zeitpunkten, an denen erstmals ein
 Priorisierungsproblem erkannt wurde.
+
+## Performance-Schutz
+
+Die Karte rendert Linien und Polylines per Leaflet-Canvas statt ueber viele
+einzelne SVG/DOM-Elemente. Beim initialen Laden wird ein gebuendeltes
+Render-Payload an QtWebEngine uebergeben, statt jede Lane, Connection, Route
+und Trajektorie als einzelnen JavaScript-Aufruf zu senden.
+
+Waehrend des Playbacks werden vollstaendige Karten-Slices gedrosselt. Wenn auf
+langsamen Notebooks ein grosses Payload noch im WebView verarbeitet wird, wird
+nicht jede Zwischenversion nachgereicht; stattdessen bleibt nur das neueste
+Payload in der Warteschlange. Das verhindert, dass QtWebEngine nach einigen
+Sekunden Wiedergabe durch eine anwachsende JavaScript-Queue einfriert.

@@ -1459,6 +1459,8 @@ class MapWidget(QWebEngineView):
         self._follow_station_id: Optional[str] = None
         self._page_ready = False
         self._pending_scripts: list[str] = []
+        self._render_payload_in_flight = False
+        self._queued_render_payload_script: Optional[str] = None
 
         self._bridge.message_clicked.connect(self._on_marker_clicked)
         self.loadFinished.connect(self._on_load_finished)
@@ -1661,17 +1663,46 @@ class MapWidget(QWebEngineView):
     def _on_load_finished(self, ok: bool) -> None:
         """Flush queued JavaScript once the embedded map page is ready."""
         self._page_ready = ok
+        self._render_payload_in_flight = False
+        self._queued_render_payload_script = None
         if not ok:
             logger.warning("Leaflet map page did not finish loading")
             return
         pending = self._pending_scripts
         self._pending_scripts = []
         for script in pending:
-            self.page().runJavaScript(script, 0)
+            self._run_js(script)
 
     def _run_js(self, script: str) -> None:
         """Execute JavaScript in the web page."""
         if not self._page_ready:
             self._pending_scripts.append(script)
             return
-        self.page().runJavaScript(script, 0)
+        if script.startswith("applyRenderPayload("):
+            if self._render_payload_in_flight:
+                self._queued_render_payload_script = script
+                return
+            self._render_payload_in_flight = True
+            self._execute_js(script, self._on_render_payload_finished)
+            return
+        self._execute_js(script)
+
+    def _execute_js(self, script: str, callback=None) -> None:
+        """Run JavaScript, using a completion callback when Qt supports it."""
+        if callback is None:
+            self.page().runJavaScript(script, 0)
+            return
+        try:
+            self.page().runJavaScript(script, 0, callback)
+        except TypeError:
+            self.page().runJavaScript(script, 0)
+            callback(None)
+
+    def _on_render_payload_finished(self, _result=None) -> None:
+        """Flush only the newest queued map payload after the previous one completed."""
+        next_script = self._queued_render_payload_script
+        self._queued_render_payload_script = None
+        if next_script is None:
+            self._render_payload_in_flight = False
+            return
+        self._execute_js(next_script, self._on_render_payload_finished)

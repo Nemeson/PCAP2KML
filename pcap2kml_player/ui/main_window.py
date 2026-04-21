@@ -82,6 +82,7 @@ SCENE_INTERSECTION_HEADERS = ["Intersection", "Revision", "Signalgruppen", "Prog
 SCENE_REQUEST_HEADERS = ["Request", "Station", "Prio", "Status", "Lanes"]
 FORECAST_TIMELINE_BUCKETS = 15
 COMPACT_LAYOUT_WIDTH = 1320
+MAP_PLAYBACK_RENDER_INTERVAL_SECONDS = 1.25
 LAYOUT_MODE_AUTO = "auto"
 LAYOUT_MODE_DESKTOP = "desktop"
 LAYOUT_MODE_COMPACT = "compact"
@@ -290,7 +291,9 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self._btn_export_kml)
 
         self._btn_export_issues = QPushButton("Fehler exportieren")
-        self._btn_export_issues.setToolTip("Priorisierungsfehler als CSV und JSON exportieren")
+        self._btn_export_issues.setToolTip(
+            "Priorisierungsfehler als lesbare CSV, Maschinen-CSV, JSON und Report exportieren"
+        )
         toolbar.addWidget(self._btn_export_issues)
 
         toolbar.addSeparator()
@@ -1175,7 +1178,7 @@ class MainWindow(QMainWindow):
         self._eta_graph.set_current_time(msg.timestamp)
 
     def _should_render_full_map_slice(self, msg: V2xMessage) -> bool:
-        """Throttle expensive map layer sync while keeping critical states immediate."""
+        """Throttle expensive map layer sync to avoid overloading QtWebEngine."""
         messages_id = id(self._player._messages)
         index = self._player.current_index
         now = time.perf_counter()
@@ -1183,9 +1186,7 @@ class MainWindow(QMainWindow):
             should_render = True
         elif self._last_map_slice_index is None or index < self._last_map_slice_index:
             should_render = True
-        elif msg.msg_type in {MessageType.MAPEM, MessageType.SPATEM, MessageType.SREM, MessageType.SSEM}:
-            should_render = True
-        elif now - self._last_map_slice_update_monotonic >= 0.25:
+        elif now - self._last_map_slice_update_monotonic >= MAP_PLAYBACK_RENDER_INTERVAL_SECONDS:
             should_render = True
         else:
             should_render = False

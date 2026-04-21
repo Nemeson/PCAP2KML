@@ -60,7 +60,9 @@ station_id
 Die Merge-Gruppe bleibt fuer UI-Auswahl und Export-Provenance erhalten, damit
 ersichtlich bleibt, ob die Beobachtung aus TXA, RXA oder beiden Quellen stammt.
 
-Der Priorisierungsfehler-Export schreibt dafuer:
+Der Priorisierungsfehler-Export schreibt dafuer in der bedienerlesbaren CSV
+deutsche Spaltenueberschriften und in `prioritization_issues_machine.csv` sowie
+`prioritization_issues.json` die stabilen technischen Felder:
 
 ```text
 source_summary

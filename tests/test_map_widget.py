@@ -516,6 +516,17 @@ class _FakePage:
         self.scripts.append(script)
 
 
+class _CallbackPage:
+    def __init__(self):
+        self.scripts: list[str] = []
+        self.callbacks = []
+
+    def runJavaScript(self, script: str, _world_id: int, callback=None) -> None:
+        self.scripts.append(script)
+        if callback is not None:
+            self.callbacks.append(callback)
+
+
 def _render_payload(captured_scripts: list[str]) -> dict:
     script = next(script for script in captured_scripts if script.startswith("applyRenderPayload("))
     return json.loads(script.removeprefix("applyRenderPayload(").removesuffix(")"))
@@ -537,6 +548,30 @@ def test_run_js_queues_until_map_page_is_loaded():
 
     assert widget._pending_scripts == []
     assert fake_page.scripts == ["first()"]
+
+
+def test_run_js_coalesces_render_payloads_while_previous_payload_is_active():
+    widget = MapWidget.__new__(MapWidget)
+    fake_page = _CallbackPage()
+    widget._page_ready = True
+    widget._pending_scripts = []
+    widget._render_payload_in_flight = False
+    widget._queued_render_payload_script = None
+    widget.page = lambda: fake_page
+
+    widget._run_js("applyRenderPayload({\"id\": 1})")
+    widget._run_js("applyRenderPayload({\"id\": 2})")
+    widget._run_js("applyRenderPayload({\"id\": 3})")
+
+    assert fake_page.scripts == ["applyRenderPayload({\"id\": 1})"]
+    assert widget._queued_render_payload_script == "applyRenderPayload({\"id\": 3})"
+
+    fake_page.callbacks.pop(0)(None)
+
+    assert fake_page.scripts == [
+        "applyRenderPayload({\"id\": 1})",
+        "applyRenderPayload({\"id\": 3})",
+    ]
 
 
 def test_load_messages_handles_label_overlays_without_popup(monkeypatch):

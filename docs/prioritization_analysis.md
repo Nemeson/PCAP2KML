@@ -265,11 +265,37 @@ Der Toolbar-Button `Fehler exportieren` schreibt:
 
 ```text
 prioritization_issues.csv
+prioritization_issues_machine.csv
 prioritization_issues.json
 prioritization_report.json
 ```
 
-Spalten:
+`prioritization_issues.csv` ist fuer die manuelle Analyse in Excel/LibreOffice
+gedacht und nutzt deutsche, bedienerlesbare Spaltenueberschriften:
+
+```text
+Zeitstempel
+Fehlertyp
+Schweregrad
+Kreuzung
+Request-ID
+Sequenznummer
+Station
+Einfahrts-Lane
+Ausfahrts-Lane
+SSEM-Status
+Verzoegerung [s]
+Beschreibung
+Quelle
+Quellrollen
+Quelldateien
+Merge-Gruppe
+Merge-Konfidenz
+```
+
+`prioritization_issues_machine.csv` und `prioritization_issues.json` behalten
+die stabilen technischen Feldnamen fuer Skripte, Regressionstests und
+Weiterverarbeitung:
 
 ```text
 timestamp

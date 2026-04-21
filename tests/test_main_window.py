@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from pcap2kml_player.data_model import MessageType, V2xMessage
 from pcap2kml_player.scene_model import PrioritizationIssue
+from pcap2kml_player.ui import main_window as main_window_module
 from pcap2kml_player.ui.main_window import (
     COL_LATLON,
     COL_MERGE,
@@ -13,6 +14,7 @@ from pcap2kml_player.ui.main_window import (
     COL_STATION,
     COL_TIMESTAMP,
     MainWindow,
+    MAP_PLAYBACK_RENDER_INTERVAL_SECONDS,
 )
 
 
@@ -79,6 +81,12 @@ class _FakeTable:
 
     def setColumnHidden(self, column: int, hidden: bool) -> None:
         self.hidden_columns[column] = hidden
+
+
+class _FakePlayerForMapThrottle:
+    def __init__(self):
+        self._messages = [_message(0), _message(1)]
+        self.current_index = 0
 
 
 class _FakeTabs:
@@ -346,6 +354,42 @@ def test_reset_playback_render_caches_clears_state_without_recursion():
     assert window._last_map_slice_update_monotonic == 0.0
     assert window._last_map_slice_index is None
     assert window._last_map_messages_id is None
+
+
+def test_map_slice_render_is_throttled_even_for_priority_messages(monkeypatch):
+    window = MainWindow.__new__(MainWindow)
+    window._player = _FakePlayerForMapThrottle()
+    window._last_map_messages_id = id(window._player._messages)
+    window._last_map_slice_index = 0
+    window._last_map_slice_update_monotonic = 100.0
+    window._player.current_index = 1
+    monkeypatch.setattr(main_window_module.time, "perf_counter", lambda: 100.2)
+
+    msg = V2xMessage(
+        timestamp=datetime(2026, 4, 19, 12, 0, 1, tzinfo=timezone.utc),
+        station_id="rsu-srem",
+        msg_type=MessageType.SREM,
+        latitude=52.0,
+        longitude=13.0,
+    )
+
+    assert window._should_render_full_map_slice(msg) is False
+
+
+def test_map_slice_render_runs_after_throttle_interval(monkeypatch):
+    window = MainWindow.__new__(MainWindow)
+    window._player = _FakePlayerForMapThrottle()
+    window._last_map_messages_id = id(window._player._messages)
+    window._last_map_slice_index = 0
+    window._last_map_slice_update_monotonic = 100.0
+    window._player.current_index = 1
+    monkeypatch.setattr(
+        main_window_module.time,
+        "perf_counter",
+        lambda: 100.0 + MAP_PLAYBACK_RENDER_INTERVAL_SECONDS + 0.01,
+    )
+
+    assert window._should_render_full_map_slice(_message(1)) is True
 
 
 def test_toggle_issue_panel_collapses_and_expands_content():
