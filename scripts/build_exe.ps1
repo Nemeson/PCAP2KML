@@ -81,6 +81,7 @@ py -m PyInstaller `
     --collect-all PyQt6 `
     --collect-all PyQt6.QtWebEngineWidgets `
     --add-data "pcap2kml_player\requirements.txt;pcap2kml_player" `
+    --add-data "pcap2kml_player\assets;pcap2kml_player\assets" `
     $Launcher
 
 Write-Host ""

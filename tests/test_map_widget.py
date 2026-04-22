@@ -5,7 +5,10 @@ from datetime import datetime, timezone
 
 from pcap2kml_player.data_model import MessageType, V2xMessage
 from pcap2kml_player.map_widget import (
+    MAP_PERFORMANCE_DIAGNOSTIC,
+    MAP_PERFORMANCE_SAVER,
     MapWidget,
+    _asset_base_path,
     _display_anchor_points,
     _has_display_position,
     _is_near_display_anchors,
@@ -477,6 +480,9 @@ def test_infrastructure_overlays_for_messages_create_request_overlays_for_lane_a
 
 def test_leaflet_html_exposes_layer_toggles_and_label_renderer():
     assert "Hell / Schwarz-Weiss" in LEAFLET_HTML
+    assert 'href="leaflet/leaflet.css"' in LEAFLET_HTML
+    assert 'src="leaflet/leaflet.js"' in LEAFLET_HTML
+    assert "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" in LEAFLET_HTML
     assert "OSM Standard" in LEAFLET_HTML
     assert "Dunkel" in LEAFLET_HTML
     assert "Satellit" in LEAFLET_HTML
@@ -502,6 +508,7 @@ def test_leaflet_html_exposes_layer_toggles_and_label_renderer():
     assert "qrc:///qtwebchannel/qwebchannel.js" in LEAFLET_HTML
     assert "typeof QWebChannel !== 'undefined'" in LEAFLET_HTML
     assert "map.invalidateSize(false)" in LEAFLET_HTML
+    assert "function setMapPerformanceMode(mode)" in LEAFLET_HTML
     assert "map: L.layerGroup()," in LEAFLET_HTML
     assert "spat: L.layerGroup()" in LEAFLET_HTML
     assert "map: L.layerGroup().addTo(map)" not in LEAFLET_HTML
@@ -799,6 +806,74 @@ def test_render_playback_slice_does_not_copy_growing_message_prefix(monkeypatch)
     payload = _render_payload(captured_scripts)
     assert payload["markers"][-1]["lat"] == 52.001
     assert [52.002, 13.002] not in payload["trajectories"][-1]["coords"]
+
+
+def test_render_playback_slice_applies_time_window(monkeypatch):
+    captured_scripts = []
+
+    def fake_run_js(self, script):
+        captured_scripts.append(script)
+
+    monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
+    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
+
+    widget = MapWidget()
+    widget._station_color_map = {}
+    widget._station_index = 0
+    widget._performance_mode = MAP_PERFORMANCE_SAVER
+    messages = [
+        V2xMessage(
+            timestamp=datetime(2026, 4, 18, 12, 0, index, tzinfo=timezone.utc),
+            station_id="car-1",
+            msg_type=MessageType.CAM,
+            latitude=52.0 + (index / 1000.0),
+            longitude=13.0 + (index / 1000.0),
+        )
+        for index in range(5)
+    ]
+
+    widget.render_playback_slice(messages, 4, window_seconds=2.0)
+
+    payload = _render_payload(captured_scripts)
+    coords = payload["trajectories"][-1]["coords"]
+    assert [52.0, 13.0] not in coords
+    assert [52.002, 13.002] in coords
+    assert payload["performanceMode"] == MAP_PERFORMANCE_SAVER
+
+
+def test_diagnostic_mode_suppresses_trajectories(monkeypatch):
+    captured_scripts = []
+
+    def fake_run_js(self, script):
+        captured_scripts.append(script)
+
+    monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
+    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
+
+    widget = MapWidget()
+    widget._station_color_map = {}
+    widget._station_index = 0
+    widget._performance_mode = MAP_PERFORMANCE_DIAGNOSTIC
+    msg = V2xMessage(
+        timestamp=datetime(2026, 4, 18, 12, 0, 0, tzinfo=timezone.utc),
+        station_id="car-1",
+        msg_type=MessageType.CAM,
+        latitude=52.0,
+        longitude=13.0,
+    )
+
+    widget.load_messages([msg])
+
+    payload = _render_payload(captured_scripts)
+    assert payload["markers"]
+    assert payload["trajectories"] == []
+    assert payload["performanceMode"] == MAP_PERFORMANCE_DIAGNOSTIC
+
+
+def test_leaflet_assets_are_bundled_locally():
+    base_path = _asset_base_path()
+    assert (base_path / "leaflet" / "leaflet.js").exists()
+    assert (base_path / "leaflet" / "leaflet.css").exists()
 
 
 def test_update_playback_position_follows_selected_station(monkeypatch):

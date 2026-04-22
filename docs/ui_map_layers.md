@@ -1,6 +1,6 @@
 # Kartenlayer und UI-Verhalten
 
-Stand: 2026-04-21
+Stand: 2026-04-22
 
 ## Standardlayer
 
@@ -114,3 +114,61 @@ Python-Listen und JSON-Zwischenobjekte entstehen. Wiederverwendete Leaflet-Layer
 aktualisieren Popups und Tooltips per `setContent`; beim Entfernen werden
 Events, Popups und Tooltips geloest, damit der QtWebEngine-Prozess keine alten
 Layer-Objekte ueber laengere Wiedergaben haelt.
+
+## Performance-Modi
+
+Die Toolbar enthaelt den Modus `Leistung`:
+
+```text
+Normal | Schonend | Diagnose
+```
+
+Die Modi sind bewusst nicht nur optische Presets, sondern reduzieren die
+tatsaechliche Renderarbeit:
+
+| Modus | Ziel | Kartenverhalten |
+|---|---|---|
+| `Normal` | Desktop-Rechner und kurze Mitschnitte | voller Detailgrad, Hover-Tooltips, Trajektorien |
+| `Schonend` | groessere TXA/RXA-Merges oder schwache Notebooks | kuerzeres Playback-Zeitfenster, staerker gedrosselte Vollrenderings, keine Hover-Tooltips |
+| `Diagnose` | eingefrorene Karte, RAM-Druck, Fehleranalyse | sehr kurzes Playback-Zeitfenster, keine Trajektorien, keine Labels, nur zentrale Infrastruktur-Layer |
+
+Playback-Fenster:
+
+- `Normal`: letzte 120 Sekunden
+- `Schonend`: letzte 45 Sekunden
+- `Diagnose`: letzte 20 Sekunden
+
+Vollrenderings werden je nach Modus auf ca. 1,25 s, 2,5 s bzw. 4,0 s
+gedrosselt. Zwischen diesen Vollrenderings wird weiterhin die aktuelle
+Playback-Position aktualisiert.
+
+## RAM-Waechter
+
+Der RAM-Waechter prueft alle fuenf Sekunden den Arbeitsspeicher des
+App-Prozesses. Die Anzeige sitzt direkt neben dem Performance-Dropdown.
+
+Schwellwerte:
+
+- ab ca. 1200 MB: automatische Reduktion auf `Schonend`
+- ab ca. 1800 MB: automatische Reduktion auf `Diagnose`
+
+Die Reduktion ist absichtlich defensiv: wenn ein Notebook unter Speicherdruck
+geraet, ist eine noch lesbare Analyse wichtiger als ein vollstaendiger
+Kartenlayer-Satz. Waehlt der Bediener danach manuell wieder einen Modus aus,
+wird die automatische Markierung zurueckgesetzt.
+
+## Lokale Leaflet-Assets
+
+Leaflet wird nicht mehr nur vom CDN geladen. Die App liefert folgende Dateien
+lokal unter `pcap2kml_player/assets/leaflet` aus:
+
+- `leaflet.js`
+- `leaflet.css`
+- Standardbilder fuer Layer-Control und Marker
+
+Die eingebettete HTML-Karte nutzt diese lokalen Dateien zuerst. Falls sie in
+einer Entwickler- oder Paketierungsumgebung fehlen, faellt die Karte auf das
+offizielle Leaflet-CDN zurueck. Dadurch startet die Karte robuster auf Rechnern
+mit eingeschraenkter Netzverbindung und die EXE ist weniger an CDN-Verfuegbarkeit
+gebunden. Kartenkacheln selbst bleiben weiterhin Online-Tiles der jeweiligen
+Basiskartenanbieter.

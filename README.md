@@ -2,8 +2,8 @@
 
 Desktop-Anwendung zur Analyse, Wiedergabe und Kartendarstellung von V2X-Nachrichten aus PCAP-Dateien.
 
-Stand: 2026-04-21  
-Aktueller dokumentierter Funktionsstand: v1.6
+Stand: 2026-04-22  
+Aktueller dokumentierter Funktionsstand: v1.7
 
 ## Uebersicht
 
@@ -61,6 +61,14 @@ Die Kartenlogik ist inzwischen deutlich ueber Marker und einfache Trajektorien h
   damit grosse TXA/RXA-Merges beim Laden nicht durch viele einzelne JavaScript-Aufrufe einfrieren
 - Im Playback werden grosse Karten-Slices gedrosselt und laufende Render-Payloads zusammengefasst,
   damit langsame Notebooks keine wachsende QtWebEngine-Warteschlange aufbauen
+- Der Toolbar-Modus `Leistung` steuert den Detailgrad der Karte:
+  - `Normal`: voller Detailgrad mit Tooltips und Trajektorien
+  - `Schonend`: reduzierte Playback-Fenster, weniger haeufige Vollrenderings und weniger Hover-Arbeit
+  - `Diagnose`: stark reduzierter Kartenumfang fuer schwache Rechner oder Fehleranalyse
+- Ein RAM-Waechter zeigt den aktuellen Arbeitsspeicher in der Toolbar und reduziert bei hoher Last
+  automatisch auf `Schonend` bzw. `Diagnose`
+- Leaflet-JavaScript, CSS und Standardbilder liegen lokal unter `pcap2kml_player/assets/leaflet`;
+  nur wenn diese Assets fehlen, wird auf das CDN zurueckgefallen
 - Playback-Renderings arbeiten mit Indexgrenzen statt mit kopierten Nachrichten-Prefixes;
   Popups/Tooltips werden in Leaflet wiederverwendet und beim Entfernen explizit geloest,
   damit die RAM-Nutzung ueber laengere Wiedergaben stabil bleibt
@@ -133,6 +141,37 @@ Das Szenenpanel zeigt derzeit:
 Die Playback-Leiste enthaelt zusaetzlich `Nur Problemstellen`, `Fehler zurueck`
 und `Naechster Fehler`. Damit springt die Wiedergabe nur zwischen Zeitpunkten,
 an denen ein Priorisierungsproblem erstmals erkannt wird.
+
+### Performance-Modus und RAM-Waechter
+
+Die Toolbar enthaelt zusaetzlich den Modus `Leistung`:
+
+```text
+Normal | Schonend | Diagnose
+```
+
+`Normal` ist fuer leistungsstarke Rechner gedacht und zeigt die vollstaendige
+Kartenanalyse. `Schonend` reduziert die Playback-Arbeit auf ein kuerzeres
+Zeitfenster, drosselt Vollrenderings staerker und deaktiviert Hover-Tooltips im
+laufenden Kartenbetrieb. `Diagnose` ist der Sicherheitsmodus fuer problematische
+Notebooks: Trajektorien, Labels und nicht zwingend notwendige Infrastruktur
+werden unterdrueckt, damit die WebEngine moeglichst wenig Layer verwalten muss.
+
+Der Modus wird in den Benutzereinstellungen gespeichert. Der RAM-Waechter prueft
+alle fuenf Sekunden den Arbeitsspeicher des App-Prozesses. Ab ca. 1200 MB wird
+automatisch auf `Schonend`, ab ca. 1800 MB auf `Diagnose` reduziert. Eine
+manuelle Auswahl im Dropdown hebt diese automatische Reduktion wieder auf.
+
+Die Playback-Zeitfenster sind bewusst abgestuft:
+
+| Modus | Vollrender-Intervall | Playback-Fenster |
+|---|---:|---:|
+| `Normal` | 1,25 s | 120 s |
+| `Schonend` | 2,5 s | 45 s |
+| `Diagnose` | 4,0 s | 20 s |
+
+Dadurch bleiben aktuelle Bewegungen und Priorisierungen sichtbar, waehrend alte
+Kartenobjekte nicht dauerhaft im Browserprozess mitgefuehrt werden.
 
 ## Architektur
 
@@ -294,6 +333,9 @@ dist\PCAP2KML-Player.exe
 Ohne `-InstallMissing` bricht das Buildskript mit einer Liste fehlender Pakete ab,
 statt automatisch etwas nachzuladen.
 
+Das Buildskript nimmt `pcap2kml_player/assets` in das PyInstaller-Paket auf,
+damit die lokalen Leaflet-Dateien auch in der EXE verfuegbar sind.
+
 ## Abhaengigkeiten
 
 | Paket | Zweck |
@@ -354,7 +396,7 @@ statt automatisch etwas nachzuladen.
 
 Die aktuelle Testsuite deckt Parser, Kartenlogik, Playback, Export, Sicherheitsparser und Szenenmodell breit ab.
 
-- Aktueller Stand: `195 passed`
+- Aktueller Stand: `201 passed`
 - Vorhandene Testbereiche:
   - App-Memory
   - ASN.1-Schema-Update
@@ -374,7 +416,7 @@ Direkte GUI-Interaktionstests fuer die komplette `main_window.py` sind weiterhin
 
 - Kein vollstaendiger PKI-Chain-Validator
 - Noch kein GeoJSON- oder GPX-Export
-- Noch keine Offline-Karten
+- Noch keine Offline-Kartenkacheln; Leaflet selbst wird lokal gebuendelt
 - Keine vollwertige Frame-fuer-Frame-Navigation
 - Keine Headless-CLI
 

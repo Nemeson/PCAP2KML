@@ -15,6 +15,11 @@ from pcap2kml_player.ui.main_window import (
     COL_TIMESTAMP,
     MainWindow,
     MAP_PLAYBACK_RENDER_INTERVAL_SECONDS,
+    MEMORY_DIAGNOSTIC_THRESHOLD_MB,
+    MEMORY_SAVER_THRESHOLD_MB,
+    PERFORMANCE_MODE_DIAGNOSTIC,
+    PERFORMANCE_MODE_NORMAL,
+    PERFORMANCE_MODE_SAVER,
 )
 
 
@@ -89,6 +94,92 @@ class _FakePlayerForMapThrottle:
         self.current_index = 0
 
 
+class _FakeMapWidget:
+    def __init__(self):
+        self.modes: list[str] = []
+        self.render_calls: list[tuple[list[V2xMessage], int, float | None]] = []
+
+    def set_performance_mode(self, mode: str) -> None:
+        self.modes.append(mode)
+
+    def render_playback_slice(
+        self,
+        messages: list[V2xMessage],
+        current_index: int,
+        *,
+        window_seconds: float | None = None,
+    ) -> None:
+        self.render_calls.append((messages, current_index, window_seconds))
+
+    def update_playback_position(self, _msg: V2xMessage) -> None:
+        return None
+
+
+class _FakeCombo:
+    def __init__(self):
+        self.items: list[tuple[str, str]] = []
+        self.current_index = -1
+        self.signals_blocked = False
+
+    def addItem(self, label: str, data: str) -> None:
+        self.items.append((label, data))
+
+    def itemData(self, index: int) -> str:
+        return self.items[index][1]
+
+    def currentData(self) -> str | None:
+        if 0 <= self.current_index < len(self.items):
+            return self.items[self.current_index][1]
+        return None
+
+    def count(self) -> int:
+        return len(self.items)
+
+    def findData(self, data: str) -> int:
+        for index, (_label, item_data) in enumerate(self.items):
+            if item_data == data:
+                return index
+        return -1
+
+    def setCurrentIndex(self, index: int) -> None:
+        self.current_index = index
+
+    def blockSignals(self, blocked: bool) -> None:
+        self.signals_blocked = blocked
+
+
+class _FakeSettings:
+    def __init__(self):
+        self.values: dict[str, object] = {}
+
+    def setValue(self, key: str, value: object) -> None:
+        self.values[key] = value
+
+
+class _FakeStatusBar:
+    def __init__(self):
+        self.messages: list[str] = []
+
+    def showMessage(self, message: str) -> None:
+        self.messages.append(message)
+
+
+class _FakeLabel:
+    def __init__(self):
+        self.text = ""
+        self.style = ""
+        self.tooltip = ""
+
+    def setText(self, text: str) -> None:
+        self.text = text
+
+    def setStyleSheet(self, style: str) -> None:
+        self.style = style
+
+    def setToolTip(self, text: str) -> None:
+        self.tooltip = text
+
+
 class _FakeTabs:
     def __init__(self, index: int = 1):
         self._index = index
@@ -151,6 +242,7 @@ class _FakeVisibleWidget:
 class _FakeLabel:
     def __init__(self):
         self.text = ""
+        self.style = ""
         self.tooltip = ""
 
     def setText(self, text: str) -> None:
@@ -158,6 +250,9 @@ class _FakeLabel:
 
     def setToolTip(self, text: str) -> None:
         self.tooltip = text
+
+    def setStyleSheet(self, style: str) -> None:
+        self.style = style
 
 
 class _FakeSettings:
@@ -390,6 +485,71 @@ def test_map_slice_render_runs_after_throttle_interval(monkeypatch):
     )
 
     assert window._should_render_full_map_slice(_message(1)) is True
+
+
+def test_performance_mode_is_forwarded_to_map_and_persisted():
+    window = MainWindow.__new__(MainWindow)
+    window._map_widget = _FakeMapWidget()
+    window._performance_mode_combo = _FakeCombo()
+    window._performance_mode_combo.addItem("Normal", PERFORMANCE_MODE_NORMAL)
+    window._performance_mode_combo.addItem("Schonend", PERFORMANCE_MODE_SAVER)
+    window._performance_mode_combo.setCurrentIndex(1)
+    window._settings = _FakeSettings()
+    window._memory_watch_label = _FakeLabel()
+    window._performance_auto_downgraded = False
+
+    window._on_performance_mode_changed()
+
+    assert window._performance_mode == PERFORMANCE_MODE_SAVER
+    assert window._map_widget.modes[-1] == PERFORMANCE_MODE_SAVER
+    assert window._settings.values["ui/performance_mode"] == PERFORMANCE_MODE_SAVER
+
+
+def test_memory_watchdog_auto_reduces_performance_mode(monkeypatch):
+    window = MainWindow.__new__(MainWindow)
+    window._map_widget = _FakeMapWidget()
+    window._performance_mode = PERFORMANCE_MODE_NORMAL
+    window._performance_auto_downgraded = False
+    window._last_memory_warning_level = ""
+    window._performance_mode_combo = _FakeCombo()
+    window._performance_mode_combo.addItem("Normal", PERFORMANCE_MODE_NORMAL)
+    window._performance_mode_combo.addItem("Schonend", PERFORMANCE_MODE_SAVER)
+    window._performance_mode_combo.addItem("Diagnose", PERFORMANCE_MODE_DIAGNOSTIC)
+    window._settings = _FakeSettings()
+    window._memory_watch_label = _FakeLabel()
+    window._statusbar = _FakeStatusBar()
+    monkeypatch.setattr(
+        main_window_module,
+        "_current_process_memory_mb",
+        lambda: MEMORY_DIAGNOSTIC_THRESHOLD_MB + 10.0,
+    )
+
+    window._on_memory_watch_tick()
+
+    assert window._performance_mode == PERFORMANCE_MODE_DIAGNOSTIC
+    assert window._map_widget.modes[-1] == PERFORMANCE_MODE_DIAGNOSTIC
+    assert window._performance_auto_downgraded is True
+    assert "Diagnose" in window._statusbar.messages[-1]
+
+
+def test_playback_tick_passes_performance_window(monkeypatch):
+    window = MainWindow.__new__(MainWindow)
+    window._player = _FakePlayerForMapThrottle()
+    window._map_widget = _FakeMapWidget()
+    window._performance_mode = PERFORMANCE_MODE_DIAGNOSTIC
+    window._last_map_messages_id = None
+    window._last_map_slice_index = None
+    window._last_map_slice_update_monotonic = 0.0
+    window._highlight_table_row = lambda _msg: None
+    window._show_security_detail = lambda _msg, auto_focus=False: None
+    window._update_scene_for_message = lambda _msg: None
+    window._eta_graph = type("Eta", (), {"set_current_time": lambda self, _ts: None})()
+    monkeypatch.setattr(main_window_module.time, "perf_counter", lambda: 10.0)
+
+    window._on_playback_tick(window._player._messages[0])
+
+    assert window._map_widget.render_calls
+    assert window._map_widget.render_calls[-1][2] == 20.0
 
 
 def test_toggle_issue_panel_collapses_and_expands_content():

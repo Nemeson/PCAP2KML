@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 from math import cos, hypot, radians
+from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import QObject, QTimer, QUrl, pyqtSignal, pyqtSlot
@@ -23,6 +25,14 @@ from .scene_model import build_scene_snapshot
 logger = logging.getLogger(__name__)
 PLAYBACK_TRAIL_POINTS = 8
 DISPLAY_CLUSTER_RADIUS_M = 5000.0
+MAP_PERFORMANCE_NORMAL = "normal"
+MAP_PERFORMANCE_SAVER = "saver"
+MAP_PERFORMANCE_DIAGNOSTIC = "diagnostic"
+MAP_PERFORMANCE_MODES = {
+    MAP_PERFORMANCE_NORMAL,
+    MAP_PERFORMANCE_SAVER,
+    MAP_PERFORMANCE_DIAGNOSTIC,
+}
 
 # Color palette for station markers (hex strings for Leaflet)
 STATION_PALETTE = [
@@ -971,8 +981,14 @@ LEAFLET_HTML = """<!DOCTYPE html>
 <head>
     <meta charset="utf-8">
     <title>PCAP2KML Map</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="leaflet/leaflet.css"
+          onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';" />
+    <script src="leaflet/leaflet.js"></script>
+    <script>
+        if (typeof L === 'undefined') {
+            document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\\/script>');
+        }
+    </script>
     <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
     <style>
         html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; }
@@ -1068,6 +1084,7 @@ LEAFLET_HTML = """<!DOCTYPE html>
         var markers = {};
         var trajectories = {};
         var infrastructureLayers = {};
+        var mapPerformanceMode = 'normal';
         var overlayGroups = {
             markers: L.layerGroup().addTo(map),
             trajectories: L.layerGroup().addTo(map),
@@ -1095,6 +1112,10 @@ LEAFLET_HTML = """<!DOCTYPE html>
         // Called from Python to set station colors
         function setStationColors(colors) {
             stationColors = colors;
+        }
+
+        function setMapPerformanceMode(mode) {
+            mapPerformanceMode = mode || 'normal';
         }
 
         // Called from Python to add a marker
@@ -1185,6 +1206,14 @@ LEAFLET_HTML = """<!DOCTYPE html>
         }
 
         function attachHoverTooltip(layer, tooltip, weight, opacity) {
+            if (mapPerformanceMode !== 'normal') {
+                if (layer.unbindTooltip) {
+                    layer.unbindTooltip();
+                }
+                layer.off('mouseover');
+                layer.off('mouseout');
+                return;
+            }
             if (!tooltip) {
                 if (layer.unbindTooltip) {
                     layer.unbindTooltip();
@@ -1310,6 +1339,7 @@ LEAFLET_HTML = """<!DOCTYPE html>
         }
 
         function applyRenderPayload(payload) {
+            setMapPerformanceMode(payload.performanceMode || 'normal');
             if (payload.clear) {
                 clearAll();
             }
@@ -1491,6 +1521,23 @@ LEAFLET_HTML = """<!DOCTYPE html>
 </html>"""
 
 
+def _asset_base_path() -> Path:
+    """Return the directory used as base URL for local web assets."""
+    bundle_root = getattr(sys, "_MEIPASS", None)
+    candidates = []
+    if bundle_root:
+        root = Path(bundle_root)
+        candidates.extend([
+            root / "pcap2kml_player" / "assets",
+            root / "assets",
+        ])
+    candidates.append(Path(__file__).resolve().parent / "assets")
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[-1]
+
+
 class MapBridge(QObject):
     """Bridge object exposed to JavaScript via QWebChannel."""
     message_clicked = pyqtSignal(str)  # station_id
@@ -1520,6 +1567,7 @@ class MapWidget(QWebEngineView):
         self._station_color_map: dict[str, str] = {}
         self._station_index = 0
         self._follow_station_id: Optional[str] = None
+        self._performance_mode = MAP_PERFORMANCE_NORMAL
         self._page_ready = False
         self._pending_scripts: list[str] = []
         self._render_payload_in_flight = False
@@ -1528,7 +1576,7 @@ class MapWidget(QWebEngineView):
         self._bridge.message_clicked.connect(self._on_marker_clicked)
         self.loadFinished.connect(self._on_load_finished)
 
-        self.setHtml(LEAFLET_HTML, QUrl("about:blank"))
+        self.setHtml(LEAFLET_HTML, QUrl.fromLocalFile(str(_asset_base_path()) + "/"))
 
     def _get_station_color(self, station_id: str) -> str:
         """Assign a color to a station ID, creating a new one if needed."""
@@ -1543,6 +1591,13 @@ class MapWidget(QWebEngineView):
         """Pick a marker color, with dedicated infrastructure colors for MAP/SPAT."""
         return INFRASTRUCTURE_MESSAGE_COLORS.get(msg.msg_type, self._get_station_color(msg.station_id))
 
+    def set_performance_mode(self, mode: str) -> None:
+        """Set the map rendering detail level used for future payloads."""
+        if mode not in MAP_PERFORMANCE_MODES:
+            mode = MAP_PERFORMANCE_NORMAL
+        self._performance_mode = mode
+        self._run_js(f"setMapPerformanceMode('{mode}')")
+
     def load_messages(self, messages: list[V2xMessage]) -> None:
         """Load all messages onto the map: markers, trajectories, and overlays."""
         self._follow_station_id = None
@@ -1554,15 +1609,25 @@ class MapWidget(QWebEngineView):
             clear_first=True,
         )
 
-    def render_playback_slice(self, messages: list[V2xMessage], current_index: int) -> None:
+    def render_playback_slice(
+        self,
+        messages: list[V2xMessage],
+        current_index: int,
+        *,
+        window_seconds: Optional[float] = None,
+    ) -> None:
         """Render only the state visible up to the current playback index."""
         if not messages:
             self.clear()
             return
         safe_index = max(0, min(current_index, len(messages) - 1))
+        window_start = None
+        if window_seconds is not None and window_seconds > 0:
+            window_start = messages[safe_index].timestamp.timestamp() - window_seconds
         self._render_messages(
             messages,
             max_index=safe_index,
+            window_start_timestamp=window_start,
             fit_view=False,
             short_trails=True,
             clear_first=False,
@@ -1573,6 +1638,7 @@ class MapWidget(QWebEngineView):
         messages: list[V2xMessage],
         *,
         max_index: Optional[int],
+        window_start_timestamp: Optional[float] = None,
         fit_view: bool,
         short_trails: bool,
         clear_first: bool,
@@ -1582,13 +1648,21 @@ class MapWidget(QWebEngineView):
         # Group by station for trajectories
         station_coords: dict[str, list] = {}
         markers_by_id: dict[str, dict[str, object]] = {}
+        performance_mode = self.__dict__.get("_performance_mode", MAP_PERFORMANCE_NORMAL)
         end_index = len(messages) if max_index is None else min(max_index + 1, len(messages))
         display_anchors = _display_anchor_points(messages, max_index=max_index)
 
         for index, msg in enumerate(messages):
             if index >= end_index:
                 break
+            msg_timestamp = msg.timestamp.timestamp()
             if not _has_display_position(msg) or not _is_near_display_anchors(msg, display_anchors):
+                continue
+            if (
+                window_start_timestamp is not None
+                and msg_timestamp < window_start_timestamp
+                and msg.msg_type not in INFRASTRUCTURE_MESSAGE_COLORS
+            ):
                 continue
             color = self._color_for_message(msg)
             marker_lat, marker_lon = _marker_position_for_message(msg)
@@ -1620,6 +1694,13 @@ class MapWidget(QWebEngineView):
 
         infrastructure_payload: list[dict[str, object]] = []
         for overlay in _infrastructure_overlays_for_messages(messages, max_index=max_index):
+            if performance_mode != MAP_PERFORMANCE_NORMAL and overlay["kind"] == "label":
+                continue
+            if (
+                performance_mode == MAP_PERFORMANCE_DIAGNOSTIC
+                and overlay.get("layer") not in {"map_connections", "map_requests", "spat"}
+            ):
+                continue
             overlay_id = str(overlay["id"])
             layer_name = str(overlay["layer"])
             overlay_color = str(overlay["color"])
@@ -1660,7 +1741,12 @@ class MapWidget(QWebEngineView):
 
         # Draw trajectories
         trajectories_payload: list[dict[str, object]] = []
+        render_trajectories = performance_mode == MAP_PERFORMANCE_NORMAL
+        if performance_mode == MAP_PERFORMANCE_SAVER and len(station_coords) <= 25:
+            render_trajectories = True
         for station_id, coords in station_coords.items():
+            if not render_trajectories:
+                continue
             if short_trails:
                 coords = coords[-PLAYBACK_TRAIL_POINTS:]
             trajectories_payload.append({
@@ -1672,6 +1758,7 @@ class MapWidget(QWebEngineView):
         payload = {
             "clear": clear_first,
             "fitView": fit_view,
+            "performanceMode": performance_mode,
             "stationColors": self._station_color_map,
             "markers": list(markers_by_id.values()),
             "infrastructure": infrastructure_payload,

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
+import ctypes
+from ctypes import wintypes
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import QSettings, QThread, Qt
+from PyQt6.QtCore import QSettings, QThread, QTimer, Qt
 from PyQt6.QtGui import QCloseEvent, QDragEnterEvent, QDropEvent, QResizeEvent
 from PyQt6.QtWidgets import (
     QApplication,
@@ -39,7 +42,12 @@ from PyQt6.QtWidgets import (
 from ..app_memory import AppMemory
 from ..data_model import MessageType, SessionData, V2xMessage
 from ..kml_exporter import export_kml
-from ..map_widget import MapWidget
+from ..map_widget import (
+    MAP_PERFORMANCE_DIAGNOSTIC,
+    MAP_PERFORMANCE_NORMAL,
+    MAP_PERFORMANCE_SAVER,
+    MapWidget,
+)
 from ..parsing_worker import ParsingWorker
 from ..player_controller import SPEED_OPTIONS, PlayerController
 from ..prioritization_exporter import export_prioritization_issues
@@ -83,10 +91,65 @@ SCENE_REQUEST_HEADERS = ["Request", "Station", "Prio", "Status", "Lanes"]
 FORECAST_TIMELINE_BUCKETS = 15
 COMPACT_LAYOUT_WIDTH = 1320
 MAP_PLAYBACK_RENDER_INTERVAL_SECONDS = 1.25
+PERFORMANCE_MODE_NORMAL = MAP_PERFORMANCE_NORMAL
+PERFORMANCE_MODE_SAVER = MAP_PERFORMANCE_SAVER
+PERFORMANCE_MODE_DIAGNOSTIC = MAP_PERFORMANCE_DIAGNOSTIC
+PERFORMANCE_MODE_LABELS = {
+    PERFORMANCE_MODE_NORMAL: "Normal",
+    PERFORMANCE_MODE_SAVER: "Schonend",
+    PERFORMANCE_MODE_DIAGNOSTIC: "Diagnose",
+}
+PERFORMANCE_RENDER_INTERVAL_SECONDS = {
+    PERFORMANCE_MODE_NORMAL: 1.25,
+    PERFORMANCE_MODE_SAVER: 2.5,
+    PERFORMANCE_MODE_DIAGNOSTIC: 4.0,
+}
+PERFORMANCE_PLAYBACK_WINDOW_SECONDS = {
+    PERFORMANCE_MODE_NORMAL: 120.0,
+    PERFORMANCE_MODE_SAVER: 45.0,
+    PERFORMANCE_MODE_DIAGNOSTIC: 20.0,
+}
+MEMORY_WATCH_INTERVAL_MS = 5000
+MEMORY_SAVER_THRESHOLD_MB = 1200.0
+MEMORY_DIAGNOSTIC_THRESHOLD_MB = 1800.0
 LAYOUT_MODE_AUTO = "auto"
 LAYOUT_MODE_DESKTOP = "desktop"
 LAYOUT_MODE_COMPACT = "compact"
 COMPACT_MESSAGE_COLUMNS = {COL_TIMESTAMP, COL_STATION, COL_MSGTYPE, COL_SPEED_HEADING}
+
+
+def _current_process_memory_mb() -> Optional[float]:
+    """Return current process working set in MiB on Windows."""
+    if os.name != "nt":
+        return None
+    try:
+        class PROCESS_MEMORY_COUNTERS(ctypes.Structure):
+            _fields_ = [
+                ("cb", wintypes.DWORD),
+                ("PageFaultCount", wintypes.DWORD),
+                ("PeakWorkingSetSize", ctypes.c_size_t),
+                ("WorkingSetSize", ctypes.c_size_t),
+                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                ("PagefileUsage", ctypes.c_size_t),
+                ("PeakPagefileUsage", ctypes.c_size_t),
+            ]
+
+        counters = PROCESS_MEMORY_COUNTERS()
+        counters.cb = ctypes.sizeof(PROCESS_MEMORY_COUNTERS)
+        handle = ctypes.windll.kernel32.GetCurrentProcess()
+        ok = ctypes.windll.psapi.GetProcessMemoryInfo(
+            handle,
+            ctypes.byref(counters),
+            counters.cb,
+        )
+        if not ok:
+            return None
+        return counters.WorkingSetSize / (1024 * 1024)
+    except Exception:
+        return None
 
 
 class MainWindow(QMainWindow):
@@ -108,6 +171,13 @@ class MainWindow(QMainWindow):
             LAYOUT_MODE_COMPACT,
         }:
             self._layout_preference = LAYOUT_MODE_AUTO
+        self._performance_mode = str(
+            self._settings.value("ui/performance_mode", PERFORMANCE_MODE_NORMAL)
+        )
+        if self._performance_mode not in PERFORMANCE_MODE_LABELS:
+            self._performance_mode = PERFORMANCE_MODE_NORMAL
+        self._performance_auto_downgraded = False
+        self._last_memory_warning_level = ""
         self._is_compact_layout = False
         self._overview_collapsed = self._settings.value(
             "ui/header_collapsed",
@@ -146,6 +216,7 @@ class MainWindow(QMainWindow):
         self._refresh_memory_banner()
         self._update_controls_enabled(False)
         self._apply_responsive_layout(force=True)
+        self._setup_memory_watchdog()
 
     def _setup_ui(self) -> None:
         """Build the complete UI layout."""
@@ -315,6 +386,26 @@ class MainWindow(QMainWindow):
                 self._layout_mode_combo.setCurrentIndex(index)
                 break
         toolbar.addWidget(self._layout_mode_combo)
+
+        toolbar.addSeparator()
+        toolbar.addWidget(QLabel("Leistung:"))
+        self._performance_mode_combo = QComboBox()
+        self._performance_mode_combo.addItem("Normal", PERFORMANCE_MODE_NORMAL)
+        self._performance_mode_combo.addItem("Schonend", PERFORMANCE_MODE_SAVER)
+        self._performance_mode_combo.addItem("Diagnose", PERFORMANCE_MODE_DIAGNOSTIC)
+        self._performance_mode_combo.setToolTip(
+            "Kartenrendering fuer starke Rechner, schwache Notebooks oder Diagnose reduzieren"
+        )
+        self._performance_mode_combo.setFixedWidth(120)
+        for index in range(self._performance_mode_combo.count()):
+            if self._performance_mode_combo.itemData(index) == self._performance_mode:
+                self._performance_mode_combo.setCurrentIndex(index)
+                break
+        toolbar.addWidget(self._performance_mode_combo)
+
+        self._memory_watch_label = QLabel("RAM: -")
+        self._memory_watch_label.setToolTip("Arbeitsspeicher des App-Prozesses")
+        toolbar.addWidget(self._memory_watch_label)
 
     def _setup_overview_panel(self, parent_layout: QVBoxLayout) -> None:
         """Create the SWARCO-inspired overview header."""
@@ -758,6 +849,7 @@ class MainWindow(QMainWindow):
         self._btn_export_issues.clicked.connect(self._on_export_prioritization_issues)
         self._btn_update_schemas.clicked.connect(self._on_update_schemas)
         self._layout_mode_combo.currentIndexChanged.connect(self._on_layout_mode_changed)
+        self._performance_mode_combo.currentIndexChanged.connect(self._on_performance_mode_changed)
 
         self._btn_play.clicked.connect(self._player.play)
         self._btn_pause.clicked.connect(self._player.pause)
@@ -784,6 +876,103 @@ class MainWindow(QMainWindow):
         self._layout_preference = str(self._layout_mode_combo.currentData() or LAYOUT_MODE_AUTO)
         self._settings.setValue("ui/layout_mode", self._layout_preference)
         self._apply_responsive_layout(force=True)
+
+    def _on_performance_mode_changed(self, *_args) -> None:
+        """Persist and apply the selected map performance mode."""
+        self._performance_mode = str(
+            self._performance_mode_combo.currentData() or PERFORMANCE_MODE_NORMAL
+        )
+        if self._performance_mode not in PERFORMANCE_MODE_LABELS:
+            self._performance_mode = PERFORMANCE_MODE_NORMAL
+        self._performance_auto_downgraded = False
+        self._settings.setValue("ui/performance_mode", self._performance_mode)
+        self._apply_performance_mode()
+
+    def _apply_performance_mode(self) -> None:
+        """Forward the current performance mode to the map and status UI."""
+        if hasattr(self, "_map_widget"):
+            self._map_widget.set_performance_mode(self._performance_mode)
+        if hasattr(self, "_memory_watch_label"):
+            self._update_memory_watch_label(_current_process_memory_mb())
+
+    def _setup_memory_watchdog(self) -> None:
+        """Start a lightweight watchdog that can reduce map detail under memory pressure."""
+        self._memory_watch_timer = QTimer(self)
+        self._memory_watch_timer.setInterval(MEMORY_WATCH_INTERVAL_MS)
+        self._memory_watch_timer.timeout.connect(self._on_memory_watch_tick)
+        self._memory_watch_timer.start()
+        self._apply_performance_mode()
+        self._on_memory_watch_tick()
+
+    def _on_memory_watch_tick(self) -> None:
+        """Update RAM display and automatically lower map detail if needed."""
+        memory_mb = _current_process_memory_mb()
+        self._update_memory_watch_label(memory_mb)
+        if memory_mb is None:
+            return
+        target_mode = None
+        warning_level = ""
+        if memory_mb >= MEMORY_DIAGNOSTIC_THRESHOLD_MB:
+            target_mode = PERFORMANCE_MODE_DIAGNOSTIC
+            warning_level = "diagnostic"
+        elif memory_mb >= MEMORY_SAVER_THRESHOLD_MB:
+            target_mode = PERFORMANCE_MODE_SAVER
+            warning_level = "saver"
+        if target_mode and self._performance_mode != target_mode:
+            self._set_performance_mode(target_mode, auto=True)
+        if warning_level and warning_level != self._last_memory_warning_level:
+            self._last_memory_warning_level = warning_level
+            self._statusbar.showMessage(
+                f"RAM {memory_mb:.0f} MB - Kartenmodus automatisch auf "
+                f"{PERFORMANCE_MODE_LABELS[target_mode]} reduziert"
+            )
+
+    def _set_performance_mode(self, mode: str, *, auto: bool) -> None:
+        """Set performance mode without recursively triggering UI handlers."""
+        if mode not in PERFORMANCE_MODE_LABELS:
+            mode = PERFORMANCE_MODE_NORMAL
+        self._performance_mode = mode
+        self._performance_auto_downgraded = auto
+        self._settings.setValue("ui/performance_mode", mode)
+        if hasattr(self, "_performance_mode_combo"):
+            index = self._performance_mode_combo.findData(mode)
+            if index >= 0:
+                self._performance_mode_combo.blockSignals(True)
+                self._performance_mode_combo.setCurrentIndex(index)
+                self._performance_mode_combo.blockSignals(False)
+        self._apply_performance_mode()
+
+    def _update_memory_watch_label(self, memory_mb: Optional[float]) -> None:
+        """Render the current memory and performance mode in the toolbar."""
+        if not hasattr(self, "_memory_watch_label"):
+            return
+        mode = self.__dict__.get("_performance_mode", PERFORMANCE_MODE_NORMAL)
+        mode_label = PERFORMANCE_MODE_LABELS.get(mode, "Normal")
+        suffix = " auto" if self.__dict__.get("_performance_auto_downgraded", False) else ""
+        if memory_mb is None:
+            self._memory_watch_label.setText(f"RAM: - | {mode_label}{suffix}")
+            return
+        color = "#1f7a3a"
+        if memory_mb >= MEMORY_DIAGNOSTIC_THRESHOLD_MB:
+            color = "#b91c1c"
+        elif memory_mb >= MEMORY_SAVER_THRESHOLD_MB:
+            color = "#a16207"
+        self._memory_watch_label.setText(f"RAM: {memory_mb:.0f} MB | {mode_label}{suffix}")
+        self._memory_watch_label.setStyleSheet(f"color: {color}; font-weight: 700;")
+
+    def _map_render_interval_seconds(self) -> float:
+        """Return current full-slice render throttle for map playback."""
+        return PERFORMANCE_RENDER_INTERVAL_SECONDS.get(
+            self.__dict__.get("_performance_mode", PERFORMANCE_MODE_NORMAL),
+            PERFORMANCE_RENDER_INTERVAL_SECONDS[PERFORMANCE_MODE_NORMAL],
+        )
+
+    def _map_playback_window_seconds(self) -> Optional[float]:
+        """Return the playback time window rendered on the map."""
+        return PERFORMANCE_PLAYBACK_WINDOW_SECONDS.get(
+            self.__dict__.get("_performance_mode", PERFORMANCE_MODE_NORMAL),
+            PERFORMANCE_PLAYBACK_WINDOW_SECONDS[PERFORMANCE_MODE_NORMAL],
+        )
 
     def _effective_layout_mode(self) -> str:
         """Return the concrete layout mode for the current window size."""
@@ -1170,7 +1359,11 @@ class MainWindow(QMainWindow):
             return
 
         if self._should_render_full_map_slice(msg):
-            self._map_widget.render_playback_slice(self._player._messages, self._player.current_index)
+            self._map_widget.render_playback_slice(
+                self._player._messages,
+                self._player.current_index,
+                window_seconds=self._map_playback_window_seconds(),
+            )
         self._map_widget.update_playback_position(msg)
         self._highlight_table_row(msg)
         self._show_security_detail(msg, auto_focus=False)
@@ -1186,7 +1379,7 @@ class MainWindow(QMainWindow):
             should_render = True
         elif self._last_map_slice_index is None or index < self._last_map_slice_index:
             should_render = True
-        elif now - self._last_map_slice_update_monotonic >= MAP_PLAYBACK_RENDER_INTERVAL_SECONDS:
+        elif now - self._last_map_slice_update_monotonic >= self._map_render_interval_seconds():
             should_render = True
         else:
             should_render = False
