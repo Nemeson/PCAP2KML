@@ -249,8 +249,20 @@ py pcap2kml_launcher.py
 Auf manchen Windows-Rechnern schreibt QtWebEngine/Chromium Meldungen wie
 `QueryVideoProcessorCustomExtForHDR: Failed to retrieve D3D11 device` ins
 Terminal. Die App setzt beim Start konservative Chromium-Flags gegen fragile
-DirectComposition-/HDR-Pfade. Falls Karte oder WebEngine auf einem Rechner
-trotzdem instabil laufen, kann Software-Rendering erzwungen werden:
+DirectComposition-/HDR-/Video-Overlay-Pfade:
+
+```text
+--disable-direct-composition
+--disable-features=DirectComposition,DirectCompositionVideoOverlays,UseHDRTransferFunction
+--disable-accelerated-video-decode
+--disable-gpu-memory-buffer-video-frames
+--force-color-profile=srgb
+```
+
+Damit bleibt normale GPU-Beschleunigung fuer die Karte moeglich, waehrend der
+problematische D3D11/HDR-Pfad nicht mehr verwendet werden soll. Falls Karte
+oder WebEngine auf einem Rechner trotzdem instabil laufen, kann zusaetzlich
+Software-Rendering erzwungen werden:
 
 ```powershell
 $env:PCAP2KML_DISABLE_GPU="1"

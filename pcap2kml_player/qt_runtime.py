@@ -7,6 +7,9 @@ import os
 
 DEFAULT_CHROMIUM_FLAGS = (
     "--disable-direct-composition",
+    "--disable-features=DirectComposition,DirectCompositionVideoOverlays,UseHDRTransferFunction",
+    "--disable-accelerated-video-decode",
+    "--disable-gpu-memory-buffer-video-frames",
     "--force-color-profile=srgb",
 )
 SOFTWARE_RENDERING_FLAGS = (
@@ -19,8 +22,9 @@ def configure_qt_runtime_environment() -> None:
     """Configure QtWebEngine before any PyQt imports happen.
 
     Some Windows machines emit noisy Chromium/QtWebEngine D3D11/HDR errors such
-    as QueryVideoProcessorCustomExtForHDR. The default flags avoid the most
-    fragile DirectComposition/HDR path while keeping GPU rendering available.
+    as QueryVideoProcessorCustomExtForHDR. The default flags avoid the fragile
+    DirectComposition/HDR/video-overlay path while keeping normal GPU rendering
+    available for the embedded map.
 
     Set PCAP2KML_DISABLE_GPU=1 to force software rendering on problematic
     remote desktops, old GPUs, or broken drivers.
