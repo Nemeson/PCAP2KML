@@ -1,0 +1,1400 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PCAP2KML Player – Benutzerhandbuch</title>
+  <style>
+    :root {
+      --navy:   #10233f;
+      --red:    #b2192b;
+      --red-lt: #fff2f3;
+      --blue-lt:#eaf5ff;
+      --border: #d7dde8;
+      --bg:     #f5f7fb;
+      --white:  #ffffff;
+      --muted:  #5a6b81;
+      --small:  #667891;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      font-size: 14px;
+      background: var(--bg);
+      color: var(--navy);
+      line-height: 1.6;
+    }
+
+    /* ── Sidebar nav ── */
+    .sidebar {
+      position: fixed;
+      top: 0; left: 0;
+      width: 240px;
+      height: 100vh;
+      background: var(--navy);
+      color: #c8d4e8;
+      overflow-y: auto;
+      padding: 0 0 24px 0;
+      z-index: 100;
+    }
+    .sidebar-logo {
+      background: var(--red);
+      padding: 18px 20px;
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: 0.03em;
+    }
+    .sidebar-logo span { display: block; font-size: 11px; font-weight: 400; opacity: .8; margin-top: 2px; }
+    .sidebar nav { padding: 12px 0; }
+    .sidebar nav a {
+      display: block;
+      padding: 8px 20px;
+      color: #c8d4e8;
+      text-decoration: none;
+      font-size: 13px;
+      border-left: 3px solid transparent;
+      transition: background .15s, border-color .15s;
+    }
+    .sidebar nav a:hover { background: rgba(255,255,255,.07); color: #fff; }
+    .sidebar nav a.active { border-left-color: var(--red); color: #fff; background: rgba(255,255,255,.05); }
+    .sidebar-section {
+      padding: 14px 20px 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: #6a829c;
+    }
+
+    /* ── Main content ── */
+    .main {
+      margin-left: 240px;
+      padding: 0 0 80px 0;
+    }
+
+    /* ── Hero banner ── */
+    .hero {
+      background: var(--navy);
+      color: #fff;
+      padding: 48px 56px 40px;
+      border-bottom: 4px solid var(--red);
+    }
+    .hero-badge {
+      display: inline-block;
+      background: var(--red);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      padding: 3px 10px;
+      border-radius: 4px;
+      margin-bottom: 14px;
+    }
+    .hero h1 { font-size: 32px; font-weight: 700; line-height: 1.2; }
+    .hero p  { margin-top: 10px; color: #9ab0c8; max-width: 640px; font-size: 15px; }
+    .hero-meta { margin-top: 24px; display: flex; gap: 32px; }
+    .hero-meta-item { font-size: 12px; color: #7891aa; }
+    .hero-meta-item strong { display: block; color: #dce8f5; font-size: 14px; font-weight: 600; }
+
+    /* ── Content sections ── */
+    .content { padding: 40px 56px; max-width: 1000px; }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--red);
+    }
+    h3 { font-size: 16px; font-weight: 700; color: var(--navy); margin: 24px 0 10px; }
+    h4 { font-size: 14px; font-weight: 700; color: var(--navy); margin: 16px 0 6px; }
+    p  { margin-bottom: 12px; color: #2a3f5a; }
+
+    /* ── Section divider ── */
+    .section {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 32px 36px;
+      margin-bottom: 28px;
+    }
+
+    /* ── Screenshot placeholder ── */
+    .screenshot-box {
+      background: #e8eef7;
+      border: 2px dashed #9ab0c8;
+      border-radius: 10px;
+      padding: 28px 20px;
+      margin: 16px 0 20px;
+      text-align: center;
+      position: relative;
+    }
+    .screenshot-box .ss-label {
+      display: inline-block;
+      background: var(--red);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      padding: 3px 10px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+    .screenshot-box .ss-desc {
+      font-size: 13px;
+      color: #42546b;
+    }
+    .screenshot-box .ss-todo {
+      margin-top: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #b2192b;
+      background: #fff2f3;
+      border: 1px solid #f5c0c5;
+      border-radius: 6px;
+      display: inline-block;
+      padding: 4px 14px;
+    }
+    .screenshot-box img {
+      max-width: 100%;
+      border-radius: 8px;
+      box-shadow: 0 2px 12px rgba(16,35,63,.15);
+    }
+
+    /* ── UI mockup ── */
+    .ui-mock {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 16px 0 20px;
+      box-shadow: 0 2px 10px rgba(16,35,63,.08);
+    }
+    .ui-mock-toolbar {
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 12px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .ui-mock-btn {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--navy);
+      white-space: nowrap;
+    }
+    .ui-mock-btn.primary { background: var(--red); color: #fff; border-color: var(--red); }
+    .ui-mock-sep { width: 1px; height: 24px; background: var(--border); }
+    .ui-mock-body { padding: 14px; background: var(--bg); }
+    .ui-mock-stat-row { display: flex; gap: 12px; margin-bottom: 12px; }
+    .stat-card-m {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 16px;
+      min-width: 120px;
+    }
+    .stat-card-m .sc-label { font-size: 11px; color: var(--small); font-weight: 600; }
+    .stat-card-m .sc-value { font-size: 20px; font-weight: 700; color: var(--navy); }
+    .ui-mock-filter {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: var(--navy);
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    }
+    .filter-badge {
+      background: var(--blue-lt);
+      border: 1px solid #a8d4f5;
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--navy);
+    }
+    .filter-badge.active { background: var(--navy); color: #fff; }
+    .ui-mock-playbar {
+      background: var(--white);
+      border-top: 1px solid var(--border);
+      padding: 8px 14px;
+      display: flex; gap: 8px; align-items: center;
+    }
+    .pb-btn {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 4px 12px;
+      font-size: 12px; font-weight: 600; color: var(--navy);
+    }
+    .pb-btn.play { background: var(--navy); color: #fff; }
+    .pb-slider {
+      flex: 1;
+      height: 8px;
+      background: linear-gradient(to right, var(--red) 35%, #dce3ee 35%);
+      border-radius: 4px;
+    }
+    .pb-time { font-size: 12px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+
+    /* ── Tables ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 16px;
+      font-size: 13px;
+    }
+    th {
+      background: var(--navy);
+      color: #fff;
+      text-align: left;
+      padding: 9px 12px;
+      font-weight: 700;
+    }
+    td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    tr:nth-child(even) td { background: var(--blue-lt); }
+    tr:last-child td { border-bottom: none; }
+
+    /* ── Callout boxes ── */
+    .callout {
+      border-left: 4px solid;
+      border-radius: 0 8px 8px 0;
+      padding: 12px 16px;
+      margin: 14px 0;
+      font-size: 13px;
+    }
+    .callout.tip    { border-color: #2da44e; background: #eafbee; color: #1a5c30; }
+    .callout.warn   { border-color: #e3a000; background: #fef9ec; color: #7a4f00; }
+    .callout.info   { border-color: #0969da; background: #dff0ff; color: #0550ae; }
+    .callout.danger { border-color: var(--red); background: var(--red-lt); color: #7a0a15; }
+    .callout strong { display: block; margin-bottom: 4px; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; }
+
+    /* ── Step list ── */
+    .steps { counter-reset: step-counter; list-style: none; padding: 0; margin: 14px 0; }
+    .steps li {
+      counter-increment: step-counter;
+      position: relative;
+      padding: 10px 14px 10px 52px;
+      margin-bottom: 8px;
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 13px;
+    }
+    .steps li::before {
+      content: counter(step-counter);
+      position: absolute;
+      left: 14px;
+      top: 50%; transform: translateY(-50%);
+      background: var(--navy);
+      color: #fff;
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      font-weight: 700; font-size: 12px;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ── Key badge ── */
+    kbd {
+      background: var(--navy);
+      color: #fff;
+      border-radius: 5px;
+      padding: 2px 7px;
+      font-size: 12px;
+      font-family: monospace;
+    }
+
+    /* ── Badge ── */
+    .badge {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge-cam    { background: #dff0ff; color: #0550ae; }
+    .badge-denm   { background: #ffe0e0; color: #7a0a15; }
+    .badge-srem   { background: #fff3d6; color: #7a4f00; }
+    .badge-ssem   { background: #e0f9f9; color: #006666; }
+    .badge-mapem  { background: #e2f9e2; color: #1a5c30; }
+    .badge-spatem { background: #f5e0ff; color: #5a0080; }
+    .badge-nmea   { background: #f0e8d8; color: #5a3a00; }
+
+    /* ── Anchor targets ── */
+    section { scroll-margin-top: 20px; }
+
+    /* ── Print ── */
+    @media print {
+      .sidebar { display: none; }
+      .main { margin-left: 0; }
+      .hero { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════
+     SIDEBAR
+══════════════════════════════════════════════════════════ -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    PCAP2KML Player
+    <span>Benutzerhandbuch v1.0</span>
+  </div>
+  <nav>
+    <div class="sidebar-section">Einstieg</div>
+    <a href="#uebersicht">Übersicht</a>
+    <a href="#voraussetzungen">Systemvoraussetzungen</a>
+    <a href="#start">Anwendung starten</a>
+
+    <div class="sidebar-section">Oberfläche</div>
+    <a href="#oberflaeche">Fensteraufbau</a>
+    <a href="#toolbar">Werkzeugleiste</a>
+    <a href="#overview-panel">Übersichts-Panel</a>
+    <a href="#filter">Filter-Zeile</a>
+    <a href="#karte">Kartenansicht</a>
+    <a href="#nachrichtenliste">Nachrichtentabelle</a>
+    <a href="#context-tabs">Kontext-Tabs</a>
+    <a href="#issue-panel">Priorisierungs­fehler-Panel</a>
+    <a href="#wiedergabe">Wiedergabe­steuerung</a>
+
+    <div class="sidebar-section">Arbeitsabläufe</div>
+    <a href="#pcap-laden">PCAP-Datei laden</a>
+    <a href="#filter-anwenden">Filter anwenden</a>
+    <a href="#wiedergabe-workflow">Wiedergabe nutzen</a>
+    <a href="#fehler-analysieren">Fehler analysieren</a>
+    <a href="#eta-analyse">ETA-Analyse</a>
+    <a href="#kml-export">KML exportieren</a>
+    <a href="#issues-export">Fehler exportieren</a>
+    <a href="#schemas">ASN.1-Schemas</a>
+    <a href="#layout">Layout anpassen</a>
+
+    <div class="sidebar-section">Referenz</div>
+    <a href="#nachrichtentypen">Nachrichtentypen</a>
+    <a href="#fehlercodes">Fehlercodes</a>
+    <a href="#glossar">Glossar</a>
+    <a href="#fehlerbehebung">Fehlerbehebung</a>
+  </nav>
+</aside>
+
+<!-- ══════════════════════════════════════════════════════════
+     MAIN CONTENT
+══════════════════════════════════════════════════════════ -->
+<div class="main">
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-badge">SWARCO ITS · V2X Analyse</div>
+    <h1>PCAP2KML Player</h1>
+    <p>Datenorientierte V2X-Analyse: PCAP-Dateien laden, Nachrichten auf einer interaktiven Karte visualisieren, Priorisierungsfehler diagnostizieren und Ergebnisse als KML oder CSV exportieren.</p>
+    <div class="hero-meta">
+      <div class="hero-meta-item"><strong>Version</strong>1.0.0</div>
+      <div class="hero-meta-item"><strong>Plattform</strong>Windows 10/11 · macOS · Linux</div>
+      <div class="hero-meta-item"><strong>Sprache</strong>Python · PyQt6</div>
+      <div class="hero-meta-item"><strong>Formate</strong>.pcap · .pcapng · .cap</div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="uebersicht" class="content">
+    <div class="section">
+      <h2>Übersicht</h2>
+      <p>
+        PCAP2KML Player ist eine Desktop-Anwendung zur Analyse von V2X-Nachrichten (Vehicle-to-Everything)
+        aus PCAP-Mitschnittdateien. Die Anwendung dekodiert ITS-PDUs nach ETSI-Standard, stellt alle
+        Nachrichten auf einer interaktiven Karte dar und ermöglicht eine zeitgesteuerte Wiedergabe.
+      </p>
+      <p>Typische Einsatzbereiche:</p>
+      <table>
+        <tr><th>Aufgabe</th><th>Funktion</th></tr>
+        <tr><td>Feldtest-Auswertung</td><td>Fahrzeugpositionen und -trajektorien visuell nachvollziehen</td></tr>
+        <tr><td>Priorisierungsdiagnose</td><td>SREM/SSEM-Fehler (verspätetes <em>granted</em>, fehlende SSEM) automatisch erkennen</td></tr>
+        <tr><td>Kreuzungsanalyse</td><td>MAP+SPaT-Phasenprognose im zeitlichen Verlauf betrachten</td></tr>
+        <tr><td>ETA-Diagnose</td><td>Restzeit bis Haltelinie und SREM-Verlauf grafisch analysieren</td></tr>
+        <tr><td>Datenexport</td><td>KML für Google Earth/QGIS sowie CSV/JSON für Weiterverarbeitung</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="voraussetzungen" class="content">
+    <div class="section">
+      <h2>Systemvoraussetzungen</h2>
+      <table>
+        <tr><th>Komponente</th><th>Mindestanforderung</th></tr>
+        <tr><td>Python</td><td>3.10 oder neuer</td></tr>
+        <tr><td>PyQt6</td><td>6.4 oder neuer</td></tr>
+        <tr><td>scapy</td><td>2.5 oder neuer (PCAP-Parsing)</td></tr>
+        <tr><td>simplekml</td><td>1.3 oder neuer (KML-Export)</td></tr>
+        <tr><td>RAM</td><td>4 GB empfohlen (große Captures)</td></tr>
+        <tr><td>Internetverbindung</td><td>Für Kartenkacheln und Schema-Updates</td></tr>
+      </table>
+      <div class="callout warn">
+        <strong>Hinweis</strong>
+        Fehlen <code>scapy</code> oder <code>simplekml</code>, erscheint beim Start ein Warnhinweis.
+        PCAP-Parsing bzw. KML-Export sind dann nicht verfügbar.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="start" class="content">
+    <div class="section">
+      <h2>Anwendung starten</h2>
+      <ol class="steps">
+        <li>Terminal öffnen und in das Projektverzeichnis wechseln:<br>
+            <code style="font-family:monospace;background:#f0f4fa;padding:2px 6px;border-radius:4px;">cd C:\PythonTools\PCAP2KML</code></li>
+        <li>Abhängigkeiten installieren (einmalig):<br>
+            <code style="font-family:monospace;background:#f0f4fa;padding:2px 6px;border-radius:4px;">pip install -r requirements.txt</code></li>
+        <li>Anwendung starten:<br>
+            <code style="font-family:monospace;background:#f0f4fa;padding:2px 6px;border-radius:4px;">python -m pcap2kml_player.main</code></li>
+      </ol>
+      <div class="callout tip">
+        <strong>Tipp</strong>
+        Unter Windows kann eine <code>.bat</code>-Startdatei angelegt werden, um den Aufruf zu vereinfachen.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="oberflaeche" class="content">
+    <div class="section">
+      <h2>Fensteraufbau</h2>
+      <p>Das Hauptfenster gliedert sich in sechs funktionale Bereiche:</p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 1</div>
+        <div class="ss-desc">Gesamtansicht des Hauptfensters nach dem Laden einer PCAP-Datei</div>
+        <div class="ss-todo">📷 Bitte Screenshot anfertigen: App starten → PCAP laden → Wiedergabe kurz starten → Vollbild-Screenshot</div>
+      </div>
+
+      <!-- UI Mockup -->
+      <div class="ui-mock">
+        <div class="ui-mock-toolbar">
+          <div class="ui-mock-btn primary">PCAP laden</div>
+          <div class="ui-mock-btn">Letzte Sitzung</div>
+          <div class="ui-mock-btn">Laden abbrechen</div>
+          <div class="ui-mock-sep"></div>
+          <div class="ui-mock-btn">KML exportieren</div>
+          <div class="ui-mock-btn">Fehler exportieren</div>
+          <div class="ui-mock-sep"></div>
+          <div class="ui-mock-btn">ASN.1-Schemas aktualisieren</div>
+          <div class="ui-mock-sep"></div>
+          <span style="font-size:12px;color:#42546b;">Layout:</span>
+          <div class="ui-mock-btn">Auto ▾</div>
+        </div>
+        <div class="ui-mock-body">
+          <div class="ui-mock-stat-row">
+            <div class="stat-card-m"><div class="sc-label">Dateien</div><div class="sc-value">2</div></div>
+            <div class="stat-card-m"><div class="sc-label">Nachrichten</div><div class="sc-value">4 812</div></div>
+            <div class="stat-card-m"><div class="sc-label">Stationen</div><div class="sc-value">7</div></div>
+          </div>
+          <div class="ui-mock-filter" style="margin-bottom:10px;">
+            <span style="font-size:12px;font-weight:600;">Nachrichtentyp:</span>
+            <span class="filter-badge active">CAM</span>
+            <span class="filter-badge active">DENM</span>
+            <span class="filter-badge active">SREM</span>
+            <span class="filter-badge active">SSEM</span>
+            <span class="filter-badge active">MAPEM</span>
+            <span class="filter-badge active">SPATEM</span>
+            <span class="filter-badge active">NMEA</span>
+            <span style="margin-left:12px;font-size:12px;font-weight:600;">Stationen:</span>
+            <span class="filter-badge">Station 1234</span>
+            <span class="filter-badge">Station 5678</span>
+          </div>
+          <div style="display:flex;gap:10px;height:200px;">
+            <div style="flex:7;background:#dce3ee;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#42546b;">🗺️ Interaktive Karte (Leaflet)</div>
+            <div style="flex:3;background:var(--white);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:12px;color:#42546b;">
+              <strong style="color:var(--navy);">Priorisierungsfehler</strong><br><br>
+              ⚠ 3 Fehler gefunden<br>
+              • Timeout ohne SSEM<br>
+              • Verspätetes granted<br>
+              • ETA-Sprung &gt; 5 s
+            </div>
+          </div>
+        </div>
+        <div class="ui-mock-playbar">
+          <div class="pb-btn play">▶ Play</div>
+          <div class="pb-btn">⏸ Pause</div>
+          <div class="pb-btn">⏹ Stop</div>
+          <div class="pb-btn">☑ Nur Problemstellen</div>
+          <div class="pb-btn">◀ Fehler</div>
+          <div class="pb-btn">Fehler ▶</div>
+          <div class="pb-slider"></div>
+          <span style="font-size:12px;color:#42546b;">Geschw.:</span>
+          <div class="pb-btn">1.0x ▾</div>
+          <div class="pb-time">00:32.5 / 04:17.0</div>
+        </div>
+      </div>
+
+      <table>
+        <tr><th>Bereich</th><th>Position</th><th>Funktion</th></tr>
+        <tr><td><strong>Werkzeugleiste</strong></td><td>Ganz oben</td><td>Datei laden, exportieren, Schemas, Layout</td></tr>
+        <tr><td><strong>Übersichts-Panel</strong></td><td>Unterhalb Toolbar</td><td>Sitzungs-Statistiken (Dateien, Nachrichten, Stationen)</td></tr>
+        <tr><td><strong>Filter-Zeile</strong></td><td>Unter Übersicht</td><td>Nachrichtentypen und Stationen ein-/ausblenden</td></tr>
+        <tr><td><strong>Karte + Fehler-Panel</strong></td><td>Mitte links</td><td>Kartendarstellung und Priorisierungsfehler-Liste</td></tr>
+        <tr><td><strong>Nachrichtenliste</strong></td><td>Mitte rechts</td><td>Tabelle aller Nachrichten mit Kontext-Tabs</td></tr>
+        <tr><td><strong>Wiedergabesteuerung</strong></td><td>Unten</td><td>Play/Pause/Stop, Zeitachse, Geschwindigkeit</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="toolbar" class="content">
+    <div class="section">
+      <h2>Werkzeugleiste</h2>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 2</div>
+        <div class="ss-desc">Werkzeugleiste im Desktop-Layout</div>
+        <div class="ss-todo">📷 Bitte Screenshot anfertigen: Nur die Toolbar (obere ~60 px des Fensters)</div>
+      </div>
+
+      <table>
+        <tr><th>Schaltfläche</th><th>Funktion</th></tr>
+        <tr><td><strong>PCAP laden</strong></td><td>Öffnet den Dateidialog zur Auswahl einer oder mehrerer <code>.pcap</code>/<code>.pcapng</code>/<code>.cap</code>-Dateien</td></tr>
+        <tr><td><strong>Letzte Sitzung</strong></td><td>Lädt die zuletzt verwendeten PCAP-Dateien erneut (persistiert über Sitzungen)</td></tr>
+        <tr><td><strong>Laden abbrechen</strong></td><td>Bricht einen laufenden Parse-Vorgang ab (aktiv während des Ladens)</td></tr>
+        <tr><td><strong>KML exportieren</strong></td><td>Exportiert alle gefilterten Entitäten als KML-Dateien (eine Datei je Station)</td></tr>
+        <tr><td><strong>Fehler exportieren</strong></td><td>Exportiert Priorisierungsfehler als CSV, Maschinen-CSV, JSON und Textreport</td></tr>
+        <tr><td><strong>ASN.1-Schemas aktualisieren</strong></td><td>Lädt aktuelle ASN.1-Schemadateien aus dem Git-Repository</td></tr>
+        <tr><td><strong>Layout-Auswahl</strong></td><td>Wechselt zwischen <em>Auto</em>, <em>Desktop</em> und <em>Kompakt</em>-Layout</td></tr>
+      </table>
+      <div class="callout info">
+        <strong>Hinweis</strong>
+        Im <em>Kompakt</em>-Layout werden Schaltflächentexte automatisch verkürzt
+        (z.&nbsp;B. „KML" statt „KML exportieren"), um Platz zu sparen.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="overview-panel" class="content">
+    <div class="section">
+      <h2>Übersichts-Panel</h2>
+      <p>
+        Das Übersichts-Panel unterhalb der Werkzeugleiste zeigt auf einen Blick
+        die wichtigsten Kennzahlen der geladenen Sitzung.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 3</div>
+        <div class="ss-desc">Übersichts-Panel mit Statistikkarten nach dem Laden einer Sitzung</div>
+        <div class="ss-todo">📷 Bitte Screenshot anfertigen: Nur den Header-Bereich mit den drei Stat-Karten</div>
+      </div>
+
+      <table>
+        <tr><th>Karte</th><th>Bedeutung</th></tr>
+        <tr><td><strong>Dateien</strong></td><td>Anzahl geladener PCAP-Dateien</td></tr>
+        <tr><td><strong>Nachrichten</strong></td><td>Gesamtzahl dekodierter V2X-Nachrichten</td></tr>
+        <tr><td><strong>Stationen</strong></td><td>Anzahl eindeutiger Stations-IDs</td></tr>
+      </table>
+      <p>
+        Mit der Schaltfläche <strong>„Header einklappen"</strong> lässt sich das Panel
+        ausblenden, um mehr Platz für Karte und Tabelle zu gewinnen.
+        Im eingeklappten Zustand erscheint eine einzeilige Kompaktzusammenfassung.
+      </p>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="filter" class="content">
+    <div class="section">
+      <h2>Filter-Zeile</h2>
+      <p>
+        Die Filter-Zeile steuert, welche Nachrichten in Karte, Tabelle und
+        Wiedergabe angezeigt werden.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 4</div>
+        <div class="ss-desc">Filter-Zeile mit aktivierten Nachrichtentypen und ausgewählten Stationen</div>
+        <div class="ss-todo">📷 Bitte Screenshot anfertigen: Filter-Zeile – mehrere Checkboxen aktiviert, eine Station markiert</div>
+      </div>
+
+      <h3>Nachrichtentyp-Filter</h3>
+      <p>Jeder Nachrichtentyp hat eine eigene Checkbox. Deaktivierte Typen werden
+      vollständig aus Tabelle, Karte und Wiedergabe ausgeschlossen.</p>
+
+      <table>
+        <tr><th>Checkbox</th><th>Enthaltene Nachrichten</th></tr>
+        <tr><td><span class="badge badge-cam">CAM</span></td><td>Cooperative Awareness Messages – Fahrzeugposition und -status</td></tr>
+        <tr><td><span class="badge badge-denm">DENM</span></td><td>Decentralized Environmental Notification Messages – Ereignisse</td></tr>
+        <tr><td><span class="badge badge-srem">SREM</span></td><td>Signal Request Messages – Priorisierungsanfragen von Fahrzeugen</td></tr>
+        <tr><td><span class="badge badge-ssem">SSEM</span></td><td>Signal Status Messages – Antworten der Kreuzung auf SREM</td></tr>
+        <tr><td><span class="badge badge-mapem">MAPEM</span></td><td>MAP Extended Messages – Kreuzungsgeometrie und Fahrspurdaten</td></tr>
+        <tr><td><span class="badge badge-spatem">SPATEM</span></td><td>Signal Phase and Timing Messages – Ampelzustand und Prognose</td></tr>
+        <tr><td><span class="badge badge-nmea">NMEA</span></td><td>GPS/GNSS-Rohdaten (NMEA 0183)</td></tr>
+      </table>
+
+      <h3>Stations-Filter</h3>
+      <p>
+        Die Stationsliste zeigt alle in der Sitzung enthaltenen Stations-IDs.
+        Durch Klick (Mehrfachauswahl mit <kbd>Ctrl</kbd>+Klick oder <kbd>Shift</kbd>+Klick)
+        werden nur die gewählten Stationen angezeigt. Keine Auswahl = alle Stationen aktiv.
+      </p>
+
+      <h3>Gemergte Sicht</h3>
+      <p>
+        Aktiviert die Option <strong>„Gemergte Sicht"</strong>, werden
+        Mehrfachbeobachtungen derselben physischen Nachricht (TXA- und RXA-Capture)
+        zusammengeführt und nur einmal kanonisch dargestellt.
+        Die Merge-Konfidenz ist in der Tabellenspalte <em>Merge</em> sichtbar.
+      </p>
+      <div class="callout tip">
+        <strong>Tipp</strong>
+        Wenn TXA- und RXA-Dateien gleichzeitig geladen sind, empfiehlt sich die
+        Gemergte Sicht, um Duplikate in der Positionsdarstellung zu vermeiden.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="karte" class="content">
+    <div class="section">
+      <h2>Kartenansicht</h2>
+      <p>
+        Die Karte basiert auf Leaflet und zeigt die Positionen aller gefilterten
+        Nachrichten als farbige Marker. Während der Wiedergabe bewegen sich die
+        Fahrzeugpositionen in Echtzeit.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 5</div>
+        <div class="ss-desc">Interaktive Karte mit Fahrzeug-Markern und Trajektorien während der Wiedergabe</div>
+        <div class="ss-todo">📷 Bitte Screenshot anfertigen: Karte mit sichtbaren Markern – Wiedergabe aktiv, ca. bei 30–50 % des Fortschritts</div>
+      </div>
+
+      <h3>Karteninteraktion</h3>
+      <table>
+        <tr><th>Aktion</th><th>Funktion</th></tr>
+        <tr><td>Linksklick + Ziehen</td><td>Karte verschieben (Pan)</td></tr>
+        <tr><td>Mausrad</td><td>Rein-/Rauszoomen</td></tr>
+        <tr><td>Klick auf Marker</td><td>Zugehörige Nachricht in der Tabelle markieren und Details anzeigen</td></tr>
+        <tr><td>Layer-Umschalter (rechts oben)</td><td>Kachel-Layer wechseln (OpenStreetMap, Satellit etc.)</td></tr>
+      </table>
+
+      <h3>Marker-Farben nach Nachrichtentyp</h3>
+      <table>
+        <tr><th>Farbe</th><th>Typ</th></tr>
+        <tr><td><span style="display:inline-block;width:18px;height:18px;background:#0000ff;border-radius:50%;vertical-align:middle;"></span> Blau</td><td>CAM</td></tr>
+        <tr><td><span style="display:inline-block;width:18px;height:18px;background:#ff0000;border-radius:50%;vertical-align:middle;"></span> Rot</td><td>DENM</td></tr>
+        <tr><td><span style="display:inline-block;width:18px;height:18px;background:#ff6600;border-radius:50%;vertical-align:middle;"></span> Orange</td><td>SREM</td></tr>
+        <tr><td><span style="display:inline-block;width:18px;height:18px;background:#00ffff;border-radius:50%;vertical-align:middle;"></span> Cyan</td><td>SSEM</td></tr>
+        <tr><td><span style="display:inline-block;width:18px;height:18px;background:#00ff00;border-radius:50%;vertical-align:middle;"></span> Grün</td><td>MAPEM</td></tr>
+        <tr><td><span style="display:inline-block;width:18px;height:18px;background:#ff00ff;border-radius:50%;vertical-align:middle;"></span> Magenta</td><td>SPATEM</td></tr>
+        <tr><td><span style="display:inline-block;width:18px;height:18px;background:#800000;border-radius:50%;vertical-align:middle;"></span> Dunkelrot</td><td>NMEA</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="nachrichtenliste" class="content">
+    <div class="section">
+      <h2>Nachrichtentabelle</h2>
+      <p>
+        Die Tabelle rechts listet alle gefilterten Nachrichten chronologisch auf.
+        Ein Klick auf eine Zeile markiert den zugehörigen Marker auf der Karte und
+        öffnet die Details im Tab <em>Details</em>.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 6</div>
+        <div class="ss-desc">Nachrichtentabelle mit einer markierten Zeile und ausgefülltem Details-Tab</div>
+        <div class="ss-todo">📷 Bitte Screenshot anfertigen: Tabelle – eine Zeile anklicken, sodass Detail-Tab Daten zeigt</div>
+      </div>
+
+      <h3>Spalten</h3>
+      <table>
+        <tr><th>Spalte</th><th>Inhalt</th><th>Kompakt-Layout</th></tr>
+        <tr><td>Timestamp</td><td>Zeitstempel der Nachricht (ISO-8601)</td><td>✓ sichtbar</td></tr>
+        <tr><td>Station ID</td><td>Eindeutige Stations-ID des Senders</td><td>✓ sichtbar</td></tr>
+        <tr><td>Msg Type</td><td>Nachrichtentyp (CAM, DENM, …)</td><td>✓ sichtbar</td></tr>
+        <tr><td>Lat / Lon</td><td>Geografische Koordinaten</td><td>✗ ausgeblendet</td></tr>
+        <tr><td>Speed / Heading</td><td>Geschwindigkeit (km/h) und Fahrtrichtung (°)</td><td>✓ sichtbar</td></tr>
+        <tr><td>Quelle</td><td>Quelldateiname und Rolle (TXA/RXA)</td><td>✗ ausgeblendet</td></tr>
+        <tr><td>Merge</td><td>Merge-Gruppe und Konfidenz (bei gemergter Sicht)</td><td>✗ ausgeblendet</td></tr>
+      </table>
+
+      <h3>Tabelle maximieren</h3>
+      <p>
+        Mit der Schaltfläche <strong>„Tabelle maximieren"</strong> oberhalb der Tabelle
+        wird der vertikale Splitter so verschoben, dass die Tabelle mehr Platz erhält.
+        Nützlich auf kleinen Bildschirmen oder bei vielen Nachrichten.
+      </p>
+
+      <div class="callout info">
+        <strong>Hinweis</strong>
+        Die aktuell abgespielte Nachricht wird während der Wiedergabe automatisch
+        in der Tabelle markiert (blaue Hervorhebung).
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="context-tabs" class="content">
+    <div class="section">
+      <h2>Kontext-Tabs</h2>
+      <p>
+        Unterhalb der Nachrichtentabelle befinden sich drei Tabs, die je nach
+        Wiedergabeposition und ausgewählter Nachricht unterschiedliche
+        Kontextinformationen anzeigen.
+      </p>
+
+      <!-- Tab: Details -->
+      <h3>Tab „Details"</h3>
+      <p>
+        Zeigt alle dekodierten Felder der zuletzt angeklickten Nachricht als
+        Feld-Wert-Tabelle. Enthält die Nachricht PKI-Sicherheitsinformationen
+        (z.&nbsp;B. Zertifikatsangaben), werden diese ebenfalls dargestellt.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 7</div>
+        <div class="ss-desc">Details-Tab mit dekodierten ASN.1-Feldern einer CAM-Nachricht</div>
+        <div class="ss-todo">📷 Bitte Screenshot anfertigen: Eine CAM-Zeile anklicken → Details-Tab zeigt Felder</div>
+      </div>
+
+      <table>
+        <tr><th>Typische Felder</th><th>Beschreibung</th></tr>
+        <tr><td>vehicleWidth / vehicleLength</td><td>Fahrzeugabmessungen (CAM)</td></tr>
+        <tr><td>driveDirection</td><td>Fahrtrichtung (vorwärts/rückwärts)</td></tr>
+        <tr><td>causeCode / subCauseCode</td><td>Ereignisursache (DENM)</td></tr>
+        <tr><td>intersectionId</td><td>Kreuzungs-ID (MAPEM, SPATEM)</td></tr>
+        <tr><td>requestId / sequenceNumber</td><td>Priorisierungsanfrage-ID (SREM)</td></tr>
+        <tr><td>importanceLevel</td><td>Dringlichkeitsstufe der Anfrage (SREM)</td></tr>
+        <tr><td>Zertifikat-Felder</td><td>PKI-Angaben (falls vorhanden)</td></tr>
+      </table>
+
+      <!-- Tab: Szene -->
+      <h3>Tab „Szene"</h3>
+      <p>
+        Der Szene-Tab aggregiert MAP- und SPaT-Nachrichten zur aktuellen
+        Wiedergabeposition und zeigt den Echtzeit-Zustand aller Kreuzungen
+        sowie aktiver Priorisierungsanfragen.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 8</div>
+        <div class="ss-desc">Szene-Tab mit Kreuzungstabelle, Signalgruppen-Prognose und Request-Liste</div>
+        <div class="ss-todo">📷 Bitte Screenshot anfertigen: Szene-Tab während der Wiedergabe (muss SPATEM/SREM-Nachrichten enthalten)</div>
+      </div>
+
+      <h4>Kreuzungstabelle</h4>
+      <table>
+        <tr><th>Spalte</th><th>Inhalt</th></tr>
+        <tr><td>Intersection</td><td>Kreuzungs-ID</td></tr>
+        <tr><td>Revision</td><td>MAP-Revisionsnummer</td></tr>
+        <tr><td>Signalgruppen</td><td>Anzahl aktiver Signalgruppen</td></tr>
+        <tr><td>Prognose</td><td>Konfidenz der Phasenprognose (high/medium/low)</td></tr>
+        <tr><td>30s Timeline</td><td>Symbolische 30-Sekunden-Vorschau der Signalphasen</td></tr>
+      </table>
+
+      <h4>Timeline-Legende</h4>
+      <table>
+        <tr><th>Symbol</th><th>Phase</th></tr>
+        <tr><td><code>G</code></td><td>Freigabe (protected-Movement-Allowed)</td></tr>
+        <tr><td><code>R</code></td><td>Halt (stop-And-Remain)</td></tr>
+        <tr><td><code>C</code></td><td>Clearance (protected-clearance)</td></tr>
+        <tr><td><code>P</code></td><td>Vorlauf (pre-Movement)</td></tr>
+        <tr><td><code>!</code></td><td>Konflikt (caution-Conflicting-Traffic)</td></tr>
+        <tr><td><code>?</code></td><td>Unbekannte Phase</td></tr>
+      </table>
+
+      <h4>Request-Tabelle</h4>
+      <table>
+        <tr><th>Spalte</th><th>Inhalt</th></tr>
+        <tr><td>Request</td><td>Request-ID</td></tr>
+        <tr><td>Station</td><td>Anfragende Station</td></tr>
+        <tr><td>Prio</td><td>Prioritätsstufe (importanceLevel)</td></tr>
+        <tr><td>Status</td><td>Betriebsstatus (pending / acknowledged / granted / rejected / timeout)</td></tr>
+        <tr><td>Lanes</td><td>Ein- und Ausfahrtsspuren</td></tr>
+      </table>
+
+      <h4>Request-Farblegende</h4>
+      <p>Die Statusfarben in der Tabelle und auf der Karte:</p>
+      <table>
+        <tr><th>Farbe</th><th>Status</th></tr>
+        <tr><td><span style="display:inline-block;width:14px;height:14px;background:#0969da;border-radius:3px;vertical-align:middle;"></span> Blau</td><td>pending</td></tr>
+        <tr><td><span style="display:inline-block;width:14px;height:14px;background:#e3a000;border-radius:3px;vertical-align:middle;"></span> Gelb</td><td>acknowledged</td></tr>
+        <tr><td><span style="display:inline-block;width:14px;height:14px;background:#2da44e;border-radius:3px;vertical-align:middle;"></span> Grün</td><td>granted</td></tr>
+        <tr><td><span style="display:inline-block;width:14px;height:14px;background:#cf222e;border-radius:3px;vertical-align:middle;"></span> Rot</td><td>rejected</td></tr>
+        <tr><td><span style="display:inline-block;width:14px;height:14px;background:#6e0000;border-radius:3px;vertical-align:middle;"></span> Dunkelrot</td><td>timeout</td></tr>
+      </table>
+
+      <!-- Tab: ETA Analyse -->
+      <h3>Tab „ETA Analyse"</h3>
+      <p>
+        Der ETA-Tab stellt die geschätzte Restzeit bis zur MAP-Haltelinie
+        grafisch dar – synchronisiert mit der Wiedergabeposition.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 9</div>
+        <div class="ss-desc">ETA-Analyse-Tab mit Restzeit-Kurve, Geschwindigkeitskurve und SREM/SSEM-Ereignislinien</div>
+        <div class="ss-todo">📷 Bitte Screenshot anfertigen: ETA-Tab anklicken – Request/Merge-Spur in Combo auswählen</div>
+      </div>
+
+      <h4>Graphelemente</h4>
+      <table>
+        <tr><th>Element</th><th>Farbe</th><th>Bedeutung</th></tr>
+        <tr><td>ETA-Kurve</td><td>Blau</td><td>Restzeit bis Haltelinie in Sekunden</td></tr>
+        <tr><td>Geschwindigkeitskurve</td><td>Grün</td><td>Geglättete Fahrzeuggeschwindigkeit</td></tr>
+        <tr><td>SREM-Ereignislinien</td><td>Vertikal</td><td>Zeitpunkte von Priorisierungsanfragen</td></tr>
+        <tr><td>SSEM-Statusbänder</td><td>Farbig</td><td>Status-Intervalle der Kreuzungsantwort</td></tr>
+        <tr><td>Diagnosemarker</td><td>Symbole</td><td>ETA-Sprung, fehlendes SSEM, spätes granted, Stopline-Passage ohne granted</td></tr>
+      </table>
+
+      <p>
+        Die Dropdown-Liste <strong>„Request/Merge-Spur"</strong> erlaubt die Auswahl
+        der anzuzeigenden Stations- oder Merge-ID.
+      </p>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="issue-panel" class="content">
+    <div class="section">
+      <h2>Priorisierungsfehler-Panel</h2>
+      <p>
+        Das Panel rechts neben der Karte listet automatisch erkannte
+        Priorisierungsfehler auf. Es ist nur sichtbar, wenn Fehler vorhanden sind.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 10</div>
+        <div class="ss-desc">Priorisierungsfehler-Panel mit Fehlerliste und aktiven Filtern</div>
+        <div class="ss-todo">📷 Bitte Screenshot anfertigen: Sitzung mit SREM/SSEM laden → Panel sollte Fehler zeigen</div>
+      </div>
+
+      <h3>Fehlerfilter</h3>
+      <table>
+        <tr><th>Filter</th><th>Anzeige</th></tr>
+        <tr><td>Alle</td><td>Alle erkannten Priorisierungsfehler</td></tr>
+        <tr><td>Nur kritisch</td><td>Nur Fehler mit Schweregrad <em>critical</em></td></tr>
+        <tr><td>Aktuelle Kreuzung</td><td>Fehler nur für die aktuell sichtbare Kreuzung</td></tr>
+      </table>
+      <p>
+        Der zweite Dropdown <strong>„Kreuzung"</strong> grenzt die Liste auf eine
+        spezifische Kreuzungs-ID ein.
+      </p>
+
+      <h3>Navigation über Fehler</h3>
+      <p>
+        Ein Klick auf einen Eintrag in der Fehlerliste springt die Wiedergabe
+        automatisch zum Zeitpunkt des Fehlers und markiert die betroffene Nachricht
+        in der Tabelle. Alternativ können die Schaltflächen
+        <strong>„Fehler zurück"</strong> / <strong>„Nächster Fehler"</strong>
+        in der Wiedergabesteuerung genutzt werden.
+      </p>
+
+      <h3>Panel ein-/ausklappen</h3>
+      <p>
+        Mit der Schaltfläche <strong>„Einklappen"</strong> kann das Panel ausgeblendet
+        werden, um der Karte mehr Breite zu geben.
+      </p>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="wiedergabe" class="content">
+    <div class="section">
+      <h2>Wiedergabesteuerung</h2>
+      <p>
+        Die Wiedergabesteuerung am unteren Fensterrand steuert die zeitgesteuerte
+        Simulation der V2X-Nachrichtenfolge.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 11</div>
+        <div class="ss-desc">Wiedergabesteuerung während aktiver Wiedergabe</div>
+        <div class="ss-todo">📷 Bitte Screenshot anfertigen: Nur die Steuerleiste am unteren Rand – Wiedergabe läuft</div>
+      </div>
+
+      <table>
+        <tr><th>Element</th><th>Funktion</th></tr>
+        <tr><td><strong>Play</strong></td><td>Startet oder setzt die Wiedergabe fort</td></tr>
+        <tr><td><strong>Pause</strong></td><td>Hält die Wiedergabe an (Position bleibt erhalten)</td></tr>
+        <tr><td><strong>Stop</strong></td><td>Beendet die Wiedergabe und setzt auf den Anfang zurück</td></tr>
+        <tr><td><strong>Nur Problemstellen</strong></td><td>Wenn aktiviert, springt die Wiedergabe nur zu Zeitpunkten mit erkannten Priorisierungsfehlern</td></tr>
+        <tr><td><strong>Fehler zurück / Nächster Fehler</strong></td><td>Springt zum vorherigen bzw. nächsten Priorisierungsfehler-Zeitpunkt</td></tr>
+        <tr><td><strong>Zeitachsen-Schieberegler</strong></td><td>Manuelle Positionierung (Ziehen oder Klicken)</td></tr>
+        <tr><td><strong>Geschwindigkeit</strong></td><td>Wiedergabegeschwindigkeit: 0.1×, 0.5×, 1×, 2×, 5×, 10×</td></tr>
+        <tr><td><strong>Zeitanzeige</strong></td><td>Aktuelle Position und Gesamtdauer im Format <code>MM:SS.t / MM:SS.t</code></td></tr>
+      </table>
+
+      <div class="callout tip">
+        <strong>Tipp</strong>
+        Für eine detaillierte Analyse empfiehlt sich zunächst die Geschwindigkeit
+        <strong>1×</strong> oder <strong>0.5×</strong>. Zur schnellen Übersicht
+        eignet sich <strong>5×</strong> oder <strong>10×</strong>.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="pcap-laden" class="content">
+    <div class="section">
+      <h2>Arbeitsablauf: PCAP-Datei laden</h2>
+
+      <h3>Methode 1: Dateidialog</h3>
+      <ol class="steps">
+        <li>Schaltfläche <strong>„PCAP laden"</strong> in der Werkzeugleiste klicken.</li>
+        <li>Im Dateidialog eine oder mehrere <code>.pcap</code>/<code>.pcapng</code>/<code>.cap</code>-Dateien auswählen.</li>
+        <li>Auf <strong>„Öffnen"</strong> klicken. Der Ladebalken in der Statusleiste zeigt den Fortschritt.</li>
+        <li>Nach erfolgreichem Laden werden Statistiken im Übersichts-Panel und Nachrichten in der Tabelle angezeigt.</li>
+      </ol>
+
+      <h3>Methode 2: Drag &amp; Drop</h3>
+      <ol class="steps">
+        <li>Eine oder mehrere PCAP-Dateien im Windows-Explorer auswählen.</li>
+        <li>Die Dateien auf das PCAP2KML-Player-Fenster ziehen und loslassen.</li>
+        <li>Der Parse-Vorgang startet automatisch.</li>
+      </ol>
+
+      <h3>Methode 3: Letzte Sitzung</h3>
+      <ol class="steps">
+        <li>Schaltfläche <strong>„Letzte Sitzung"</strong> klicken.</li>
+        <li>Die zuletzt geladenen Dateien werden automatisch erneut geparst.</li>
+      </ol>
+
+      <div class="callout warn">
+        <strong>Hinweis: Mehrere Dateien</strong>
+        Werden mehrere Dateien geladen (z.&nbsp;B. TXA + RXA eines Feldtests),
+        sollte die <strong>Gemergte Sicht</strong> aktiviert werden, um
+        Doppel-Darstellungen zu vermeiden.
+      </div>
+
+      <h3>Laden abbrechen</h3>
+      <p>
+        Ein laufender Parse-Vorgang kann jederzeit mit <strong>„Laden abbrechen"</strong>
+        unterbrochen werden. Bereits geparste Pakete werden verworfen.
+      </p>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="filter-anwenden" class="content">
+    <div class="section">
+      <h2>Arbeitsablauf: Filter anwenden</h2>
+
+      <h3>Nachrichtentypen filtern</h3>
+      <ol class="steps">
+        <li>In der Filter-Zeile die gewünschten Typ-Checkboxen aktivieren oder deaktivieren.</li>
+        <li>Karte, Tabelle und Wiedergabe aktualisieren sich sofort.</li>
+      </ol>
+
+      <h3>Auf einzelne Station fokussieren</h3>
+      <ol class="steps">
+        <li>In der Stationsliste die gewünschte Station anklicken.</li>
+        <li>Für mehrere Stationen: <kbd>Ctrl</kbd>+Klick für einzelne Auswahl oder <kbd>Shift</kbd>+Klick für Bereich.</li>
+        <li>Karte zeigt nur Nachrichten der gewählten Station(en).</li>
+        <li>Auswahl aufheben: Alle Stationen abwählen → alle werden wieder angezeigt.</li>
+      </ol>
+
+      <h3>Nur Priorisierungsnachrichten</h3>
+      <ol class="steps">
+        <li>Alle Checkboxen deaktivieren.</li>
+        <li>Nur <strong>SREM</strong> und <strong>SSEM</strong> aktivieren.</li>
+        <li>Optional: Gemergte Sicht aktivieren, falls TXA+RXA geladen.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="wiedergabe-workflow" class="content">
+    <div class="section">
+      <h2>Arbeitsablauf: Wiedergabe nutzen</h2>
+
+      <ol class="steps">
+        <li>PCAP-Datei laden (siehe oben).</li>
+        <li>Filter nach Bedarf einstellen (z.&nbsp;B. nur CAM + SREM).</li>
+        <li><strong>Play</strong> drücken – Fahrzeugpositionen bewegen sich auf der Karte.</li>
+        <li>Geschwindigkeit anpassen: Für Überblick <strong>5×</strong>, für Detailanalyse <strong>0.5×</strong>.</li>
+        <li>Zum gewünschten Zeitpunkt per Schieberegler navigieren.</li>
+        <li>Interessante Nachricht in der Tabelle anklicken → <em>Details</em>-Tab öffnet sich.</li>
+        <li>Szene-Tab für Kreuzungsstatus und Signalprognose öffnen.</li>
+      </ol>
+
+      <div class="callout tip">
+        <strong>Problem-Replay-Modus</strong>
+        Checkbox <strong>„Nur Problemstellen"</strong> aktivieren: Die Wiedergabe
+        überspringt fehlerfreie Zeitbereiche automatisch und springt direkt zu
+        erkannten Priorisierungsproblemen. Ideal für schnelle Diagnosen in langen Captures.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="fehler-analysieren" class="content">
+    <div class="section">
+      <h2>Arbeitsablauf: Priorisierungsfehler analysieren</h2>
+
+      <ol class="steps">
+        <li>PCAP-Datei(en) mit SREM/SSEM-Inhalt laden.</li>
+        <li>Im Priorisierungsfehler-Panel werden erkannte Fehler automatisch aufgelistet.</li>
+        <li>Fehlerliste nach Schwere oder Kreuzung filtern (Dropdown oben im Panel).</li>
+        <li>Auf einen Fehlereintrag klicken → Wiedergabe springt zum Fehlerzeitpunkt.</li>
+        <li>Im <em>Szene</em>-Tab den Request-Status und die Signalgruppen-Prognose prüfen.</li>
+        <li>Im <em>ETA-Analyse</em>-Tab den Verlauf der Restzeit und SSEM-Antworten betrachten.</li>
+        <li>Mit <strong>„Fehler zurück"</strong> / <strong>„Nächster Fehler"</strong> chronologisch durch alle Fehler navigieren.</li>
+        <li>Fehler exportieren für Bericht (siehe unten).</li>
+      </ol>
+
+      <h3>Erkannte Fehlertypen</h3>
+      <table>
+        <tr><th>Fehlertyp</th><th>Bedeutung</th></tr>
+        <tr><td>Timeout ohne SSEM</td><td>SREM wurde gesendet, aber keine SSEM-Antwort empfangen</td></tr>
+        <tr><td>Verspätetes granted</td><td>granted-Status kam nach der erwarteten Ankunft an der Kreuzung</td></tr>
+        <tr><td>ETA-Sprung</td><td>Die ETA-Schätzung hat sich sprunghaft um mehr als 5 Sekunden geändert</td></tr>
+        <tr><td>Fehlendes SSEM</td><td>Für einen aktiven Request fehlen SSEM-Updates über längeren Zeitraum</td></tr>
+        <tr><td>Stopline-Passage ohne granted</td><td>Fahrzeug hat Haltelinie passiert, ohne granted erhalten zu haben</td></tr>
+        <tr><td>Überholte Anfrage</td><td>Request ist abgelaufen bevor er beantwortet wurde</td></tr>
+        <tr><td>Uhr-Skew-Warnung</td><td>Zeitstempel-Abweichung zwischen TXA und RXA überschreitet Schwellwert</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="eta-analyse" class="content">
+    <div class="section">
+      <h2>Arbeitsablauf: ETA-Analyse</h2>
+
+      <ol class="steps">
+        <li>PCAP mit SREM/SSEM und CAM laden.</li>
+        <li>Tab <strong>„ETA Analyse"</strong> klicken.</li>
+        <li>Im Dropdown <strong>„Request/Merge-Spur"</strong> die gewünschte Station oder Merge-ID auswählen.</li>
+        <li>Graph zeigt: blaue ETA-Kurve (Restzeit), grüne Geschwindigkeitskurve, vertikale SREM-Linien, farbige SSEM-Bänder.</li>
+        <li>Diagnosemarker identifizieren Problemstellen (ETA-Sprünge, fehlendes granted usw.).</li>
+        <li>Wiedergabe parallel laufen lassen – die Cursor-Position im Graphen bewegt sich mit.</li>
+      </ol>
+
+      <div class="callout info">
+        <strong>Interpretation</strong>
+        Eine gleichmäßig fallende ETA-Kurve ohne Sprünge bei konsistent
+        hoher Fahrzeuggeschwindigkeit und einem frühen <em>granted</em>-Band
+        ist das Zeichen einer funktionierenden Priorisierung.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="kml-export" class="content">
+    <div class="section">
+      <h2>Arbeitsablauf: KML exportieren</h2>
+
+      <ol class="steps">
+        <li>PCAP laden und ggf. Filter setzen (nur die zu exportierenden Typen/Stationen).</li>
+        <li>Schaltfläche <strong>„KML exportieren"</strong> klicken.</li>
+        <li>Zielordner im Dialog auswählen.</li>
+        <li>Die Anwendung erzeugt pro Station eine KML-Datei (<code>station_&lt;ID&gt;.kml</code>).</li>
+        <li>Die Dateien können direkt in <strong>Google Earth</strong> oder <strong>QGIS</strong> geöffnet werden.</li>
+      </ol>
+
+      <h3>KML-Inhalt</h3>
+      <table>
+        <tr><th>Element</th><th>Beschreibung</th></tr>
+        <tr><td>Placemarks</td><td>Jede Nachricht als georeferenzierter Punkt mit Zeitstempel und Typ</td></tr>
+        <tr><td>LineString-Trajektorie</td><td>Verbindet alle Positionen einer Station als Linie</td></tr>
+        <tr><td>Farben</td><td>Stationsspezifische Farben für Trajektorien; typbezogene Farben für Placemarks</td></tr>
+        <tr><td>ASN.1-Provenienz</td><td>Verwendete Schema-Versionen im KML-Dokumentkopf</td></tr>
+      </table>
+
+      <div class="callout tip">
+        <strong>Tipp</strong>
+        Die aktiven Filter (Typen, Stationen) werden beim Export berücksichtigt.
+        Für einen vollständigen Export alle Filter deaktivieren.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="issues-export" class="content">
+    <div class="section">
+      <h2>Arbeitsablauf: Fehler exportieren</h2>
+
+      <ol class="steps">
+        <li>Sitzung mit erkannten Priorisierungsfehlern laden.</li>
+        <li>Schaltfläche <strong>„Fehler exportieren"</strong> klicken.</li>
+        <li>Zielordner auswählen.</li>
+        <li>Die Anwendung erzeugt mehrere Dateien im gewählten Ordner.</li>
+      </ol>
+
+      <h3>Exportierte Dateien</h3>
+      <table>
+        <tr><th>Datei</th><th>Format</th><th>Verwendung</th></tr>
+        <tr><td><code>prioritization_issues.csv</code></td><td>CSV (lesbar)</td><td>Tabellenkalkulationen, manuelle Auswertung</td></tr>
+        <tr><td><code>prioritization_issues_machine.csv</code></td><td>CSV (Maschine)</td><td>Automatisierte Weiterverarbeitung</td></tr>
+        <tr><td><code>prioritization_issues.json</code></td><td>JSON</td><td>API-Integration, Skripte</td></tr>
+        <tr><td><code>prioritization_issues_report.txt</code></td><td>Textreport</td><td>Prüfberichte, Dokumentation</td></tr>
+      </table>
+
+      <h3>CSV-Felder</h3>
+      <table>
+        <tr><th>Feld</th><th>Beschreibung</th></tr>
+        <tr><td>Zeitstempel</td><td>Zeitpunkt des Fehlers</td></tr>
+        <tr><td>Fehlertyp</td><td>Kategorie des Problems</td></tr>
+        <tr><td>Schweregrad</td><td>critical / warning / info</td></tr>
+        <tr><td>Kreuzung</td><td>Betroffene Kreuzungs-ID</td></tr>
+        <tr><td>Request-ID / Sequenznummer</td><td>SREM-Kennung</td></tr>
+        <tr><td>Station</td><td>Betroffene Stations-ID</td></tr>
+        <tr><td>Verzögerung [s]</td><td>Gemessene Zeitverzögerung</td></tr>
+        <tr><td>Beschreibung</td><td>Lesbarer Fehlertext</td></tr>
+        <tr><td>Quelldateien</td><td>Herkunft der Nachrichten</td></tr>
+        <tr><td>Merge-Gruppe / Konfidenz</td><td>Merge-Informationen (falls vorhanden)</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="schemas" class="content">
+    <div class="section">
+      <h2>ASN.1-Schemas aktualisieren</h2>
+      <p>
+        PCAP2KML Player nutzt ASN.1-Schemadateien zur Dekodierung von ITS-PDUs
+        nach ETSI-Standard. Diese können auf dem neuesten Stand gehalten werden.
+      </p>
+
+      <ol class="steps">
+        <li>Internetverbindung sicherstellen.</li>
+        <li>Schaltfläche <strong>„ASN.1-Schemas aktualisieren"</strong> klicken.</li>
+        <li>Die Anwendung lädt aktualisierte Schemadateien aus dem Git-Repository.</li>
+        <li>Nach dem Update sollte die Sitzung neu geladen werden, damit neue Felder dekodiert werden.</li>
+      </ol>
+
+      <div class="callout warn">
+        <strong>Hinweis</strong>
+        Schema-Updates können bei bestehenden Sitzungen zu geänderten Feldbezeichnungen
+        oder zusätzlichen Feldern führen. KML-Exporte sollten nach einem Update
+        erneut durchgeführt werden.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="layout" class="content">
+    <div class="section">
+      <h2>Layout anpassen</h2>
+      <p>
+        Die Anwendung unterstützt drei Layoutmodi, die über die Dropdown-Liste
+        „Layout" in der Werkzeugleiste eingestellt werden.
+      </p>
+
+      <table>
+        <tr><th>Modus</th><th>Beschreibung</th></tr>
+        <tr><td><strong>Auto</strong></td><td>Wechselt automatisch basierend auf der Fensterbreite (Schwellwert: 1320 px)</td></tr>
+        <tr><td><strong>Desktop</strong></td><td>Alle Spalten sichtbar, volle Schaltflächentexte, optimiert für große Bildschirme</td></tr>
+        <tr><td><strong>Kompakt</strong></td><td>Reduzierte Spalten (nur Timestamp, Station, Typ, Speed), kürzere Labels für Laptops</td></tr>
+      </table>
+
+      <p>
+        Der Splitter zwischen Karte und Nachrichtentabelle lässt sich durch
+        Ziehen der vertikalen Trennlinie verschieben. Ebenso kann der
+        horizontale Splitter im rechten Panel (Tabelle/Kontext-Tabs)
+        angepasst werden.
+      </p>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="nachrichtentypen" class="content">
+    <div class="section">
+      <h2>Referenz: Nachrichtentypen</h2>
+      <table>
+        <tr><th>Typ</th><th>Vollbezeichnung</th><th>Standard</th><th>Inhalt</th></tr>
+        <tr>
+          <td><span class="badge badge-cam">CAM</span></td>
+          <td>Cooperative Awareness Message</td>
+          <td>ETSI EN 302 637-2</td>
+          <td>Fahrzeugposition, Geschwindigkeit, Richtung, Fahrzeugtyp</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-denm">DENM</span></td>
+          <td>Decentralized Environmental Notification Message</td>
+          <td>ETSI EN 302 637-3</td>
+          <td>Gefahrenereignisse, Baustellen, Unfälle</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-srem">SREM</span></td>
+          <td>Signal Request Message</td>
+          <td>ETSI TS 103 301</td>
+          <td>Priorisierungsanfrage: Request-ID, Wichtigkeit, Spuren, ETA</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-ssem">SSEM</span></td>
+          <td>Signal Status Message</td>
+          <td>ETSI TS 103 301</td>
+          <td>Kreuzungsantwort: Status (pending/granted/rejected), Sequenz</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-mapem">MAPEM</span></td>
+          <td>MAP Extended Message</td>
+          <td>SAE J2735 / ISO TS 19091</td>
+          <td>Kreuzungsgeometrie: Fahrspuren, Stoplinien, Verbindungen</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-spatem">SPATEM</span></td>
+          <td>Signal Phase and Timing Message</td>
+          <td>SAE J2735 / ISO TS 19091</td>
+          <td>Aktueller Ampelzustand, Phasenprognose für alle Signalgruppen</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-nmea">NMEA</span></td>
+          <td>NMEA 0183 GNSS</td>
+          <td>NMEA 0183</td>
+          <td>GPS-Rohsätze: Position, Geschwindigkeit, Qualität</td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="fehlercodes" class="content">
+    <div class="section">
+      <h2>Referenz: Fehlercodes &amp; Schweregrade</h2>
+      <table>
+        <tr><th>Schweregrad</th><th>Bedeutung</th><th>Farbe</th></tr>
+        <tr>
+          <td><strong>critical</strong></td>
+          <td>Funktionsrelevanter Fehler der Priorisierung (z.&nbsp;B. kein granted erhalten)</td>
+          <td><span style="background:#ffe0e0;color:#7a0a15;padding:2px 8px;border-radius:4px;">Rot</span></td>
+        </tr>
+        <tr>
+          <td><strong>warning</strong></td>
+          <td>Auffälligkeit ohne direkte Funktionsbeeinträchtigung (z.&nbsp;B. ETA-Sprung)</td>
+          <td><span style="background:#fff3d6;color:#7a4f00;padding:2px 8px;border-radius:4px;">Gelb</span></td>
+        </tr>
+        <tr>
+          <td><strong>info</strong></td>
+          <td>Informative Diagnosemeldung</td>
+          <td><span style="background:#dff0ff;color:#0550ae;padding:2px 8px;border-radius:4px;">Blau</span></td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="glossar" class="content">
+    <div class="section">
+      <h2>Glossar</h2>
+      <table>
+        <tr><th>Begriff</th><th>Erläuterung</th></tr>
+        <tr><td><strong>V2X</strong></td><td>Vehicle-to-Everything – Kommunikation zwischen Fahrzeug und Infrastruktur/anderen Fahrzeugen</td></tr>
+        <tr><td><strong>ITS-PDU</strong></td><td>Intelligent Transport Systems Protocol Data Unit – Datenpaket nach ETSI-Standard</td></tr>
+        <tr><td><strong>PCAP</strong></td><td>Packet Capture – Aufzeichnungsformat für Netzwerkpakete</td></tr>
+        <tr><td><strong>ASN.1</strong></td><td>Abstract Syntax Notation One – Beschreibungssprache für ITS-Nachrichten</td></tr>
+        <tr><td><strong>TXA</strong></td><td>Transmit-seitige Aufzeichnung (Fahrzeugseite)</td></tr>
+        <tr><td><strong>RXA</strong></td><td>Receive-seitige Aufzeichnung (Infrastrukturseite)</td></tr>
+        <tr><td><strong>Merge</strong></td><td>Zusammenführung von TXA/RXA-Beobachtungen derselben Nachricht</td></tr>
+        <tr><td><strong>Station-ID</strong></td><td>Eindeutige numerische Kennung einer V2X-Einheit</td></tr>
+        <tr><td><strong>MAP</strong></td><td>Kreuzungsgeometrie-Nachricht (MAPEM)</td></tr>
+        <tr><td><strong>SPaT</strong></td><td>Signalzustandsnachricht (SPATEM)</td></tr>
+        <tr><td><strong>SRM/SREM</strong></td><td>Signal Request Message – Priorisierungsanfrage eines Fahrzeugs</td></tr>
+        <tr><td><strong>SSM/SSEM</strong></td><td>Signal Status Message – Kreuzungsantwort auf Priorisierungsanfrage</td></tr>
+        <tr><td><strong>ETA</strong></td><td>Estimated Time of Arrival – geschätzte Ankunftszeit an der Haltelinie</td></tr>
+        <tr><td><strong>KML</strong></td><td>Keyhole Markup Language – Geodatenformat für Google Earth und QGIS</td></tr>
+        <tr><td><strong>granted</strong></td><td>Status: Priorisierungsanfrage wurde gewährt</td></tr>
+        <tr><td><strong>rejected</strong></td><td>Status: Priorisierungsanfrage wurde abgelehnt</td></tr>
+        <tr><td><strong>timeout</strong></td><td>Status: Keine Antwort innerhalb der erwarteten Zeit</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="fehlerbehebung" class="content">
+    <div class="section">
+      <h2>Fehlerbehebung</h2>
+
+      <h3>Häufige Probleme</h3>
+      <table>
+        <tr><th>Problem</th><th>Ursache</th><th>Lösung</th></tr>
+        <tr>
+          <td>„Fehlende Abhängigkeiten"-Dialog beim Start</td>
+          <td><code>scapy</code> oder <code>simplekml</code> nicht installiert</td>
+          <td><code>pip install scapy simplekml</code> ausführen</td>
+        </tr>
+        <tr>
+          <td>Karte bleibt leer / grau</td>
+          <td>Keine Internetverbindung für Kartenkacheln</td>
+          <td>Internetverbindung prüfen; ggf. anderen Kachel-Layer wählen</td>
+        </tr>
+        <tr>
+          <td>Keine Nachrichten in der Tabelle</td>
+          <td>Alle Filter deaktiviert oder keine V2X-Pakete in PCAP</td>
+          <td>Filter-Zeile prüfen; Datei auf V2X-Inhalt prüfen</td>
+        </tr>
+        <tr>
+          <td>Priorisierungsfehler-Panel fehlt</td>
+          <td>Keine SREM/SSEM-Nachrichten in der Sitzung</td>
+          <td>PCAP mit SREM/SSEM-Inhalt laden</td>
+        </tr>
+        <tr>
+          <td>ETA-Tab zeigt keinen Graph</td>
+          <td>Keine Request/Merge-Spur verfügbar oder keine SREM</td>
+          <td>SREM in Filtern aktivieren; andere Spur im Dropdown wählen</td>
+        </tr>
+        <tr>
+          <td>KML-Export-Schaltfläche ausgegraut</td>
+          <td>Noch keine Sitzung geladen</td>
+          <td>Erst PCAP laden</td>
+        </tr>
+        <tr>
+          <td>Anwendung friert beim Laden ein</td>
+          <td>Sehr große PCAP-Datei (&gt; 500 MB)</td>
+          <td>Datei aufteilen oder Ladevorgang auf Hintergrundbetrieb warten</td>
+        </tr>
+      </table>
+
+      <div class="callout danger">
+        <strong>Unerwarteter Fehler</strong>
+        Erscheint ein Fehlerdialog „Unerwarteter Fehler", bitte den vollständigen
+        Stack-Trace aus der Konsole sichern und als Issue melden.
+        Die Anwendung bleibt nach dem Dialog weiter bedienbar.
+      </div>
+
+      <h3>Log-Ausgabe aktivieren</h3>
+      <p>
+        Für erweiterte Diagnoseinformationen die Anwendung aus dem Terminal starten.
+        Alle Log-Einträge erscheinen im Format <code>HH:MM:SS [LEVEL] Modul: Nachricht</code>.
+      </p>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <div style="background:var(--navy);color:#6a829c;padding:24px 56px;font-size:12px;margin-left:0;">
+    PCAP2KML Player · Benutzerhandbuch v1.0 · SWARCO ITS ·
+    Erstellt mit Claude Code ·
+    <span style="color:#4a6280;">Technische Fragen: nemeson@gmail.com</span>
+  </div>
+
+</div><!-- /.main -->
+
+<script>
+  // Highlight active nav link on scroll
+  const sections = document.querySelectorAll('section[id]');
+  const navLinks = document.querySelectorAll('.sidebar nav a');
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(a => a.classList.remove('active'));
+        const active = document.querySelector(`.sidebar nav a[href="#${entry.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>

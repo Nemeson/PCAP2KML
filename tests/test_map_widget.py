@@ -527,6 +527,13 @@ class _CallbackPage:
             self.callbacks.append(callback)
 
 
+class _NoSliceMessages(list):
+    def __getitem__(self, item):
+        if isinstance(item, slice):
+            raise AssertionError("playback rendering must not copy message slices")
+        return super().__getitem__(item)
+
+
 def _render_payload(captured_scripts: list[str]) -> dict:
     script = next(script for script in captured_scripts if script.startswith("applyRenderPayload("))
     return json.loads(script.removeprefix("applyRenderPayload(").removesuffix(")"))
@@ -761,6 +768,39 @@ def test_render_playback_slice_limits_trail_to_recent_points(monkeypatch):
     assert [52.009, 13.009] in coords
 
 
+def test_render_playback_slice_does_not_copy_growing_message_prefix(monkeypatch):
+    captured_scripts = []
+
+    def fake_run_js(self, script):
+        captured_scripts.append(script)
+
+    monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
+    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
+
+    widget = MapWidget()
+    widget._station_color_map = {}
+    widget._station_index = 0
+    widget._follow_station_id = None
+    messages = _NoSliceMessages(
+        [
+            V2xMessage(
+                timestamp=datetime(2026, 4, 18, 12, 0, index, tzinfo=timezone.utc),
+                station_id="car-1",
+                msg_type=MessageType.CAM,
+                latitude=52.0 + (index / 1000.0),
+                longitude=13.0 + (index / 1000.0),
+            )
+            for index in range(3)
+        ]
+    )
+
+    widget.render_playback_slice(messages, 1)
+
+    payload = _render_payload(captured_scripts)
+    assert payload["markers"][-1]["lat"] == 52.001
+    assert [52.002, 13.002] not in payload["trajectories"][-1]["coords"]
+
+
 def test_update_playback_position_follows_selected_station(monkeypatch):
     captured_scripts = []
 
@@ -902,6 +942,9 @@ def test_load_messages_skips_far_outliers_when_infrastructure_anchor_exists(monk
 def test_leaflet_html_exposes_incremental_sync_helpers():
     assert "L.map('map', {preferCanvas: true})" in LEAFLET_HTML
     assert "applyRenderPayload(payload)" in LEAFLET_HTML
+    assert "function setLayerPopup(layer, popup)" in LEAFLET_HTML
+    assert "function disposeLayer(layer)" in LEAFLET_HTML
+    assert "existingTooltip.setContent(tooltip)" in LEAFLET_HTML
     assert "syncMarkers(activeIds)" in LEAFLET_HTML
     assert "syncTrajectories(activeIds)" in LEAFLET_HTML
     assert "syncInfrastructure(activeIds)" in LEAFLET_HTML

@@ -106,3 +106,11 @@ langsamen Notebooks ein grosses Payload noch im WebView verarbeitet wird, wird
 nicht jede Zwischenversion nachgereicht; stattdessen bleibt nur das neueste
 Payload in der Warteschlange. Das verhindert, dass QtWebEngine nach einigen
 Sekunden Wiedergabe durch eine anwachsende JavaScript-Queue einfriert.
+
+Zusaetzlich kopiert der Playback-Renderer keine wachsenden Nachrichten-Prefixes
+mehr. Er arbeitet mit Indexgrenzen auf der bestehenden Nachrichtenliste. Das ist
+wichtig fuer lange TXA/RXA-Merges, weil sonst alle paar Sekunden neue grosse
+Python-Listen und JSON-Zwischenobjekte entstehen. Wiederverwendete Leaflet-Layer
+aktualisieren Popups und Tooltips per `setContent`; beim Entfernen werden
+Events, Popups und Tooltips geloest, damit der QtWebEngine-Prozess keine alten
+Layer-Objekte ueber laengere Wiedergaben haelt.

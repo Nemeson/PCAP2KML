@@ -61,6 +61,9 @@ Die Kartenlogik ist inzwischen deutlich ueber Marker und einfache Trajektorien h
   damit grosse TXA/RXA-Merges beim Laden nicht durch viele einzelne JavaScript-Aufrufe einfrieren
 - Im Playback werden grosse Karten-Slices gedrosselt und laufende Render-Payloads zusammengefasst,
   damit langsame Notebooks keine wachsende QtWebEngine-Warteschlange aufbauen
+- Playback-Renderings arbeiten mit Indexgrenzen statt mit kopierten Nachrichten-Prefixes;
+  Popups/Tooltips werden in Leaflet wiederverwendet und beim Entfernen explizit geloest,
+  damit die RAM-Nutzung ueber laengere Wiedergaben stabil bleibt
 - MAP-/SPAT-Punktlayer sind standardmaessig deaktiviert
 - SSEM/SSM erzeugt keine Punktmarker oder Trajektorien
 - Connections zeigen per Mouseover den aktiven MovementState und Timing-Felder
@@ -339,7 +342,7 @@ statt automatisch etwas nachzuladen.
 
 Die aktuelle Testsuite deckt Parser, Kartenlogik, Playback, Export, Sicherheitsparser und Szenenmodell breit ab.
 
-- Aktueller Stand: `194 passed`
+- Aktueller Stand: `195 passed`
 - Vorhandene Testbereiche:
   - App-Memory
   - ASN.1-Schema-Update

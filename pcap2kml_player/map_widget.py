@@ -254,10 +254,17 @@ def _point_distance_meters(point_a: tuple[float, float], point_b: tuple[float, f
     return hypot(dx, dy)
 
 
-def _display_anchor_points(messages: list[V2xMessage]) -> list[tuple[float, float]]:
+def _display_anchor_points(
+    messages: list[V2xMessage],
+    *,
+    max_index: Optional[int] = None,
+) -> list[tuple[float, float]]:
     """Return stable infrastructure points used to reject far-away display outliers."""
     anchors: list[tuple[float, float]] = []
-    for msg in messages:
+    end_index = len(messages) if max_index is None else min(max_index + 1, len(messages))
+    for index, msg in enumerate(messages):
+        if index >= end_index:
+            break
         if msg.msg_type not in INFRASTRUCTURE_MESSAGE_COLORS or not _has_display_position(msg):
             continue
         for intersection in _iter_message_intersections(msg):
@@ -658,17 +665,27 @@ def _infrastructure_overlays_for_message(msg: V2xMessage) -> list[dict[str, obje
     return overlays
 
 
-def _infrastructure_overlays_for_messages(messages: list[V2xMessage]) -> list[dict[str, object]]:
+def _infrastructure_overlays_for_messages(
+    messages: list[V2xMessage],
+    *,
+    max_index: Optional[int] = None,
+) -> list[dict[str, object]]:
     """Aggregate the latest MAP/SPAT context per intersection into render overlays."""
     if not messages:
         return []
 
+    end_index = len(messages) if max_index is None else min(max_index + 1, len(messages))
+    if end_index <= 0:
+        return []
+    timeline_position = messages[end_index - 1].timestamp
     latest_map: dict[str, tuple[V2xMessage, dict]] = {}
     latest_spat: dict[str, tuple[V2xMessage, dict]] = {}
-    scene = build_scene_snapshot(messages, messages[-1].timestamp)
+    scene = build_scene_snapshot(messages, timeline_position)
     request_visuals = scene.request_visuals_by_intersection
 
-    for msg in messages:
+    for index, msg in enumerate(messages):
+        if index >= end_index:
+            break
         if msg.msg_type not in INFRASTRUCTURE_MESSAGE_COLORS:
             continue
         for intersection in _iter_message_intersections(msg):
@@ -1085,7 +1102,7 @@ LEAFLET_HTML = """<!DOCTYPE html>
             var group = overlayGroups[layerName] || overlayGroups.markers;
             if (markers[id]) {
                 markers[id].setLatLng([lat, lon]);
-                markers[id].setPopupContent(popup);
+                setLayerPopup(markers[id], popup);
             } else {
                 markers[id] = L.marker([lat, lon], {
                     icon: L.divIcon({
@@ -1094,7 +1111,8 @@ LEAFLET_HTML = """<!DOCTYPE html>
                         iconSize: [12, 12],
                         iconAnchor: [6, 6]
                     })
-                }).addTo(group).bindPopup(popup);
+                }).addTo(group);
+                setLayerPopup(markers[id], popup);
                 markers[id].on('click', function() {
                     if (window.bridge && layerName === 'markers') {
                         window.bridge.onMarkerClicked(stationId);
@@ -1118,12 +1136,42 @@ LEAFLET_HTML = """<!DOCTYPE html>
             return overlayGroups[layerName] || overlayGroups.map;
         }
 
+        function setLayerPopup(layer, popup) {
+            if (!popup) {
+                if (layer.unbindPopup) {
+                    layer.unbindPopup();
+                }
+                return;
+            }
+            var existingPopup = layer.getPopup ? layer.getPopup() : null;
+            if (existingPopup) {
+                existingPopup.setContent(popup);
+            } else {
+                layer.bindPopup(popup);
+            }
+        }
+
+        function disposeLayer(layer) {
+            if (!layer) {
+                return;
+            }
+            if (layer.off) {
+                layer.off();
+            }
+            if (layer.unbindPopup) {
+                layer.unbindPopup();
+            }
+            if (layer.unbindTooltip) {
+                layer.unbindTooltip();
+            }
+        }
+
         function addInfrastructureCircle(id, lat, lon, radius, color, popup, layerName) {
             if (infrastructureLayers[id]) {
                 infrastructureLayers[id].setLatLng([lat, lon]);
                 infrastructureLayers[id].setRadius(radius);
                 infrastructureLayers[id].setStyle({color: color});
-                infrastructureLayers[id].bindPopup(popup);
+                setLayerPopup(infrastructureLayers[id], popup);
             } else {
                 infrastructureLayers[id] = L.circle([lat, lon], {
                     radius: radius,
@@ -1131,15 +1179,26 @@ LEAFLET_HTML = """<!DOCTYPE html>
                     weight: 2,
                     fillColor: color,
                     fillOpacity: 0.12
-                }).addTo(infrastructureGroup(layerName)).bindPopup(popup);
+                }).addTo(infrastructureGroup(layerName));
+                setLayerPopup(infrastructureLayers[id], popup);
             }
         }
 
         function attachHoverTooltip(layer, tooltip, weight, opacity) {
             if (!tooltip) {
+                if (layer.unbindTooltip) {
+                    layer.unbindTooltip();
+                }
+                layer.off('mouseover');
+                layer.off('mouseout');
                 return;
             }
-            layer.bindTooltip(tooltip, {sticky: true});
+            var existingTooltip = layer.getTooltip ? layer.getTooltip() : null;
+            if (existingTooltip) {
+                existingTooltip.setContent(tooltip);
+            } else {
+                layer.bindTooltip(tooltip, {sticky: true});
+            }
             layer.off('mouseover');
             layer.off('mouseout');
             layer.on('mouseover', function() {
@@ -1161,7 +1220,7 @@ LEAFLET_HTML = """<!DOCTYPE html>
                     opacity: opacity || 0.85,
                     dashArray: dashArray || '8 6'
                 });
-                infrastructureLayers[id].bindPopup(popup);
+                setLayerPopup(infrastructureLayers[id], popup);
                 attachHoverTooltip(infrastructureLayers[id], tooltip, weight, opacity);
             } else {
                 infrastructureLayers[id] = L.polyline(coords, {
@@ -1169,7 +1228,8 @@ LEAFLET_HTML = """<!DOCTYPE html>
                     weight: weight || 3,
                     opacity: opacity || 0.85,
                     dashArray: dashArray || '8 6'
-                }).addTo(infrastructureGroup(layerName)).bindPopup(popup);
+                }).addTo(infrastructureGroup(layerName));
+                setLayerPopup(infrastructureLayers[id], popup);
                 attachHoverTooltip(infrastructureLayers[id], tooltip, weight, opacity);
             }
         }
@@ -1207,6 +1267,7 @@ LEAFLET_HTML = """<!DOCTYPE html>
             overlayGroups.map_stoplines.removeLayer(infrastructureLayers[id]);
             overlayGroups.map_requests.removeLayer(infrastructureLayers[id]);
             overlayGroups.spat.removeLayer(infrastructureLayers[id]);
+            disposeLayer(infrastructureLayers[id]);
             delete infrastructureLayers[id];
         }
 
@@ -1402,9 +1463,11 @@ LEAFLET_HTML = """<!DOCTYPE html>
         function clearAll() {
             for (var key in markers) {
                 overlayGroups.markers.removeLayer(markers[key]);
+                disposeLayer(markers[key]);
             }
             for (var key in trajectories) {
                 overlayGroups.trajectories.removeLayer(trajectories[key]);
+                disposeLayer(trajectories[key]);
             }
             for (var key in infrastructureLayers) {
                 removeInfrastructureLayer(key);
@@ -1483,7 +1546,13 @@ class MapWidget(QWebEngineView):
     def load_messages(self, messages: list[V2xMessage]) -> None:
         """Load all messages onto the map: markers, trajectories, and overlays."""
         self._follow_station_id = None
-        self._render_messages(messages, fit_view=True, short_trails=False, clear_first=True)
+        self._render_messages(
+            messages,
+            max_index=None,
+            fit_view=True,
+            short_trails=False,
+            clear_first=True,
+        )
 
     def render_playback_slice(self, messages: list[V2xMessage], current_index: int) -> None:
         """Render only the state visible up to the current playback index."""
@@ -1492,7 +1561,8 @@ class MapWidget(QWebEngineView):
             return
         safe_index = max(0, min(current_index, len(messages) - 1))
         self._render_messages(
-            messages[: safe_index + 1],
+            messages,
+            max_index=safe_index,
             fit_view=False,
             short_trails=True,
             clear_first=False,
@@ -1502,6 +1572,7 @@ class MapWidget(QWebEngineView):
         self,
         messages: list[V2xMessage],
         *,
+        max_index: Optional[int],
         fit_view: bool,
         short_trails: bool,
         clear_first: bool,
@@ -1511,9 +1582,12 @@ class MapWidget(QWebEngineView):
         # Group by station for trajectories
         station_coords: dict[str, list] = {}
         markers_by_id: dict[str, dict[str, object]] = {}
-        display_anchors = _display_anchor_points(messages)
+        end_index = len(messages) if max_index is None else min(max_index + 1, len(messages))
+        display_anchors = _display_anchor_points(messages, max_index=max_index)
 
-        for msg in messages:
+        for index, msg in enumerate(messages):
+            if index >= end_index:
+                break
             if not _has_display_position(msg) or not _is_near_display_anchors(msg, display_anchors):
                 continue
             color = self._color_for_message(msg)
@@ -1545,7 +1619,7 @@ class MapWidget(QWebEngineView):
                 )
 
         infrastructure_payload: list[dict[str, object]] = []
-        for overlay in _infrastructure_overlays_for_messages(messages):
+        for overlay in _infrastructure_overlays_for_messages(messages, max_index=max_index):
             overlay_id = str(overlay["id"])
             layer_name = str(overlay["layer"])
             overlay_color = str(overlay["color"])
