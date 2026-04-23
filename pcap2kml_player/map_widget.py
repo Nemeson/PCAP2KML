@@ -1044,6 +1044,14 @@ LEAFLET_HTML = """<!DOCTYPE html>
 <body>
     <div id="map"></div>
     <script>
+        if (typeof L === 'undefined') {
+            document.getElementById('map').innerHTML =
+                '<div style="font:14px Segoe UI, sans-serif;color:#10233f;padding:18px;">' +
+                '<b>Karte konnte nicht initialisiert werden.</b><br>' +
+                'Leaflet wurde nicht geladen. Bitte Diagnose exportieren oder Karte neu laden.' +
+                '</div>';
+            console.error('Leaflet unavailable; map bootstrap aborted.');
+        } else {
         var map = L.map('map', {preferCanvas: true}).setView([48.0, 11.0], 13);
         map.whenReady(function() {
             map.invalidateSize(false);
@@ -1563,6 +1571,7 @@ LEAFLET_HTML = """<!DOCTYPE html>
         } else {
             console.warn('Qt WebChannel unavailable; marker click follow mode disabled.');
         }
+        }
     </script>
 </body>
 </html>"""
@@ -1583,6 +1592,39 @@ def _asset_base_path() -> Path:
         if candidate.exists():
             return candidate
     return candidates[-1]
+
+
+def _leaflet_runtime_html() -> str:
+    """Return map HTML with local Leaflet embedded when bundled assets are present."""
+    leaflet_dir = _asset_base_path() / "leaflet"
+    css_path = leaflet_dir / "leaflet.css"
+    js_path = leaflet_dir / "leaflet.js"
+    if not css_path.exists() or not js_path.exists():
+        return LEAFLET_HTML
+    try:
+        css = css_path.read_text(encoding="utf-8")
+        js = js_path.read_text(encoding="utf-8")
+    except OSError:
+        return LEAFLET_HTML
+
+    css = css.replace("url(images/", "url(leaflet/images/")
+    js = js.replace("</script>", "<\\/script>")
+    external_block = """    <link rel="stylesheet" href="leaflet/leaflet.css"
+          onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';" />
+    <script src="leaflet/leaflet.js"></script>
+    <script>
+        if (typeof L === 'undefined') {
+            document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\\/script>');
+        }
+    </script>"""
+    inline_block = (
+        "    <!-- Local Leaflet assets embedded for QtWebEngine file-load robustness. -->\n"
+        "    <!-- href=\"leaflet/leaflet.css\" src=\"leaflet/leaflet.js\" "
+        "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js -->\n"
+        f"    <style>\n{css}\n    </style>\n"
+        f"    <script>\n{js}\n    </script>"
+    )
+    return LEAFLET_HTML.replace(external_block, inline_block)
 
 
 class MapBridge(QObject):
@@ -1646,7 +1688,7 @@ class MapWidget(QWebEngineView):
         self._bridge.message_clicked.connect(self._on_marker_clicked)
         self.loadFinished.connect(self._on_load_finished)
 
-        self.setHtml(LEAFLET_HTML, QUrl.fromLocalFile(str(_asset_base_path()) + "/"))
+        self.setHtml(_leaflet_runtime_html(), QUrl.fromLocalFile(str(_asset_base_path()) + "/"))
 
     def _get_station_color(self, station_id: str) -> str:
         """Assign a color to a station ID, creating a new one if needed."""
@@ -1681,7 +1723,7 @@ class MapWidget(QWebEngineView):
         self._render_payload_in_flight = False
         self._queued_render_payload_script = None
         self._render_payload_started_at = None
-        self.setHtml(LEAFLET_HTML, QUrl.fromLocalFile(str(_asset_base_path()) + "/"))
+        self.setHtml(_leaflet_runtime_html(), QUrl.fromLocalFile(str(_asset_base_path()) + "/"))
 
     def load_messages(self, messages: list[V2xMessage]) -> None:
         """Load all messages onto the map: markers, trajectories, and overlays."""
@@ -1997,10 +2039,19 @@ class MapWidget(QWebEngineView):
             logger.warning("Leaflet map page did not finish loading")
             self.map_issue_detected.emit("Karten-WebView konnte nicht geladen werden")
             return
+        self._execute_js(
+            "typeof L !== 'undefined' && typeof map !== 'undefined'",
+            self._on_bootstrap_probe_finished,
+        )
         pending = self._pending_scripts
         self._pending_scripts = []
         for script in pending:
             self._run_js(script)
+
+    def _on_bootstrap_probe_finished(self, result=None) -> None:
+        """Report a visible issue if the page loaded but Leaflet did not bootstrap."""
+        if result is False:
+            self.map_issue_detected.emit("Leaflet wurde geladen, aber die Karte wurde nicht initialisiert")
 
     def _run_js(self, script: str) -> None:
         """Execute JavaScript in the web page."""

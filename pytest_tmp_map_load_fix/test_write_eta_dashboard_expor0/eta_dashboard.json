@@ -1,0 +1,23 @@
+{
+  "metrics": [
+    {
+      "name": "Station",
+      "value": "bus-1"
+    },
+    {
+      "name": "SSEM-Updates",
+      "value": "1"
+    }
+  ],
+  "events": [
+    {
+      "time": "12:00:00.000",
+      "kind": "SSEM",
+      "content": "granted",
+      "details": "SSEM granted",
+      "timestamp": "2026-04-19T12:00:00+00:00",
+      "message_type": "SSEM",
+      "selection_key": "REQ:72:6:86:bus-1:raw"
+    }
+  ]
+}

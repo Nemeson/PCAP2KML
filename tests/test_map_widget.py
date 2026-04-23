@@ -11,6 +11,7 @@ from pcap2kml_player.map_widget import (
     MAP_PERFORMANCE_SAVER,
     MapWidget,
     _asset_base_path,
+    _leaflet_runtime_html,
     _display_anchor_points,
     _has_display_position,
     _is_near_display_anchors,
@@ -511,6 +512,7 @@ def test_leaflet_html_exposes_layer_toggles_and_label_renderer():
     assert "typeof QWebChannel !== 'undefined'" in LEAFLET_HTML
     assert "map.invalidateSize(false)" in LEAFLET_HTML
     assert "function setMapPerformanceMode(mode)" in LEAFLET_HTML
+    assert "Leaflet unavailable; map bootstrap aborted." in LEAFLET_HTML
     assert "map: L.layerGroup()," in LEAFLET_HTML
     assert "spat: L.layerGroup()" in LEAFLET_HTML
     assert "map: L.layerGroup().addTo(map)" not in LEAFLET_HTML
@@ -912,6 +914,15 @@ def test_leaflet_assets_are_bundled_locally():
     base_path = _asset_base_path()
     assert (base_path / "leaflet" / "leaflet.js").exists()
     assert (base_path / "leaflet" / "leaflet.css").exists()
+
+
+def test_runtime_leaflet_html_embeds_local_assets_for_webengine_file_robustness():
+    html = _leaflet_runtime_html()
+    assert "Local Leaflet assets embedded" in html
+    assert "Leaflet" in html
+    assert 'href="leaflet/leaflet.css"' in html
+    assert 'src="leaflet/leaflet.js"' in html
+    assert "url(leaflet/images/" in html
 
 
 def test_update_playback_position_follows_selected_station(monkeypatch):

@@ -1,0 +1,4 @@
+﻿Bereich;Kennzahl/Zeit;Typ;Inhalt;Details
+Kennzahl;Station;;bus-1;
+Kennzahl;SSEM-Updates;;1;
+Ereignis;12:00:00.000;SSEM;granted;SSEM granted

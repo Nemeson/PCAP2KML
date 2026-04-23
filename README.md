@@ -79,6 +79,7 @@ Die Kartenlogik ist inzwischen deutlich ueber Marker und einfache Trajektorien h
   Diagnosezeilen fokussieren Request und Karte
 - Die aktuelle ETA-Dashboard-Auswertung kann als CSV und JSON exportiert werden
 - Leaflet-JavaScript, CSS und Standardbilder liegen lokal unter `pcap2kml_player/assets/leaflet`;
+  zur Laufzeit werden JavaScript und CSS direkt ins Karten-HTML eingebettet,
   nur wenn diese Assets fehlen, wird auf das CDN zurueckgefallen
 - Playback-Renderings arbeiten mit Indexgrenzen statt mit kopierten Nachrichten-Prefixes;
   Popups/Tooltips werden in Leaflet wiederverwendet und beim Entfernen explizit geloest,

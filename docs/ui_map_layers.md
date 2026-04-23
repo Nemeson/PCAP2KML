@@ -233,3 +233,9 @@ offizielle Leaflet-CDN zurueck. Dadurch startet die Karte robuster auf Rechnern
 mit eingeschraenkter Netzverbindung und die EXE ist weniger an CDN-Verfuegbarkeit
 gebunden. Kartenkacheln selbst bleiben weiterhin Online-Tiles der jeweiligen
 Basiskartenanbieter.
+
+Zur Laufzeit werden die lokal mitgelieferten Leaflet-JavaScript- und CSS-Dateien
+direkt in das HTML eingebettet. Das vermeidet QtWebEngine-Probleme mit relativen
+`file://`-Skriptpfaden auf einzelnen Windows-Rechnern. Wenn Leaflet trotzdem
+nicht initialisiert werden kann, zeigt der Kartenbereich eine sichtbare Meldung
+und die Python-UI erfasst den Fehler im Karten-Safe-Mode bzw. Diagnosebericht.
