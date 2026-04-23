@@ -142,6 +142,33 @@ Vollrenderings werden je nach Modus auf ca. 1,25 s, 2,5 s bzw. 4,0 s
 gedrosselt. Zwischen diesen Vollrenderings wird weiterhin die aktuelle
 Playback-Position aktualisiert.
 
+## Payload-Budgets und Telemetrie
+
+Jeder Kartenmodus besitzt feste Budgets fuer:
+
+- Marker
+- Infrastruktur-Objekte
+- Trajektorien
+- Trajektorienpunkte
+
+Wenn ein Render-Payload groesser wird als der Modus zulaesst, wird er vor dem
+Versand an QtWebEngine gekuerzt. Dabei werden aktuelle Marker und aktuelle
+Trajektorienpunkte bevorzugt behalten. Die Karte protokolliert zu jedem Payload:
+
+- Performance-Modus
+- sichtbare Nachrichten
+- Anzahl Marker, Infrastruktur-Objekte und Trajektorien
+- Anzahl Trajektorienpunkte
+- JSON-Payload-Groesse in Bytes
+- Anzahl gekuerzter Objekte je Budgetklasse
+- ob ein bereits wartendes Render-Payload durch ein neueres ersetzt wurde
+
+Diese Telemetrie wird im Hauptfenster begrenzt historisiert und im
+Diagnosebericht exportiert. Wenn bereits im Modus `Normal` Objekte wegen Budgets
+ausgelassen werden muessen, schaltet die App automatisch auf `Schonend`. Das ist
+ein fruehes Schutzsignal: lieber die Kartendetails reduzieren als eine wachsende
+WebEngine-Warteschlange riskieren.
+
 ## RAM-Waechter
 
 Der RAM-Waechter prueft alle fuenf Sekunden den Arbeitsspeicher des
@@ -156,6 +183,40 @@ Die Reduktion ist absichtlich defensiv: wenn ein Notebook unter Speicherdruck
 geraet, ist eine noch lesbare Analyse wichtiger als ein vollstaendiger
 Kartenlayer-Satz. Waehlt der Bediener danach manuell wieder einen Modus aus,
 wird die automatische Markierung zurueckgesetzt.
+
+## Karten-Safe-Mode
+
+Die eingebettete WebEngine meldet JavaScript-Fehler an die Python-UI weiter.
+Zusaetzlich meldet die Karte:
+
+- fehlgeschlagenes Laden der Leaflet-Seite
+- Render-Payloads, die laenger als acht Sekunden in der WebEngine laufen
+- wiederholte `ReferenceError`- oder `TypeError`-Meldungen aus der Karte
+
+Nach drei Kartenproblemen aktiviert das Hauptfenster automatisch den
+Performance-Modus `Diagnose`. Der Safe-Mode ist bewusst konservativ: er zeigt
+weniger Nebenlayer, unterdrueckt Labels und Trajektorien und reduziert damit die
+Zahl verwalteter Leaflet-Objekte. Der Bediener kann die Karte anschliessend ueber
+`Karte neu laden` neu initialisieren. Dabei wird die Safe-Mode-Fehlerhistorie
+geleert und die aktuelle Sitzung erneut gerendert.
+
+## Diagnosebericht
+
+`Diagnose exportieren` schreibt `pcap2kml_diagnostics.json`. Der Bericht ist fuer
+Fehleranalyse auf anderen Rechnern gedacht und enthaelt:
+
+- Erstellzeitpunkt in UTC
+- Python-, Qt-, PyQt- und Plattforminformationen
+- Versionen der Kernpakete
+- aktive QtWebEngine/Chromium-Flags
+- aktuelle RAM-Nutzung
+- aktueller Performance-Modus und Safe-Mode-Status
+- Sitzungsquellen, Nachrichtenanzahl, Stationen und Nachrichtentypverteilung
+- letzte Karten-Telemetrie und Telemetrie-Historie
+- Kartenfehler-Historie
+
+Damit lassen sich typische Notebook-Probleme wie graue Karte, WebEngine-Freeze,
+uebergrosse Payloads oder fehlende Paketversionen deutlich schneller eingrenzen.
 
 ## Lokale Leaflet-Assets
 

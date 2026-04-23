@@ -67,6 +67,17 @@ Die Kartenlogik ist inzwischen deutlich ueber Marker und einfache Trajektorien h
   - `Diagnose`: stark reduzierter Kartenumfang fuer schwache Rechner oder Fehleranalyse
 - Ein RAM-Waechter zeigt den aktuellen Arbeitsspeicher in der Toolbar und reduziert bei hoher Last
   automatisch auf `Schonend` bzw. `Diagnose`
+- Karten-Payloads haben je Modus feste Budgets fuer Marker, Infrastruktur, Trajektorien und
+  Trajektorienpunkte; bei Ueberschreitung wird automatisch vereinfacht statt die WebEngine zu
+  ueberlasten
+- Wiederholte Karten-/JavaScript-Probleme aktivieren automatisch den Karten-Safe-Mode `Diagnose`
+- `Diagnose exportieren` schreibt einen technischen JSON-Bericht mit Runtime-, Paket-, RAM-,
+  Sitzungs-, Karten- und Fehlerhistorie
+- Die `ETA Analyse` enthaelt jetzt ein Fahrzeug-/Request-Dashboard mit Kennzahlen
+  und chronologischer SREM/SSEM-/Diagnose-Ereignistabelle
+- ETA-Ereignisse sind interaktiv: SREM/SSEM-Zeilen springen zur Nachricht,
+  Diagnosezeilen fokussieren Request und Karte
+- Die aktuelle ETA-Dashboard-Auswertung kann als CSV und JSON exportiert werden
 - Leaflet-JavaScript, CSS und Standardbilder liegen lokal unter `pcap2kml_player/assets/leaflet`;
   nur wenn diese Assets fehlen, wird auf das CDN zurueckgefallen
 - Playback-Renderings arbeiten mit Indexgrenzen statt mit kopierten Nachrichten-Prefixes;
@@ -100,6 +111,8 @@ Die rechte Arbeitsleiste ist jetzt in zwei Ebenen organisiert:
   - `Details` fuer Nachrichten-, PKI- und Identitaetshinweise
   - `Szene` fuer Kreuzungszustand, Phasenprognose, Requests und Warnungen
   - `ETA Analyse` fuer request-zentrierte ETA-, Speed- und SSEM-Statusbaender
+    plus Kennzahlen- und Ereignistabelle pro Fahrzeug/Request
+    inklusive Klick-Synchronisation und CSV/JSON-Export
 
 Rechts neben der Karte befindet sich das Panel `Priorisierungsfehler`. Es zeigt
 aktuelle Timeouts, Rejected, Late Granted, ETA-Konflikte und weitere
@@ -162,6 +175,13 @@ alle fuenf Sekunden den Arbeitsspeicher des App-Prozesses. Ab ca. 1200 MB wird
 automatisch auf `Schonend`, ab ca. 1800 MB auf `Diagnose` reduziert. Eine
 manuelle Auswahl im Dropdown hebt diese automatische Reduktion wieder auf.
 
+Zusaetzlich begrenzt die Karte die Groesse jedes Render-Payloads. Wenn ein Payload
+mehr Marker, Infrastruktur-Objekte oder Trajektorienpunkte enthaelt als der
+aktuelle Modus vorsieht, werden alte bzw. nachrangige Kartenelemente gekuerzt und
+die Telemetrie protokolliert, wie viele Objekte ausgelassen wurden. Im Modus
+`Normal` fuehrt eine Budget-Ueberschreitung automatisch zu `Schonend`, weil das
+ein fruehes Warnsignal fuer einen moeglichen WebEngine-Stau ist.
+
 Die Playback-Zeitfenster sind bewusst abgestuft:
 
 | Modus | Vollrender-Intervall | Playback-Fenster |
@@ -172,6 +192,35 @@ Die Playback-Zeitfenster sind bewusst abgestuft:
 
 Dadurch bleiben aktuelle Bewegungen und Priorisierungen sichtbar, waehrend alte
 Kartenobjekte nicht dauerhaft im Browserprozess mitgefuehrt werden.
+
+### Karten-Safe-Mode und Diagnosebericht
+
+Die Karte meldet JavaScript-Fehler, fehlgeschlagene WebView-Ladevorgaenge und
+Renderpayloads, die laenger als acht Sekunden in der QtWebEngine haengen. Nach
+drei solchen Ereignissen aktiviert die App automatisch den Safe-Mode `Diagnose`.
+Der Safe-Mode reduziert Labels, Trajektorien und Nebenlayer, damit eine graue
+oder eingefrorene Karte wieder bedienbar wird.
+
+Die Toolbar bietet ausserdem:
+
+```text
+Diagnose exportieren | Karte neu laden
+```
+
+`Diagnose exportieren` schreibt `pcap2kml_diagnostics.json` in ein ausgewaehltes
+Verzeichnis. Der Bericht enthaelt:
+
+- Python-, Qt- und PyQt-Version
+- installierte Kernpakete
+- aktive QtWebEngine/Chromium-Flags
+- aktuelle RAM-Nutzung
+- Performance-Modus und Safe-Mode-Status
+- geladene Quellen, Nachrichtenzahl, Stationen und Nachrichtentypverteilung
+- letzte Karten-Telemetrie und begrenzte Telemetrie-Historie
+- Karten-/JavaScript-Fehlerhistorie
+
+`Karte neu laden` initialisiert die eingebettete Leaflet-Seite neu, leert die
+Safe-Mode-Fehlerhistorie und rendert die aktuelle Sitzung erneut.
 
 ## Architektur
 
@@ -396,7 +445,7 @@ damit die lokalen Leaflet-Dateien auch in der EXE verfuegbar sind.
 
 Die aktuelle Testsuite deckt Parser, Kartenlogik, Playback, Export, Sicherheitsparser und Szenenmodell breit ab.
 
-- Aktueller Stand: `201 passed`
+- Aktueller Stand: `210 passed`
 - Vorhandene Testbereiche:
   - App-Memory
   - ASN.1-Schema-Update

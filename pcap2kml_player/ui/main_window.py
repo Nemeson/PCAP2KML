@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import logging
+import json
+import csv
 import os
+import platform
+import sys
 import time
 import ctypes
+import importlib.metadata
 from ctypes import wintypes
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import QSettings, QThread, QTimer, Qt
+from PyQt6.QtCore import PYQT_VERSION_STR, QT_VERSION_STR, QSettings, QThread, QTimer, Qt
 from PyQt6.QtGui import QCloseEvent, QDragEnterEvent, QDropEvent, QResizeEvent
 from PyQt6.QtWidgets import (
     QApplication,
@@ -51,7 +57,7 @@ from ..map_widget import (
 from ..parsing_worker import ParsingWorker
 from ..player_controller import SPEED_OPTIONS, PlayerController
 from ..prioritization_exporter import export_prioritization_issues
-from .eta_graph_widget import EtaGraphWidget, build_eta_selection_options
+from .eta_graph_widget import EtaDashboardEvent, EtaGraphWidget, build_eta_selection_options
 from ..scene_model import (
     ActiveRequest,
     PrioritizationIssue,
@@ -112,6 +118,8 @@ PERFORMANCE_PLAYBACK_WINDOW_SECONDS = {
 MEMORY_WATCH_INTERVAL_MS = 5000
 MEMORY_SAVER_THRESHOLD_MB = 1200.0
 MEMORY_DIAGNOSTIC_THRESHOLD_MB = 1800.0
+MAP_SAFE_MODE_ISSUE_THRESHOLD = 3
+MAP_TELEMETRY_HISTORY_LIMIT = 120
 LAYOUT_MODE_AUTO = "auto"
 LAYOUT_MODE_DESKTOP = "desktop"
 LAYOUT_MODE_COMPACT = "compact"
@@ -208,6 +216,9 @@ class MainWindow(QMainWindow):
         self._last_map_slice_update_monotonic = 0.0
         self._last_map_slice_index: Optional[int] = None
         self._last_map_messages_id: Optional[int] = None
+        self._map_telemetry_history: list[dict[str, object]] = []
+        self._map_issue_history: list[str] = []
+        self._map_safe_mode_active = False
 
         self._setup_ui()
         self._setup_player()
@@ -366,6 +377,16 @@ class MainWindow(QMainWindow):
             "Priorisierungsfehler als lesbare CSV, Maschinen-CSV, JSON und Report exportieren"
         )
         toolbar.addWidget(self._btn_export_issues)
+
+        self._btn_export_diagnostics = QPushButton("Diagnose exportieren")
+        self._btn_export_diagnostics.setToolTip(
+            "Technischen Diagnosebericht mit RAM-, Karten- und Paketinformationen schreiben"
+        )
+        toolbar.addWidget(self._btn_export_diagnostics)
+
+        self._btn_reload_map = QPushButton("Karte neu laden")
+        self._btn_reload_map.setToolTip("WebEngine-Karte neu initialisieren und aktuelle Sitzung erneut rendern")
+        toolbar.addWidget(self._btn_reload_map)
 
         toolbar.addSeparator()
 
@@ -769,6 +790,11 @@ class MainWindow(QMainWindow):
         self._eta_station_combo = QComboBox()
         self._eta_station_combo.setMinimumWidth(180)
         controls.addWidget(self._eta_station_combo)
+        self._btn_export_eta_dashboard = QPushButton("ETA exportieren")
+        self._btn_export_eta_dashboard.setToolTip(
+            "Aktuelle ETA-Kennzahlen und SREM/SSEM-Ereignisse als CSV und JSON exportieren"
+        )
+        controls.addWidget(self._btn_export_eta_dashboard)
         controls.addStretch()
         parent_layout.addLayout(controls)
 
@@ -779,6 +805,37 @@ class MainWindow(QMainWindow):
 
         self._eta_graph = EtaGraphWidget()
         parent_layout.addWidget(self._eta_graph, stretch=1)
+
+        dashboard_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._eta_metric_table = QTableWidget(0, 2)
+        self._eta_metric_table.setHorizontalHeaderLabels(["Kennzahl", "Wert"])
+        self._eta_metric_table.horizontalHeader().setSectionResizeMode(
+            0,
+            QHeaderView.ResizeMode.ResizeToContents,
+        )
+        self._eta_metric_table.horizontalHeader().setSectionResizeMode(
+            1,
+            QHeaderView.ResizeMode.Stretch,
+        )
+        self._eta_metric_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._eta_metric_table.verticalHeader().setVisible(False)
+        self._eta_metric_table.setAlternatingRowColors(True)
+        self._apply_table_readability_style(self._eta_metric_table)
+        dashboard_splitter.addWidget(self._eta_metric_table)
+
+        self._eta_event_table = QTableWidget(0, 4)
+        self._eta_event_table.setHorizontalHeaderLabels(["Zeit", "Typ", "Inhalt", "Details"])
+        self._eta_event_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self._eta_event_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._eta_event_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._eta_event_table.verticalHeader().setVisible(False)
+        self._eta_event_table.setAlternatingRowColors(True)
+        self._apply_table_readability_style(self._eta_event_table)
+        dashboard_splitter.addWidget(self._eta_event_table)
+        dashboard_splitter.setStretchFactor(0, 1)
+        dashboard_splitter.setStretchFactor(1, 2)
+        dashboard_splitter.setSizes([240, 460])
+        parent_layout.addWidget(dashboard_splitter, stretch=1)
 
         suggestions = QLabel(
             "ETA-Diagnose: Restzeit bis MAP-Stopline als blaue Kurve, geglaettete "
@@ -847,9 +904,15 @@ class MainWindow(QMainWindow):
         self._btn_cancel_load.clicked.connect(self._on_cancel_load)
         self._btn_export_kml.clicked.connect(self._on_export_kml)
         self._btn_export_issues.clicked.connect(self._on_export_prioritization_issues)
+        self._btn_export_diagnostics.clicked.connect(self._on_export_diagnostics)
+        self._btn_reload_map.clicked.connect(self._on_reload_map)
         self._btn_update_schemas.clicked.connect(self._on_update_schemas)
         self._layout_mode_combo.currentIndexChanged.connect(self._on_layout_mode_changed)
         self._performance_mode_combo.currentIndexChanged.connect(self._on_performance_mode_changed)
+        self._map_widget.telemetry_updated.connect(self._on_map_telemetry_updated)
+        self._map_widget.map_issue_detected.connect(self._on_map_issue_detected)
+        self._btn_export_eta_dashboard.clicked.connect(self._on_export_eta_dashboard)
+        self._eta_event_table.itemClicked.connect(self._on_eta_event_clicked)
 
         self._btn_play.clicked.connect(self._player.play)
         self._btn_pause.clicked.connect(self._player.pause)
@@ -974,6 +1037,150 @@ class MainWindow(QMainWindow):
             PERFORMANCE_PLAYBACK_WINDOW_SECONDS[PERFORMANCE_MODE_NORMAL],
         )
 
+    def _on_map_telemetry_updated(self, telemetry: dict[str, object]) -> None:
+        """Keep a bounded history of map render diagnostics."""
+        history = self.__dict__.setdefault("_map_telemetry_history", [])
+        history.append(dict(telemetry))
+        del history[:-MAP_TELEMETRY_HISTORY_LIMIT]
+
+        dropped_total = sum(
+            int(telemetry.get(key, 0) or 0)
+            for key in (
+                "budget_dropped_markers",
+                "budget_dropped_infrastructure",
+                "budget_dropped_trajectories",
+                "budget_dropped_trajectory_points",
+            )
+        )
+        if dropped_total and self.__dict__.get("_performance_mode") == PERFORMANCE_MODE_NORMAL:
+            self._set_performance_mode(PERFORMANCE_MODE_SAVER, auto=True)
+            self._statusbar.showMessage(
+                "Karten-Payload war zu gross - Leistung automatisch auf Schonend reduziert",
+                5000,
+            )
+
+    def _on_map_issue_detected(self, message: str) -> None:
+        """Switch to safe map mode after repeated WebEngine/JavaScript problems."""
+        issues = self.__dict__.setdefault("_map_issue_history", [])
+        issues.append(message)
+        del issues[:-20]
+        if self.__dict__.get("_map_safe_mode_active", False):
+            return
+        if len(issues) < MAP_SAFE_MODE_ISSUE_THRESHOLD:
+            self._statusbar.showMessage(f"Kartenhinweis: {message}", 5000)
+            return
+
+        self._map_safe_mode_active = True
+        self._set_performance_mode(PERFORMANCE_MODE_DIAGNOSTIC, auto=True)
+        self._statusbar.showMessage(
+            "Karten-Safe-Mode aktiv: wiederholte WebEngine/JavaScript-Probleme erkannt",
+            8000,
+        )
+
+    def _on_reload_map(self) -> None:
+        """Reload the WebEngine map and re-render the current session."""
+        if hasattr(self._map_widget, "reload_map_page"):
+            self._map_widget.reload_map_page()
+        self._map_safe_mode_active = False
+        self._map_issue_history.clear()
+        self._apply_performance_mode()
+        if self._session:
+            self._map_widget.load_messages(self._player._messages)
+        self._statusbar.showMessage("Karte wurde neu geladen", 4000)
+
+    def _on_export_diagnostics(self) -> None:
+        """Write a technical diagnostics report for support and regression analysis."""
+        start_dir = self._memory.last_export_directory or self._memory.last_directory or str(Path.cwd())
+        dir_path = QFileDialog.getExistingDirectory(
+            self,
+            "Diagnose-Exportverzeichnis waehlen",
+            start_dir,
+        )
+        if not dir_path:
+            return
+        report_path = Path(dir_path) / "pcap2kml_diagnostics.json"
+        try:
+            report_path.write_text(
+                json.dumps(self._build_diagnostics_report(), indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except Exception as exc:  # pragma: no cover
+            QMessageBox.critical(self, "Diagnose-Export fehlgeschlagen", str(exc))
+            return
+
+        self._memory.remember_export_directory(dir_path)
+        self._memory.save()
+        self._statusbar.showMessage(f"Diagnosebericht exportiert nach {report_path}", 5000)
+        QMessageBox.information(
+            self,
+            "Diagnose exportiert",
+            f"Der Diagnosebericht wurde geschrieben:\n{report_path}",
+        )
+
+    def _build_diagnostics_report(self) -> dict[str, object]:
+        """Build a support-friendly diagnostics snapshot."""
+        memory_mb = _current_process_memory_mb()
+        package_names = [
+            "PyQt6",
+            "PyQt6-WebEngine",
+            "scapy",
+            "pyshark",
+            "asn1tools",
+            "simplekml",
+        ]
+        packages: dict[str, str] = {}
+        for package_name in package_names:
+            try:
+                packages[package_name] = importlib.metadata.version(package_name)
+            except importlib.metadata.PackageNotFoundError:
+                packages[package_name] = "not installed"
+
+        session_summary: dict[str, object] = {"loaded": False}
+        if self._session:
+            session_summary = {
+                "loaded": True,
+                "sources": [str(source.path) for source in self._session.sources],
+                "messages": len(self._session.messages),
+                "stations": len(self._session.station_ids),
+                "message_types": {
+                    msg_type.value: count
+                    for msg_type, count in sorted(
+                        self._session.msg_type_counts.items(),
+                        key=lambda item: item[0].value,
+                    )
+                },
+            }
+
+        return {
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "application": {
+                "performance_mode": self.__dict__.get("_performance_mode", PERFORMANCE_MODE_NORMAL),
+                "performance_auto_downgraded": self.__dict__.get(
+                    "_performance_auto_downgraded",
+                    False,
+                ),
+                "map_safe_mode_active": self.__dict__.get("_map_safe_mode_active", False),
+                "memory_mb": memory_mb,
+            },
+            "runtime": {
+                "python": sys.version,
+                "platform": platform.platform(),
+                "qt": QT_VERSION_STR,
+                "pyqt": PYQT_VERSION_STR,
+                "packages": packages,
+                "qtwebengine_flags": os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", ""),
+                "pcap2kml_disable_gpu": os.environ.get("PCAP2KML_DISABLE_GPU", ""),
+            },
+            "session": session_summary,
+            "map": {
+                "latest_telemetry": self._map_telemetry_history[-1]
+                if self._map_telemetry_history
+                else None,
+                "telemetry_history": self._map_telemetry_history,
+                "issue_history": self._map_issue_history,
+            },
+        }
+
     def _effective_layout_mode(self) -> str:
         """Return the concrete layout mode for the current window size."""
         if self._layout_preference == LAYOUT_MODE_COMPACT:
@@ -1020,6 +1227,8 @@ class MainWindow(QMainWindow):
         self._btn_next_issue.setText("Fehler >" if compact else "Naechster Fehler")
         self._btn_export_kml.setText("KML" if compact else "KML exportieren")
         self._btn_export_issues.setText("Fehler Export" if compact else "Fehler exportieren")
+        self._btn_export_diagnostics.setText("Diagnose" if compact else "Diagnose exportieren")
+        self._btn_reload_map.setText("Karte neu" if compact else "Karte neu laden")
         self._btn_update_schemas.setText("Schemas" if compact else "ASN.1-Schemas aktualisieren")
 
     def resizeEvent(self, event: QResizeEvent) -> None:
@@ -1479,11 +1688,144 @@ class MainWindow(QMainWindow):
         self._eta_graph.set_selection(selected_key)
         self._eta_graph.set_current_time(messages[0].timestamp if messages else None)
         self._eta_summary.setText(self._eta_graph.summary_text())
+        self._refresh_eta_dashboard()
 
     def _on_eta_station_changed(self, station_id: str) -> None:
         """Update the ETA graph when a single vehicle is selected."""
         self._eta_graph.set_selection(self._eta_station_combo.currentData())
         self._eta_summary.setText(self._eta_graph.summary_text())
+        self._refresh_eta_dashboard()
+
+    def _refresh_eta_dashboard(self) -> None:
+        """Render ETA metrics and event rows for the selected request track."""
+        if not hasattr(self, "_eta_metric_table") or not hasattr(self, "_eta_event_table"):
+            return
+        data = self._eta_graph.dashboard_data()
+        self._eta_metric_table.setRowCount(len(data.metrics))
+        for row, (metric, value) in enumerate(data.metrics):
+            self._eta_metric_table.setItem(row, 0, QTableWidgetItem(metric))
+            self._eta_metric_table.setItem(row, 1, QTableWidgetItem(value))
+
+        self._eta_event_table.setRowCount(len(data.events))
+        for row, event in enumerate(data.events):
+            values = [event.time_text, event.kind, event.content, event.details]
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                item.setData(Qt.ItemDataRole.UserRole, event)
+                self._eta_event_table.setItem(row, column, item)
+
+    def _on_eta_event_clicked(self, item: QTableWidgetItem) -> None:
+        """Synchronize playback, details, map and request focus from an ETA event row."""
+        event = item.data(Qt.ItemDataRole.UserRole)
+        if not isinstance(event, EtaDashboardEvent):
+            return
+        if event.message_type is not None and self._seek_eta_event_message(event):
+            return
+        self._focus_eta_event_request(event)
+
+    def _seek_eta_event_message(self, event: EtaDashboardEvent) -> bool:
+        """Seek to the concrete SREM/SSEM message represented by one event row."""
+        for index, msg in enumerate(self._player._messages):
+            if msg.msg_type != event.message_type:
+                continue
+            if abs((msg.timestamp - event.timestamp).total_seconds()) > 0.001:
+                continue
+            if not self._message_matches_eta_event_selection(msg, event):
+                continue
+            self._player.seek_to_index(index)
+            self._highlight_table_row(msg)
+            self._show_security_detail(msg, auto_focus=True, force_refresh=True)
+            self._focus_eta_event_request(event)
+            self._statusbar.showMessage(f"ETA-Ereignis geoeffnet: {event.kind} {event.time_text}", 4000)
+            return True
+        self._focus_eta_event_request(event)
+        self._statusbar.showMessage(f"Keine passende Nachricht fuer ETA-Ereignis {event.time_text} gefunden", 4000)
+        return False
+
+    def _message_matches_eta_event_selection(self, msg: V2xMessage, event: EtaDashboardEvent) -> bool:
+        """Return whether msg belongs to the same request key as the dashboard event."""
+        key_parts = (event.selection_key or "").split(":")
+        if len(key_parts) < 6 or key_parts[0] != "REQ":
+            return True
+        intersection_id = self._coerce_detail_int(key_parts[1])
+        request_id = self._coerce_detail_int(key_parts[2])
+        sequence_number = self._coerce_detail_int(key_parts[3])
+        station_id = key_parts[4]
+        if msg.msg_type == MessageType.SREM and msg.station_id != station_id:
+            return False
+        return (
+            self._coerce_detail_int(msg.decoded_data.get("intersectionId")) == intersection_id
+            and self._coerce_detail_int(msg.decoded_data.get("requestId")) == request_id
+            and self._coerce_detail_int(msg.decoded_data.get("sequenceNumber")) == sequence_number
+        )
+
+    def _focus_eta_event_request(self, event: EtaDashboardEvent) -> None:
+        """Focus the map request geometry represented by the ETA dashboard row."""
+        key_parts = (event.selection_key or "").split(":")
+        if len(key_parts) < 6 or key_parts[0] != "REQ":
+            return
+        intersection_id = self._coerce_detail_int(key_parts[1])
+        request_id = self._coerce_detail_int(key_parts[2])
+        sequence_number = self._coerce_detail_int(key_parts[3])
+        if intersection_id is None or request_id is None or sequence_number is None:
+            return
+        self._map_widget.highlight_request(intersection_id, request_id, sequence_number)
+        self._map_widget.focus_intersection(intersection_id)
+
+    def _on_export_eta_dashboard(self) -> None:
+        """Export current ETA dashboard metrics and events as CSV and JSON."""
+        start_dir = self._memory.last_export_directory or self._memory.last_directory or str(Path.cwd())
+        dir_path = QFileDialog.getExistingDirectory(
+            self,
+            "ETA-Dashboard-Exportverzeichnis waehlen",
+            start_dir,
+        )
+        if not dir_path:
+            return
+        target_dir = Path(dir_path)
+        data = self._eta_graph.dashboard_data()
+        csv_path = target_dir / "eta_dashboard.csv"
+        json_path = target_dir / "eta_dashboard.json"
+        try:
+            self._write_eta_dashboard_exports(data, csv_path, json_path)
+        except Exception as exc:  # pragma: no cover
+            QMessageBox.critical(self, "ETA-Export fehlgeschlagen", str(exc))
+            return
+        self._memory.remember_export_directory(dir_path)
+        self._memory.save()
+        self._statusbar.showMessage(f"ETA-Dashboard exportiert nach {target_dir}", 5000)
+        QMessageBox.information(
+            self,
+            "ETA exportiert",
+            f"ETA-Dashboard wurde exportiert:\n{csv_path}\n{json_path}",
+        )
+
+    def _write_eta_dashboard_exports(self, data, csv_path: Path, json_path: Path) -> None:
+        """Write ETA dashboard metrics and events to CSV and JSON files."""
+        with csv_path.open("w", encoding="utf-8-sig", newline="") as handle:
+            writer = csv.writer(handle, delimiter=";")
+            writer.writerow(["Bereich", "Kennzahl/Zeit", "Typ", "Inhalt", "Details"])
+            for metric, value in data.metrics:
+                writer.writerow(["Kennzahl", metric, "", value, ""])
+            for event in data.events:
+                writer.writerow(["Ereignis", event.time_text, event.kind, event.content, event.details])
+
+        json_payload = {
+            "metrics": [{"name": metric, "value": value} for metric, value in data.metrics],
+            "events": [
+                {
+                    "time": event.time_text,
+                    "kind": event.kind,
+                    "content": event.content,
+                    "details": event.details,
+                    "timestamp": event.timestamp.isoformat(),
+                    "message_type": event.message_type.value if event.message_type else None,
+                    "selection_key": event.selection_key,
+                }
+                for event in data.events
+            ],
+        }
+        json_path.write_text(json.dumps(json_payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
     def _toggle_message_table_maximized(self, maximized: bool) -> None:
         """Expand the message table by collapsing the lower context tabs."""
@@ -2080,6 +2422,8 @@ class MainWindow(QMainWindow):
         self._btn_stop.setEnabled(enabled)
         self._btn_export_kml.setEnabled(enabled)
         self._btn_export_issues.setEnabled(enabled)
+        self._btn_export_diagnostics.setEnabled(True)
+        self._btn_reload_map.setEnabled(True)
         self._slider.setEnabled(enabled)
         self._speed_combo.setEnabled(enabled)
         has_issues = enabled and bool(self._problem_replay_indices)
@@ -2185,6 +2529,7 @@ class MainWindow(QMainWindow):
             self._eta_graph.set_messages([])
             self._eta_graph.set_station(None)
             self._eta_graph.set_current_time(None)
+            self._refresh_eta_dashboard()
         if hasattr(self, "_eta_summary"):
             self._eta_summary.setText("Keine PCAP-Sitzung geladen.")
         if hasattr(self, "_context_tabs"):

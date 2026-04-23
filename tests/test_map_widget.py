@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from pcap2kml_player.data_model import MessageType, V2xMessage
 from pcap2kml_player.map_widget import (
     MAP_PERFORMANCE_DIAGNOSTIC,
+    MAP_PERFORMANCE_NORMAL,
+    MAP_RENDER_BUDGETS,
     MAP_PERFORMANCE_SAVER,
     MapWidget,
     _asset_base_path,
@@ -868,6 +870,42 @@ def test_diagnostic_mode_suppresses_trajectories(monkeypatch):
     assert payload["markers"]
     assert payload["trajectories"] == []
     assert payload["performanceMode"] == MAP_PERFORMANCE_DIAGNOSTIC
+
+
+def test_render_payload_budget_caps_markers_and_records_telemetry(monkeypatch):
+    captured_scripts = []
+
+    def fake_run_js(self, script):
+        captured_scripts.append(script)
+
+    monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
+    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
+
+    widget = MapWidget()
+    widget._station_color_map = {}
+    widget._station_index = 0
+    widget._performance_mode = MAP_PERFORMANCE_NORMAL
+    marker_budget = MAP_RENDER_BUDGETS[MAP_PERFORMANCE_NORMAL]["markers"]
+    messages = [
+        V2xMessage(
+            timestamp=datetime(2026, 4, 18, 12, 0, index % 60, tzinfo=timezone.utc),
+            station_id=f"car-{index}",
+            msg_type=MessageType.CAM,
+            latitude=52.0 + (index / 100000.0),
+            longitude=13.0 + (index / 100000.0),
+        )
+        for index in range(marker_budget + 5)
+    ]
+
+    widget.load_messages(messages)
+
+    payload = _render_payload(captured_scripts)
+    telemetry = widget.latest_telemetry()
+    assert len(payload["markers"]) == marker_budget
+    assert telemetry is not None
+    assert telemetry["marker_count"] == marker_budget
+    assert telemetry["budget_dropped_markers"] == 5
+    assert telemetry["payload_bytes"] > 0
 
 
 def test_leaflet_assets_are_bundled_locally():

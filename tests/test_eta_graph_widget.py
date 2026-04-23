@@ -4,8 +4,12 @@ from datetime import datetime, timedelta, timezone
 
 from pcap2kml_player.data_model import MessageType, V2xMessage
 from pcap2kml_player.ui.eta_graph_widget import (
+    DiagnosticItem,
     EtaPoint,
     EtaSelection,
+    EtaGraphWidget,
+    RequestEvent,
+    StatusBand,
     _build_status_bands,
     _detect_diagnostics,
     _smooth_speed_points,
@@ -95,3 +99,23 @@ def test_detect_diagnostics_marks_eta_jump_missing_ssem_and_missing_granted():
     assert "ETA steigt trotz Annaherung" in labels
     assert "SREM ohne SSEM-Antwort" in labels
     assert "kein granted fuer Request" in labels
+
+
+def test_eta_dashboard_data_contains_metrics_and_events():
+    widget = EtaGraphWidget.__new__(EtaGraphWidget)
+    widget._selection = EtaSelection("REQ:72:6:86:bus-1:raw", "I72 R6/S86 | bus-1", "bus-1", 72, 6, 86)
+    widget._eta_points = [EtaPoint(_ts(0), 0.0, 5.0, 1.5, "SREM 6/86")]
+    widget._speed_points = [type("Speed", (), {"speed_mps": 4.0})()]
+    widget._events = [RequestEvent(_ts(0), 0.0, "SREM", "SREM 6/86 | ETA 5.0s", None)]
+    widget._status_bands = [StatusBand(_ts(2), _ts(4), 2.0, 4.0, "granted", "SSEM granted", None)]
+    widget._diagnostics = [DiagnosticItem(_ts(3), 3.0, "ETA-Fehler +3.0s", None)]
+
+    data = widget.dashboard_data()
+    metrics = dict(data.metrics)
+    event_types = [event.kind for event in data.events]
+    assert metrics["Station"] == "bus-1"
+    assert metrics["SREM-Samples"] == "1"
+    assert metrics["SSEM-Updates"] == "1"
+    assert metrics["letzter SSEM-Status"] == "granted"
+    assert "SREM" in event_types
+    assert "SSEM" in event_types

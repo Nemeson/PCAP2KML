@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from pcap2kml_player.data_model import MessageType, V2xMessage
+from pcap2kml_player.data_model import MessageType, SessionData, V2xMessage
+from pcap2kml_player.ui.eta_graph_widget import EtaDashboardData, EtaDashboardEvent
 from pcap2kml_player.scene_model import PrioritizationIssue
 from pcap2kml_player.ui import main_window as main_window_module
 from pcap2kml_player.ui.main_window import (
@@ -92,12 +93,21 @@ class _FakePlayerForMapThrottle:
     def __init__(self):
         self._messages = [_message(0), _message(1)]
         self.current_index = 0
+        self.seek_indices: list[int] = []
+
+    def seek_to_index(self, index: int) -> None:
+        self.seek_indices.append(index)
+        self.current_index = index
 
 
 class _FakeMapWidget:
     def __init__(self):
         self.modes: list[str] = []
         self.render_calls: list[tuple[list[V2xMessage], int, float | None]] = []
+        self.reloads = 0
+        self.loaded_messages: list[list[V2xMessage]] = []
+        self.highlighted_requests: list[tuple[int, int, int]] = []
+        self.focused_intersections: list[int] = []
 
     def set_performance_mode(self, mode: str) -> None:
         self.modes.append(mode)
@@ -113,6 +123,18 @@ class _FakeMapWidget:
 
     def update_playback_position(self, _msg: V2xMessage) -> None:
         return None
+
+    def reload_map_page(self) -> None:
+        self.reloads += 1
+
+    def load_messages(self, messages: list[V2xMessage]) -> None:
+        self.loaded_messages.append(messages)
+
+    def highlight_request(self, intersection_id: int, request_id: int, sequence_number: int) -> None:
+        self.highlighted_requests.append((intersection_id, request_id, sequence_number))
+
+    def focus_intersection(self, intersection_id: int) -> None:
+        self.focused_intersections.append(intersection_id)
 
 
 class _FakeCombo:
@@ -160,7 +182,7 @@ class _FakeStatusBar:
     def __init__(self):
         self.messages: list[str] = []
 
-    def showMessage(self, message: str) -> None:
+    def showMessage(self, message: str, *_args) -> None:
         self.messages.append(message)
 
 
@@ -550,6 +572,174 @@ def test_playback_tick_passes_performance_window(monkeypatch):
 
     assert window._map_widget.render_calls
     assert window._map_widget.render_calls[-1][2] == 20.0
+
+
+def test_map_telemetry_budget_drop_reduces_to_saver_mode():
+    window = MainWindow.__new__(MainWindow)
+    window._map_widget = _FakeMapWidget()
+    window._performance_mode = PERFORMANCE_MODE_NORMAL
+    window._performance_auto_downgraded = False
+    window._performance_mode_combo = _FakeCombo()
+    window._performance_mode_combo.addItem("Normal", PERFORMANCE_MODE_NORMAL)
+    window._performance_mode_combo.addItem("Schonend", PERFORMANCE_MODE_SAVER)
+    window._settings = _FakeSettings()
+    window._memory_watch_label = _FakeLabel()
+    window._statusbar = _FakeStatusBar()
+    window._map_telemetry_history = []
+
+    window._on_map_telemetry_updated({
+        "budget_dropped_markers": 1,
+        "budget_dropped_infrastructure": 0,
+        "budget_dropped_trajectories": 0,
+        "budget_dropped_trajectory_points": 0,
+    })
+
+    assert window._performance_mode == PERFORMANCE_MODE_SAVER
+    assert window._map_widget.modes[-1] == PERFORMANCE_MODE_SAVER
+    assert "Payload" in window._statusbar.messages[-1]
+
+
+def test_repeated_map_issues_enable_diagnostic_safe_mode():
+    window = MainWindow.__new__(MainWindow)
+    window._map_widget = _FakeMapWidget()
+    window._performance_mode = PERFORMANCE_MODE_NORMAL
+    window._performance_auto_downgraded = False
+    window._performance_mode_combo = _FakeCombo()
+    window._performance_mode_combo.addItem("Normal", PERFORMANCE_MODE_NORMAL)
+    window._performance_mode_combo.addItem("Diagnose", PERFORMANCE_MODE_DIAGNOSTIC)
+    window._settings = _FakeSettings()
+    window._memory_watch_label = _FakeLabel()
+    window._statusbar = _FakeStatusBar()
+    window._map_issue_history = []
+    window._map_safe_mode_active = False
+
+    window._on_map_issue_detected("ReferenceError")
+    window._on_map_issue_detected("TypeError")
+    window._on_map_issue_detected("Render stalled")
+
+    assert window._performance_mode == PERFORMANCE_MODE_DIAGNOSTIC
+    assert window._map_safe_mode_active is True
+    assert "Safe-Mode" in window._statusbar.messages[-1]
+
+
+def test_reload_map_resets_safe_mode_and_rerenders_session():
+    window = MainWindow.__new__(MainWindow)
+    window._map_widget = _FakeMapWidget()
+    window._player = _FakePlayerForMapThrottle()
+    window._session = SessionData(messages=window._player._messages)
+    window._performance_mode = PERFORMANCE_MODE_DIAGNOSTIC
+    window._memory_watch_label = _FakeLabel()
+    window._map_issue_history = ["ReferenceError"]
+    window._map_safe_mode_active = True
+    window._statusbar = _FakeStatusBar()
+
+    window._on_reload_map()
+
+    assert window._map_widget.reloads == 1
+    assert window._map_safe_mode_active is False
+    assert window._map_issue_history == []
+    assert window._map_widget.loaded_messages[-1] == window._player._messages
+
+
+def test_build_diagnostics_report_contains_runtime_session_and_map(monkeypatch):
+    window = MainWindow.__new__(MainWindow)
+    messages = [_message(0)]
+    session = SessionData(messages=messages, station_ids={"car-1"})
+    session.msg_type_counts = {MessageType.CAM: 1}
+    window._session = session
+    window._performance_mode = PERFORMANCE_MODE_SAVER
+    window._performance_auto_downgraded = True
+    window._map_safe_mode_active = False
+    window._map_telemetry_history = [{"payload_bytes": 123}]
+    window._map_issue_history = ["ReferenceError"]
+    monkeypatch.setattr(main_window_module, "_current_process_memory_mb", lambda: 321.0)
+
+    report = window._build_diagnostics_report()
+
+    assert report["application"]["performance_mode"] == PERFORMANCE_MODE_SAVER
+    assert report["application"]["memory_mb"] == 321.0
+    assert report["session"]["loaded"] is True
+    assert report["session"]["messages"] == 1
+    assert report["map"]["latest_telemetry"]["payload_bytes"] == 123
+    assert "python" in report["runtime"]
+
+
+def test_eta_event_message_seek_focuses_matching_srem():
+    window = MainWindow.__new__(MainWindow)
+    srem = V2xMessage(
+        _message(0).timestamp,
+        "bus-1",
+        MessageType.SREM,
+        52.0,
+        13.0,
+        decoded_data={"intersectionId": 72, "requestId": 6, "sequenceNumber": 86},
+    )
+    window._player = _FakePlayerForMapThrottle()
+    window._player._messages = [_message(0), srem]
+    window._map_widget = _FakeMapWidget()
+    window._statusbar = _FakeStatusBar()
+    window._highlight_table_row = lambda _msg: None
+    window._show_security_detail = lambda _msg, auto_focus=False, force_refresh=False: None
+    event = EtaDashboardEvent(
+        time_text=srem.timestamp.strftime("%H:%M:%S.%f")[:-3],
+        kind="SREM",
+        content="SREM 6/86",
+        details="",
+        timestamp=srem.timestamp,
+        message_type=MessageType.SREM,
+        selection_key="REQ:72:6:86:bus-1:raw",
+    )
+
+    assert window._seek_eta_event_message(event) is True
+
+    assert window._player.seek_indices == [1]
+    assert window._map_widget.highlighted_requests == [(72, 6, 86)]
+    assert window._map_widget.focused_intersections == [72]
+
+
+def test_eta_diagnostic_event_focuses_request_without_message_seek():
+    window = MainWindow.__new__(MainWindow)
+    window._map_widget = _FakeMapWidget()
+    event = EtaDashboardEvent(
+        time_text="12:00:03.000",
+        kind="Diagnose",
+        content="ETA-Fehler +3.0s",
+        details="",
+        timestamp=_message(0).timestamp,
+        message_type=None,
+        selection_key="REQ:72:6:86:bus-1:raw",
+    )
+
+    window._focus_eta_event_request(event)
+
+    assert window._map_widget.highlighted_requests == [(72, 6, 86)]
+    assert window._map_widget.focused_intersections == [72]
+
+
+def test_write_eta_dashboard_exports_creates_csv_and_json(tmp_path):
+    window = MainWindow.__new__(MainWindow)
+    event = EtaDashboardEvent(
+        time_text="12:00:00.000",
+        kind="SSEM",
+        content="granted",
+        details="SSEM granted",
+        timestamp=_message(0).timestamp,
+        message_type=MessageType.SSEM,
+        selection_key="REQ:72:6:86:bus-1:raw",
+    )
+    data = EtaDashboardData(
+        metrics=[("Station", "bus-1"), ("SSEM-Updates", "1")],
+        events=[event],
+    )
+    csv_path = tmp_path / "eta_dashboard.csv"
+    json_path = tmp_path / "eta_dashboard.json"
+
+    window._write_eta_dashboard_exports(data, csv_path, json_path)
+
+    assert "Kennzahl" in csv_path.read_text(encoding="utf-8-sig")
+    payload = main_window_module.json.loads(json_path.read_text(encoding="utf-8"))
+    assert payload["metrics"][0]["name"] == "Station"
+    assert payload["events"][0]["kind"] == "SSEM"
 
 
 def test_toggle_issue_panel_collapses_and_expands_content():

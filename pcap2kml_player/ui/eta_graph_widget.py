@@ -81,6 +81,27 @@ class DiagnosticItem:
     color: QColor
 
 
+@dataclass(frozen=True)
+class EtaDashboardData:
+    """Operator-facing table data for the selected ETA track."""
+
+    metrics: list[tuple[str, str]]
+    events: list["EtaDashboardEvent"]
+
+
+@dataclass(frozen=True)
+class EtaDashboardEvent:
+    """One interactive row in the ETA dashboard event table."""
+
+    time_text: str
+    kind: str
+    content: str
+    details: str
+    timestamp: datetime
+    message_type: Optional[MessageType]
+    selection_key: Optional[str]
+
+
 class EtaGraphWidget(QWidget):
     """Paint a request-centric ETA, speed, SREM/SSEM, and diagnosis timeline."""
 
@@ -135,6 +156,68 @@ class EtaGraphWidget(QWidget):
             f"{verification_count} verifiziert, {len(self._status_bands)} SSEM-Statusband/-baender, "
             f"{len(self._diagnostics)} Diagnosehinweis(e), {error_text}."
         )
+
+    def dashboard_data(self) -> EtaDashboardData:
+        """Return metrics and event rows for the selected request/vehicle track."""
+        if self._selection is None:
+            return EtaDashboardData(
+                metrics=[("Status", "Keine ETA-Auswahl vorhanden")],
+                events=[],
+            )
+
+        eta_errors = [
+            abs(point.error_seconds)
+            for point in self._eta_points
+            if point.error_seconds is not None
+        ]
+        speed_values = [point.speed_mps for point in self._speed_points]
+        status_values = [band.status for band in self._status_bands]
+        metrics = [
+            ("Auswahl", self._selection.label),
+            ("Station", self._selection.station_id),
+            ("SREM-Samples", str(len(self._events))),
+            ("SSEM-Updates", str(len(self._status_bands))),
+            ("ETA-Samples", str(len(self._eta_points))),
+            ("verifizierte ETA", str(len(eta_errors))),
+            ("max. ETA-Abweichung", f"{max(eta_errors):.1f}s" if eta_errors else "-"),
+            ("mittlere Geschwindigkeit", f"{sum(speed_values) / len(speed_values):.1f} m/s" if speed_values else "-"),
+            ("letzter SSEM-Status", status_values[-1] if status_values else "-"),
+            ("Diagnosehinweise", str(len(self._diagnostics))),
+        ]
+
+        rows: list[EtaDashboardEvent] = []
+        for event in self._events:
+            rows.append(EtaDashboardEvent(
+                time_text=_format_time(event.timestamp),
+                kind=event.kind,
+                content=event.label,
+                details="",
+                timestamp=event.timestamp,
+                message_type=MessageType.SREM,
+                selection_key=self._selection.key,
+            ))
+        for band in self._status_bands:
+            rows.append(EtaDashboardEvent(
+                time_text=_format_time(band.start),
+                kind="SSEM",
+                content=band.status,
+                details=band.label,
+                timestamp=band.start,
+                message_type=MessageType.SSEM,
+                selection_key=self._selection.key,
+            ))
+        for diagnostic in self._diagnostics:
+            rows.append(EtaDashboardEvent(
+                time_text=_format_time(diagnostic.timestamp),
+                kind="Diagnose",
+                content=diagnostic.label,
+                details="",
+                timestamp=diagnostic.timestamp,
+                message_type=None,
+                selection_key=self._selection.key,
+            ))
+        rows.sort(key=lambda row: row.timestamp)
+        return EtaDashboardData(metrics=metrics, events=rows)
 
     def _rebuild_series(self) -> None:
         self._selection = _selection_for_key(self._selection_key, self._messages)
@@ -517,6 +600,10 @@ def _y_for_value(value: float, maximum: float, plot: QRectF) -> float:
 
 def _relative_seconds(timestamp: datetime, start_time: datetime) -> float:
     return max(0.0, (timestamp - start_time).total_seconds())
+
+
+def _format_time(timestamp: datetime) -> str:
+    return timestamp.strftime("%H:%M:%S.%f")[:-3]
 
 
 def _request_label(kind: str, request_id: Optional[int], sequence_number: Optional[int]) -> str:

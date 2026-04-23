@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import logging
 import sys
+import time
+from dataclasses import asdict, dataclass
 from math import cos, hypot, radians
 from pathlib import Path
 from typing import Optional
@@ -16,7 +18,7 @@ from typing import Optional
 from PyQt6.QtCore import QObject, QTimer, QUrl, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QResizeEvent, QShowEvent
 from PyQt6.QtWebChannel import QWebChannel
-from PyQt6.QtWebEngineCore import QWebEngineProfile
+from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 
 from .data_model import MessageType, V2xMessage
@@ -33,6 +35,27 @@ MAP_PERFORMANCE_MODES = {
     MAP_PERFORMANCE_SAVER,
     MAP_PERFORMANCE_DIAGNOSTIC,
 }
+MAP_RENDER_BUDGETS = {
+    MAP_PERFORMANCE_NORMAL: {
+        "markers": 1500,
+        "infrastructure": 2500,
+        "trajectories": 1000,
+        "trajectory_points": 8000,
+    },
+    MAP_PERFORMANCE_SAVER: {
+        "markers": 600,
+        "infrastructure": 1200,
+        "trajectories": 300,
+        "trajectory_points": 2500,
+    },
+    MAP_PERFORMANCE_DIAGNOSTIC: {
+        "markers": 200,
+        "infrastructure": 600,
+        "trajectories": 0,
+        "trajectory_points": 0,
+    },
+}
+MAP_RENDER_STALL_SECONDS = 8.0
 
 # Color palette for station markers (hex strings for Leaflet)
 STATION_PALETTE = [
@@ -78,6 +101,30 @@ SPAT_PHASE_COLORS = {
     "dark": "#475569",
     "unavailable": "#64748b",
 }
+
+
+@dataclass(frozen=True)
+class MapRenderTelemetry:
+    """Compact diagnostics for one map payload."""
+
+    timestamp: float
+    performance_mode: str
+    source_message_count: int
+    visible_message_count: int
+    marker_count: int
+    infrastructure_count: int
+    trajectory_count: int
+    trajectory_point_count: int
+    payload_bytes: int
+    queued_payload_replaced: bool = False
+    budget_dropped_markers: int = 0
+    budget_dropped_infrastructure: int = 0
+    budget_dropped_trajectories: int = 0
+    budget_dropped_trajectory_points: int = 0
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-serializable representation."""
+        return asdict(self)
 
 
 def _marker_id_for_message(msg: V2xMessage) -> str:
@@ -1547,8 +1594,24 @@ class MapBridge(QObject):
         self.message_clicked.emit(station_id)
 
 
+class DiagnosticWebEnginePage(QWebEnginePage):
+    """QWebEnginePage that forwards JavaScript errors to Python diagnostics."""
+
+    java_script_issue = pyqtSignal(str)
+
+    def javaScriptConsoleMessage(self, level, message: str, line_number: int, source_id: str) -> None:
+        """Capture JS console issues that otherwise only appear in the terminal."""
+        super().javaScriptConsoleMessage(level, message, line_number, source_id)
+        level_name = getattr(level, "name", str(level))
+        if "Error" in level_name or "ReferenceError" in message or "TypeError" in message:
+            self.java_script_issue.emit(f"{level_name}: {message} ({source_id}:{line_number})")
+
+
 class MapWidget(QWebEngineView):
     """Interactive Leaflet map displaying V2X entity positions and trajectories."""
+
+    telemetry_updated = pyqtSignal(dict)
+    map_issue_detected = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1558,6 +1621,9 @@ class MapWidget(QWebEngineView):
         profile.setHttpUserAgent(
             "PCAP2KML-Player/1.0 (Windows; V2X-Viewer) OSM-Tiles/1.0"
         )
+        self._diagnostic_page = DiagnosticWebEnginePage(profile, self)
+        self.setPage(self._diagnostic_page)
+        self._diagnostic_page.java_script_issue.connect(self._on_java_script_issue)
 
         self._bridge = MapBridge()
         self._channel = QWebChannel()
@@ -1572,6 +1638,10 @@ class MapWidget(QWebEngineView):
         self._pending_scripts: list[str] = []
         self._render_payload_in_flight = False
         self._queued_render_payload_script: Optional[str] = None
+        self._render_payload_started_at: Optional[float] = None
+        self._render_payload_stall_generation = 0
+        self._latest_telemetry: Optional[MapRenderTelemetry] = None
+        self._last_payload_was_replaced = False
 
         self._bridge.message_clicked.connect(self._on_marker_clicked)
         self.loadFinished.connect(self._on_load_finished)
@@ -1597,6 +1667,21 @@ class MapWidget(QWebEngineView):
             mode = MAP_PERFORMANCE_NORMAL
         self._performance_mode = mode
         self._run_js(f"setMapPerformanceMode('{mode}')")
+
+    def latest_telemetry(self) -> Optional[dict[str, object]]:
+        """Return the latest render telemetry, if available."""
+        if self._latest_telemetry is None:
+            return None
+        return self._latest_telemetry.to_dict()
+
+    def reload_map_page(self) -> None:
+        """Reload the embedded Leaflet page and drop pending JavaScript work."""
+        self._page_ready = False
+        self._pending_scripts = []
+        self._render_payload_in_flight = False
+        self._queued_render_payload_script = None
+        self._render_payload_started_at = None
+        self.setHtml(LEAFLET_HTML, QUrl.fromLocalFile(str(_asset_base_path()) + "/"))
 
     def load_messages(self, messages: list[V2xMessage]) -> None:
         """Load all messages onto the map: markers, trajectories, and overlays."""
@@ -1649,8 +1734,13 @@ class MapWidget(QWebEngineView):
         station_coords: dict[str, list] = {}
         markers_by_id: dict[str, dict[str, object]] = {}
         performance_mode = self.__dict__.get("_performance_mode", MAP_PERFORMANCE_NORMAL)
+        budget = MAP_RENDER_BUDGETS.get(
+            performance_mode,
+            MAP_RENDER_BUDGETS[MAP_PERFORMANCE_NORMAL],
+        )
         end_index = len(messages) if max_index is None else min(max_index + 1, len(messages))
         display_anchors = _display_anchor_points(messages, max_index=max_index)
+        visible_message_count = 0
 
         for index, msg in enumerate(messages):
             if index >= end_index:
@@ -1664,6 +1754,7 @@ class MapWidget(QWebEngineView):
                 and msg.msg_type not in INFRASTRUCTURE_MESSAGE_COLORS
             ):
                 continue
+            visible_message_count += 1
             color = self._color_for_message(msg)
             marker_lat, marker_lon = _marker_position_for_message(msg)
             popup = (
@@ -1755,16 +1846,91 @@ class MapWidget(QWebEngineView):
                 "color": self._get_station_color(station_id),
             })
 
+        marker_payload = list(markers_by_id.values())
+        dropped_markers = max(0, len(marker_payload) - int(budget["markers"]))
+        if dropped_markers:
+            marker_payload = marker_payload[-int(budget["markers"]):]
+
+        dropped_infrastructure = max(
+            0,
+            len(infrastructure_payload) - int(budget["infrastructure"]),
+        )
+        if dropped_infrastructure:
+            infrastructure_payload = infrastructure_payload[: int(budget["infrastructure"])]
+
+        dropped_trajectories = max(0, len(trajectories_payload) - int(budget["trajectories"]))
+        if dropped_trajectories:
+            trajectories_payload = trajectories_payload[-int(budget["trajectories"]):]
+
+        dropped_trajectory_points = self._trim_trajectory_payload(
+            trajectories_payload,
+            int(budget["trajectory_points"]),
+        )
+
         payload = {
             "clear": clear_first,
             "fitView": fit_view,
             "performanceMode": performance_mode,
             "stationColors": self._station_color_map,
-            "markers": list(markers_by_id.values()),
+            "markers": marker_payload,
             "infrastructure": infrastructure_payload,
             "trajectories": trajectories_payload,
         }
-        self._run_js(f"applyRenderPayload({json.dumps(payload)})")
+        payload_json = json.dumps(payload)
+        self._record_render_telemetry(
+            MapRenderTelemetry(
+                timestamp=time.time(),
+                performance_mode=performance_mode,
+                source_message_count=end_index,
+                visible_message_count=visible_message_count,
+                marker_count=len(marker_payload),
+                infrastructure_count=len(infrastructure_payload),
+                trajectory_count=len(trajectories_payload),
+                trajectory_point_count=sum(
+                    len(trajectory["coords"]) for trajectory in trajectories_payload
+                ),
+                payload_bytes=len(payload_json.encode("utf-8")),
+                budget_dropped_markers=dropped_markers,
+                budget_dropped_infrastructure=dropped_infrastructure,
+                budget_dropped_trajectories=dropped_trajectories,
+                budget_dropped_trajectory_points=dropped_trajectory_points,
+            )
+        )
+        self._run_js(f"applyRenderPayload({payload_json})")
+
+    def _trim_trajectory_payload(
+        self,
+        trajectories_payload: list[dict[str, object]],
+        max_points: int,
+    ) -> int:
+        """Trim old trajectory points to keep the payload inside the mode budget."""
+        if max_points <= 0:
+            dropped = sum(len(trajectory["coords"]) for trajectory in trajectories_payload)
+            trajectories_payload.clear()
+            return dropped
+        current_points = sum(len(trajectory["coords"]) for trajectory in trajectories_payload)
+        if current_points <= max_points:
+            return 0
+
+        dropped_points = current_points - max_points
+        remaining = max_points
+        for index, trajectory in enumerate(trajectories_payload):
+            coords = trajectory["coords"]
+            trajectories_left = len(trajectories_payload) - index
+            keep = max(1, remaining // trajectories_left)
+            if len(coords) > keep:
+                trajectory["coords"] = coords[-keep:]
+            remaining -= len(trajectory["coords"])
+        return dropped_points
+
+    def _record_render_telemetry(self, telemetry: MapRenderTelemetry) -> None:
+        """Store and publish the newest render telemetry."""
+        self._latest_telemetry = telemetry
+        try:
+            self.telemetry_updated.emit(telemetry.to_dict())
+        except RuntimeError:
+            # Unit tests construct MapWidget without the Qt base initializer.
+            pass
 
     def update_playback_position(self, msg: V2xMessage) -> None:
         """Move the marker for msg.station_id and highlight it."""
@@ -1826,8 +1992,10 @@ class MapWidget(QWebEngineView):
         self._page_ready = ok
         self._render_payload_in_flight = False
         self._queued_render_payload_script = None
+        self._render_payload_started_at = None
         if not ok:
             logger.warning("Leaflet map page did not finish loading")
+            self.map_issue_detected.emit("Karten-WebView konnte nicht geladen werden")
             return
         pending = self._pending_scripts
         self._pending_scripts = []
@@ -1842,8 +2010,12 @@ class MapWidget(QWebEngineView):
         if script.startswith("applyRenderPayload("):
             if self._render_payload_in_flight:
                 self._queued_render_payload_script = script
+                self._last_payload_was_replaced = True
+                self._mark_latest_telemetry_replaced()
                 return
             self._render_payload_in_flight = True
+            self._render_payload_started_at = time.monotonic()
+            self._schedule_render_stall_check()
             self._execute_js(script, self._on_render_payload_finished)
             return
         self._execute_js(script)
@@ -1865,5 +2037,47 @@ class MapWidget(QWebEngineView):
         self._queued_render_payload_script = None
         if next_script is None:
             self._render_payload_in_flight = False
+            self._render_payload_started_at = None
             return
+        self._render_payload_started_at = time.monotonic()
+        self._schedule_render_stall_check()
         self._execute_js(next_script, self._on_render_payload_finished)
+
+    def _schedule_render_stall_check(self) -> None:
+        """Detect a payload that appears to hang inside QtWebEngine."""
+        generation = int(self.__dict__.get("_render_payload_stall_generation", 0)) + 1
+        self._render_payload_stall_generation = generation
+        QTimer.singleShot(
+            int(MAP_RENDER_STALL_SECONDS * 1000),
+            lambda: self._check_render_payload_stall(generation),
+        )
+
+    def _check_render_payload_stall(self, generation: int) -> None:
+        """Emit a map issue if the same render payload is still in flight."""
+        if generation != self._render_payload_stall_generation:
+            return
+        started_at = self.__dict__.get("_render_payload_started_at")
+        if not self.__dict__.get("_render_payload_in_flight", False) or started_at is None:
+            return
+        if time.monotonic() - started_at >= MAP_RENDER_STALL_SECONDS:
+            self.map_issue_detected.emit(
+                f"Karten-Renderpayload laeuft seit mehr als {MAP_RENDER_STALL_SECONDS:.0f}s"
+            )
+
+    def _on_java_script_issue(self, message: str) -> None:
+        """Forward JavaScript errors from the map page to the main window."""
+        logger.warning("Map JavaScript issue: %s", message)
+        self.map_issue_detected.emit(message)
+
+    def _mark_latest_telemetry_replaced(self) -> None:
+        """Mark the newest telemetry entry as coalesced by the render queue."""
+        telemetry = self.__dict__.get("_latest_telemetry")
+        if telemetry is None:
+            return
+        replaced = MapRenderTelemetry(
+            **{
+                **telemetry.to_dict(),
+                "queued_payload_replaced": True,
+            }
+        )
+        self._record_render_telemetry(replaced)
