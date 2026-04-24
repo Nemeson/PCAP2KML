@@ -200,7 +200,9 @@ Die Karte meldet JavaScript-Fehler, fehlgeschlagene WebView-Ladevorgaenge und
 Renderpayloads, die laenger als acht Sekunden in der QtWebEngine haengen. Nach
 drei solchen Ereignissen aktiviert die App automatisch den Safe-Mode `Diagnose`.
 Der Safe-Mode reduziert Labels, Trajektorien und Nebenlayer, damit eine graue
-oder eingefrorene Karte wieder bedienbar wird.
+oder eingefrorene Karte wieder bedienbar wird. Langsame Renderpayloads loesen
+bewusst keinen Native-Fallback mehr aus, weil sie meist durch Datenmenge und
+nicht durch einen defekten WebEngine-Start entstehen.
 
 Die Toolbar bietet ausserdem:
 
@@ -378,16 +380,24 @@ Basiskarten wie OSM, Schwarz-Weiss, Dunkel und Satellit verfuegbar bleiben.
 Falls QtWebEngine trotz Software-OpenGL weiterhin keinen GLES-Kontext erstellen
 kann, erkennt die App das automatisch: Nach dem Laden der Seite prueft ein
 JavaScript-Probe, ob Leaflet tatsaechlich initialisiert wurde. Schlaegt diese
-Pruefung fehl oder laeuft sie in einen 6-Sekunden-Timeout, wechselt die App
-selbstaendig auf den nativen Backend — auch dann, wenn `loadFinished(ok=True)`
-bereits gefeuert hat (was trotz defektem GL-Kontext passiert). Ebenso loest ein
+Pruefung vor dem ersten erfolgreichen Bootstrap fehl oder laeuft sie in einen
+6-Sekunden-Timeout, wechselt die App selbstaendig auf den nativen Backend -
+auch dann, wenn `loadFinished(ok=True)` bereits gefeuert hat (was trotz
+defektem GL-Kontext passiert). Sobald Leaflet einmal erfolgreich initialisiert
+wurde, werden spaete Bootstrap-Timeouts ignoriert; dadurch verschwindet die
+geografische Karte nach dem Laden groesserer PCAPs nicht mehr aufgrund eines
+verzoegerten Timers. Ebenso loest ein
 Chromium-Render-Prozess-Absturz (`renderProcessTerminated`) sofort einen Wechsel
 aus. Dieser automatische Wechsel wird nicht dauerhaft gespeichert; der naechste
 App-Start versucht es erneut mit Leaflet. Der native Backend kann auch manuell
-ueber `Karte: Native` in der Toolbar gewaehlt werden. Er zeigt Marker,
-Trajektorien und Infrastruktur direkt in Qt ohne Leaflet-Tiles und ohne
+ueber `Karte: Native` in der Toolbar gewaehlt werden. Er zeigt Marker, kurze
+Trajektorien, Inbound-/Outbound-Lanes, Connections, Stoplines und
+Request-Overlays direkt in Qt ohne Leaflet-Tiles und ohne
 QtWebEngine-GPU-Compositor, damit die Analyse auf problematischen Notebooks
-weiterhin nutzbar bleibt.
+weiterhin nutzbar bleibt. Beim Backend-Wechsel wird das alte WebEngine-Widget
+vor `deleteLater()` explizit entschaerft: ausstehende JavaScript-Callbacks,
+Renderqueues und Timer werden verworfen, damit spaete WebEngine-Callbacks nicht
+mehr auf ein bereits geloeschtes Qt/C++-Objekt zugreifen.
 
 Der Karten-Backend kann fuer Tests auch explizit gesetzt werden:
 
@@ -507,7 +517,7 @@ damit die lokalen Leaflet-Dateien auch in der EXE verfuegbar sind.
 
 Die aktuelle Testsuite deckt Parser, Kartenlogik, Playback, Export, Sicherheitsparser und Szenenmodell breit ab.
 
-- Aktueller Stand: `231 passed`
+- Aktueller Stand: `245 passed`
   - inklusive Runtime-/Entry-Point-Tests fuer Software-OpenGL, `QT_OPENGL_DLL`
     und den QtWebEngine-Startup-Pfad
 - Vorhandene Testbereiche:

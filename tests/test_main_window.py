@@ -114,6 +114,7 @@ class _FakeMapWidget:
         self.focused_intersections: list[int] = []
         self.parent = object()
         self.deleted = False
+        self.disposed = False
 
     def set_performance_mode(self, mode: str) -> None:
         self.modes.append(mode)
@@ -147,6 +148,9 @@ class _FakeMapWidget:
 
     def deleteLater(self) -> None:
         self.deleted = True
+
+    def dispose(self) -> None:
+        self.disposed = True
 
 
 class _FakeSignal:
@@ -587,6 +591,7 @@ def test_map_backend_change_replaces_widget_and_rerenders_session(monkeypatch):
     assert window._map_widget is new_map
     assert window._map_area_layout.removed == [old_map]
     assert window._map_area_layout.inserted == [(0, new_map, 1)]
+    assert old_map.disposed is True
     assert old_map.parent is None
     assert old_map.deleted is True
     assert new_map.modes[-1] == PERFORMANCE_MODE_SAVER
@@ -623,6 +628,7 @@ def test_webengine_bootstrap_issue_switches_to_native_without_persisting(monkeyp
     assert window._map_backend_combo.currentData() == MAP_BACKEND_NATIVE
     assert window._map_area_layout.removed == [old_map]
     assert window._map_area_layout.inserted == [(0, new_map, 1)]
+    assert old_map.disposed is True
     assert new_map.loaded_messages[-1] == window._player._messages
     assert "Native-Fallback" in window._statusbar.messages[-1]
 
@@ -673,6 +679,7 @@ def test_memory_watchdog_auto_reduces_performance_mode(monkeypatch):
     assert window._performance_mode == PERFORMANCE_MODE_DIAGNOSTIC
     assert window._map_widget.modes[-1] == PERFORMANCE_MODE_DIAGNOSTIC
     assert window._performance_auto_downgraded is True
+    assert "ui/performance_mode" not in window._settings.values
     assert "Diagnose" in window._statusbar.messages[-1]
 
 
@@ -718,6 +725,7 @@ def test_map_telemetry_budget_drop_reduces_to_saver_mode():
 
     assert window._performance_mode == PERFORMANCE_MODE_SAVER
     assert window._map_widget.modes[-1] == PERFORMANCE_MODE_SAVER
+    assert "ui/performance_mode" not in window._settings.values
     assert "Payload" in window._statusbar.messages[-1]
 
 
@@ -742,6 +750,28 @@ def test_repeated_map_issues_enable_diagnostic_safe_mode():
     assert window._performance_mode == PERFORMANCE_MODE_DIAGNOSTIC
     assert window._map_safe_mode_active is True
     assert "Safe-Mode" in window._statusbar.messages[-1]
+
+
+def test_render_payload_stall_uses_safe_mode_instead_of_native_fallback():
+    window = MainWindow.__new__(MainWindow)
+    window._map_widget = _FakeMapWidget()
+    window._map_backend = MAP_BACKEND_WEBENGINE
+    window._performance_mode = PERFORMANCE_MODE_NORMAL
+    window._performance_auto_downgraded = False
+    window._performance_mode_combo = _FakeCombo()
+    window._performance_mode_combo.addItem("Normal", PERFORMANCE_MODE_NORMAL)
+    window._performance_mode_combo.addItem("Diagnose", PERFORMANCE_MODE_DIAGNOSTIC)
+    window._settings = _FakeSettings()
+    window._memory_watch_label = _FakeLabel()
+    window._statusbar = _FakeStatusBar()
+    window._map_issue_history = ["minor 1", "minor 2"]
+    window._map_safe_mode_active = False
+
+    window._on_map_issue_detected("Karten-Renderpayload laeuft seit mehr als 8s")
+
+    assert window._map_backend == MAP_BACKEND_WEBENGINE
+    assert window._performance_mode == PERFORMANCE_MODE_DIAGNOSTIC
+    assert window._map_widget.modes[-1] == PERFORMANCE_MODE_DIAGNOSTIC
 
 
 def test_reload_map_resets_safe_mode_and_rerenders_session():
@@ -990,6 +1020,7 @@ def test_render_process_issue_triggers_native_fallback(monkeypatch):
     assert window._map_backend == MAP_BACKEND_NATIVE
     assert "ui/map_backend" not in window._settings.values
     assert window._map_area_layout.removed == [old_map]
+    assert old_map.disposed is True
 
 
 def test_build_diagnostics_report_includes_map_backend_and_opengl_env(monkeypatch):

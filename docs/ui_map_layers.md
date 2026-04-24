@@ -200,6 +200,11 @@ Zahl verwalteter Leaflet-Objekte. Der Bediener kann die Karte anschliessend uebe
 `Karte neu laden` neu initialisieren. Dabei wird die Safe-Mode-Fehlerhistorie
 geleert und die aktuelle Sitzung erneut gerendert.
 
+Ein einzelnes blockiertes oder langsames Render-Payload wird nicht mehr als
+fataler WebEngine-Startfehler bewertet. Es zaehlt weiterhin fuer den Safe-Mode,
+loest aber keinen automatischen Native-Fallback aus. So bleibt die geografische
+Leaflet-Karte erhalten, waehrend die Datenmenge reduziert wird.
+
 ## Diagnosebericht
 
 `Diagnose exportieren` schreibt `pcap2kml_diagnostics.json`. Der Bericht ist fuer
@@ -256,9 +261,10 @@ verwendet wird.
 Wenn QtWebEngine auch mit dieser Konfiguration keinen GLES-Kontext erzeugen
 kann, kann in der Toolbar `Karte: Native` der native Qt-Kartenbackend gewaehlt
 werden. Dieser Backend verwendet `QGraphicsView` statt Leaflet und rendert
-Marker, Trajektorien und einfache Infrastruktur direkt in Qt. Dadurch fehlen
-Online-Kartenkacheln und Basiskartenumschaltung, aber die Analyse bleibt auf
-betroffenen Notebooks bedienbar. Fuer gezielte Vergleiche kann der Backend auch
+Marker, kurze Trajektorien, Inbound-/Outbound-Lanes, Connections, Stoplines und
+Request-Overlays direkt in Qt. Dadurch fehlen Online-Kartenkacheln und
+Basiskartenumschaltung, aber die Analyse bleibt auf betroffenen Notebooks
+bedienbar. Fuer gezielte Vergleiche kann der Backend auch
 ueber `PCAP2KML_MAP_BACKEND=native` oder `PCAP2KML_MAP_BACKEND=webengine`
 festgelegt werden. Der Diagnosebericht enthaelt den konkret aktiven
 Backend-Namen sowie `QT_OPENGL`, `QT_OPENGL_DLL` und die aktiven
@@ -269,10 +275,23 @@ Chromium-Flags.
 Nach `loadFinished` startet ein JavaScript-Probe (`typeof L !== 'undefined' &&
 typeof map !== 'undefined'`). Nur wenn dieser Probe `true` zurueckgibt, gilt der
 Bootstrap als erfolgreich (`_bootstrap_probe_succeeded = True`). Ein paralleler
-6-Sekunden-Timer prueft *dieses Flag* — nicht `loadFinished` — und loest bei
-Nichterfuellung einen `map_issue_detected`-Event aus. Das verhindert das
-Szenario, bei dem `loadFinished(ok=True)` trotz defektem GL-Kontext feuert und
-den Timer faelschlicherweise abwuergt.
+6-Sekunden-Timer prueft *dieses Flag* - nicht `loadFinished` - und loest vor dem
+ersten erfolgreichen Bootstrap bei Nichterfuellung einen `map_issue_detected`-
+Event aus. Das verhindert das Szenario, bei dem `loadFinished(ok=True)` trotz
+defektem GL-Kontext feuert und den Timer faelschlicherweise abwuergt.
+
+Nach einem erfolgreichen Leaflet-Bootstrap setzt die Karte zusaetzlich
+`_ever_bootstrapped = True`. Spaeter eintreffende Bootstrap-Timeouts werden dann
+ignoriert, weil sie typischerweise durch blockierte Event-Loops oder alte Timer
+entstehen koennen. Dadurch bleibt die geografische Leaflet-Karte auch nach dem
+Laden und Filtern grosser PCAPs erhalten.
+
+Beim initialen `fitView` verwendet Leaflet nicht mehr nur die aktuell
+registrierten Layer, sondern explizite, validierte Bounds aus dem Python-
+Render-Payload. Diese Bounds umfassen Marker, Trajektorien-nahe Infrastruktur,
+Inbound-/Outbound-Lanes, Connections, Stoplines und Request-Overlays. Falls
+keine gueltigen Bounds vorhanden sind, faellt die Karte weiterhin auf
+`fitToMarkers()` zurueck.
 
 Zusaetzlich ist das `renderProcessTerminated`-Signal des `QWebEnginePage`
 verbunden. Ein Chromium-Absturz setzt `_bootstrap_probe_succeeded = False` und
@@ -281,3 +300,8 @@ loest ebenfalls einen Fallback aus.
 `_on_map_issue_detected` erkennt fatale Fehlerkategorien (u.a. `"Karten-WebView"`,
 `"Leaflet"`, `"WebEngine"`, `"Render-Prozess"`) und ruft `_replace_map_widget`
 mit `persist=False` auf, damit der naechste App-Start wieder Leaflet versucht.
+Vor dem Entfernen des alten Widgets ruft das Hauptfenster `dispose()` auf. Das
+alte Leaflet/WebEngine-Widget leert dadurch ausstehende Render-Payloads,
+invalidiert Timer-Generationen und ignoriert spaete JavaScript-Callbacks, die
+sonst nach `deleteLater()` noch auf ein bereits geloeschtes Qt/C++-Objekt
+zeigen koennten.

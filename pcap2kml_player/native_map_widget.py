@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import asdict, dataclass
-from math import cos, radians
+from math import cos, hypot, radians
 from typing import Optional
 
 from PyQt6.QtCore import QRectF, Qt, pyqtSignal
@@ -18,6 +18,7 @@ from .map_backend import (
     MAP_PERFORMANCE_NORMAL,
     MAP_PERFORMANCE_SAVER,
 )
+from .scene_model import build_scene_snapshot
 
 PLAYBACK_TRAIL_POINTS = 8
 STATION_PALETTE = [
@@ -35,6 +36,18 @@ STATION_PALETTE = [
 INFRASTRUCTURE_MESSAGE_COLORS = {
     MessageType.MAPEM: "#1f9d55",
     MessageType.SPATEM: "#c026d3",
+}
+LANE_ROLE_COLORS = {
+    "inbound": "#0f766e",
+    "outbound": "#2563eb",
+}
+STOPLINE_COLOR = "#f97316"
+REQUEST_STATUS_COLORS = {
+    "pending": "#2563eb",
+    "acknowledged": "#eab308",
+    "granted": "#16a34a",
+    "rejected": "#dc2626",
+    "timeout": "#7f1d1d",
 }
 NON_STATION_MARKER_TYPES = {
     MessageType.MAPEM,
@@ -187,7 +200,11 @@ class NativeMapWidget(QGraphicsView):
                 or msg.msg_type in INFRASTRUCTURE_MESSAGE_COLORS
             )
         ]
-        bounds = _bounds_for_messages(visible)
+        infrastructure_overlays = _native_infrastructure_overlays(messages[:end_index])
+        bounds = _bounds_for_positions(
+            [(msg.latitude, msg.longitude) for msg in visible]
+            + _overlay_points(infrastructure_overlays)
+        )
         if bounds is None:
             self._draw_empty_hint()
             self._record_telemetry(
@@ -204,14 +221,18 @@ class NativeMapWidget(QGraphicsView):
             )
             return
 
+        for overlay in infrastructure_overlays:
+            self._draw_overlay(overlay, bounds)
+
         projected = [_project_message(msg, bounds) for msg in visible]
         station_coords: dict[str, list[tuple[float, float]]] = {}
         latest_station_points: dict[str, tuple[V2xMessage, tuple[float, float]]] = {}
-        infrastructure_count = 0
+        infrastructure_count = len(infrastructure_overlays)
         for msg, point in projected:
             if msg.msg_type in INFRASTRUCTURE_MESSAGE_COLORS:
-                self._draw_infrastructure(msg, point)
-                infrastructure_count += 1
+                if not infrastructure_overlays:
+                    self._draw_infrastructure(msg, point)
+                    infrastructure_count += 1
                 continue
             if msg.msg_type in NON_STATION_MARKER_TYPES:
                 continue
@@ -310,6 +331,47 @@ class NativeMapWidget(QGraphicsView):
         item.setOpacity(0.65)
         self._scene.addItem(item)
 
+    def _draw_overlay(self, overlay: dict[str, object], bounds: tuple[float, float, float, float]) -> None:
+        if overlay.get("kind") == "polyline":
+            coords = [_project_point((float(lat), float(lon)), bounds) for lat, lon in overlay["coords"]]
+            if len(coords) < 2:
+                return
+            self._draw_polyline(
+                coords,
+                str(overlay.get("color", "#475569")),
+                float(overlay.get("weight", 3.0)),
+                str(overlay.get("dash", "")),
+                str(overlay.get("popup", "")),
+            )
+        elif overlay.get("kind") == "label" and self._performance_mode == MAP_PERFORMANCE_NORMAL:
+            point = _project_point((float(overlay["lat"]), float(overlay["lon"])), bounds)
+            label = QGraphicsTextItem(str(overlay.get("text", "")))
+            label.setDefaultTextColor(QColor(str(overlay.get("color", "#10233f"))))
+            label.setPos(point[0] + 4, point[1] + 4)
+            self._scene.addItem(label)
+
+    def _draw_polyline(
+        self,
+        coords: list[tuple[float, float]],
+        color: str,
+        weight: float,
+        dash: str,
+        tooltip: str,
+    ) -> None:
+        path = QPainterPath()
+        path.moveTo(*coords[0])
+        for point in coords[1:]:
+            path.lineTo(*point)
+        item = QGraphicsPathItem(path)
+        pen = QPen(QColor(color), weight)
+        if dash:
+            pen.setStyle(Qt.PenStyle.DashLine)
+        item.setPen(pen)
+        item.setOpacity(0.9)
+        if tooltip:
+            item.setToolTip(tooltip)
+        self._scene.addItem(item)
+
     def _station_color(self, station_id: str) -> str:
         if station_id not in self._station_color_map:
             self._station_color_map[station_id] = STATION_PALETTE[
@@ -330,10 +392,14 @@ def _has_display_position(msg: V2xMessage) -> bool:
 
 
 def _bounds_for_messages(messages: list[V2xMessage]) -> Optional[tuple[float, float, float, float]]:
-    if not messages:
+    return _bounds_for_positions([(msg.latitude, msg.longitude) for msg in messages])
+
+
+def _bounds_for_positions(points: list[tuple[float, float]]) -> Optional[tuple[float, float, float, float]]:
+    if not points:
         return None
-    lats = [msg.latitude for msg in messages]
-    lons = [msg.longitude for msg in messages]
+    lats = [point[0] for point in points]
+    lons = [point[1] for point in points]
     min_lat, max_lat = min(lats), max(lats)
     min_lon, max_lon = min(lons), max(lons)
     if abs(max_lat - min_lat) < 1e-9:
@@ -349,11 +415,299 @@ def _project_message(
     msg: V2xMessage,
     bounds: tuple[float, float, float, float],
 ) -> tuple[V2xMessage, tuple[float, float]]:
+    return msg, _project_point((msg.latitude, msg.longitude), bounds)
+
+
+def _project_point(
+    point: tuple[float, float],
+    bounds: tuple[float, float, float, float],
+) -> tuple[float, float]:
     min_lat, max_lat, min_lon, max_lon = bounds
     width = 1200.0
     height = 800.0
     mid_lat = (min_lat + max_lat) / 2.0
     lon_scale = max(0.2, cos(radians(mid_lat)))
-    x = ((msg.longitude - min_lon) * lon_scale / max(1e-9, (max_lon - min_lon) * lon_scale)) * width
-    y = (1.0 - ((msg.latitude - min_lat) / max(1e-9, max_lat - min_lat))) * height
-    return msg, (x, y)
+    x = ((point[1] - min_lon) * lon_scale / max(1e-9, (max_lon - min_lon) * lon_scale)) * width
+    y = (1.0 - ((point[0] - min_lat) / max(1e-9, max_lat - min_lat))) * height
+    return (x, y)
+
+
+def _overlay_points(overlays: list[dict[str, object]]) -> list[tuple[float, float]]:
+    points: list[tuple[float, float]] = []
+    for overlay in overlays:
+        if overlay.get("kind") == "polyline":
+            points.extend((float(lat), float(lon)) for lat, lon in overlay.get("coords", []))
+        elif overlay.get("kind") == "label":
+            points.append((float(overlay["lat"]), float(overlay["lon"])))
+    return points
+
+
+def _native_infrastructure_overlays(messages: list[V2xMessage]) -> list[dict[str, object]]:
+    if not messages:
+        return []
+    timeline_position = messages[-1].timestamp
+    scene = build_scene_snapshot(messages, timeline_position)
+    latest_map: dict[str, tuple[V2xMessage, dict]] = {}
+    for msg in messages:
+        if msg.msg_type != MessageType.MAPEM:
+            continue
+        for intersection in _iter_message_intersections(msg):
+            key = _intersection_key(intersection, msg)
+            current = latest_map.get(key)
+            if current is None or current[0].timestamp <= msg.timestamp:
+                latest_map[key] = (msg, intersection)
+
+    overlays: list[dict[str, object]] = []
+    for key, (msg, intersection) in latest_map.items():
+        map_point = _intersection_point(intersection, msg)
+        intersection_id = _coerce_int(intersection.get("intersectionId", intersection.get("id")))
+        request_visuals = scene.request_visuals_by_intersection.get(intersection_id, []) if intersection_id is not None else []
+        lane_set = intersection.get("laneSet")
+        if not isinstance(lane_set, list):
+            continue
+        lane_by_id = {
+            _coerce_int(lane.get("laneId", lane.get("laneID", lane.get("id")))): lane
+            for lane in lane_set
+            if isinstance(lane, dict)
+        }
+        for lane_index, lane in enumerate(lane_set):
+            if not isinstance(lane, dict):
+                continue
+            points = _lane_points(lane)
+            if len(points) < 2:
+                continue
+            lane_id = _coerce_int(lane.get("laneId", lane.get("laneID", lane.get("id"))))
+            role = _lane_role(lane)
+            overlays.append({
+                "kind": "polyline",
+                "coords": points,
+                "color": LANE_ROLE_COLORS.get(role, INFRASTRUCTURE_MESSAGE_COLORS[MessageType.MAPEM]),
+                "weight": 3.0,
+                "popup": f"Lane {lane_id or '-'} | {role or 'unknown'}",
+            })
+            label_point = points[len(points) // 2]
+            overlays.append({
+                "kind": "label",
+                "lat": label_point[0],
+                "lon": label_point[1],
+                "text": f"Lane {lane_id or '-'} {role or ''}".strip(),
+                "color": LANE_ROLE_COLORS.get(role, "#10233f"),
+            })
+            stopline = _stopline_points(lane)
+            if stopline is not None:
+                overlays.append({
+                    "kind": "polyline",
+                    "coords": stopline,
+                    "color": STOPLINE_COLOR,
+                    "weight": 4.0,
+                    "popup": f"Stopline | Lane {lane_id or '-'}",
+                })
+            connections = lane.get("connections", lane.get("connectsTo"))
+            if isinstance(connections, list):
+                for connection in connections:
+                    if not isinstance(connection, dict):
+                        continue
+                    target_lane_id = _coerce_int(connection.get("targetLaneId", connection.get("connectingLane")))
+                    target_lane = lane_by_id.get(target_lane_id)
+                    if not isinstance(target_lane, dict):
+                        continue
+                    connection_points = _connection_curve_points(lane, target_lane, map_point)
+                    if connection_points is None:
+                        continue
+                    overlays.append({
+                        "kind": "polyline",
+                        "coords": connection_points,
+                        "color": INFRASTRUCTURE_MESSAGE_COLORS[MessageType.MAPEM],
+                        "weight": 3.0,
+                        "dash": "8 6",
+                        "popup": f"Connection | Lane {lane_id or '-'} -> {target_lane_id}",
+                    })
+                    for request in request_visuals:
+                        if request.in_lane == lane_id and request.out_lane == target_lane_id:
+                            overlays.append({
+                                "kind": "polyline",
+                                "coords": _offset_polyline(connection_points, _request_overlay_offset_m(request.display_rank)),
+                                "color": REQUEST_STATUS_COLORS.get(request.status.value, "#2563eb"),
+                                "weight": 6.0 if request.is_dominant else 4.0,
+                                "dash": "" if request.is_dominant else "6 6",
+                                "popup": f"Request {request.request_id}/{request.sequence_number} | {request.status.value}",
+                            })
+            for request in request_visuals:
+                if request.in_lane == lane_id or request.out_lane == lane_id:
+                    overlays.append({
+                        "kind": "polyline",
+                        "coords": _offset_polyline(points, _request_overlay_offset_m(request.display_rank)),
+                        "color": REQUEST_STATUS_COLORS.get(request.status.value, "#2563eb"),
+                        "weight": 5.0 if request.is_dominant else 3.5,
+                        "dash": "" if request.is_dominant else "6 6",
+                        "popup": f"Request {request.request_id}/{request.sequence_number} | {request.status.value}",
+                    })
+    return overlays
+
+
+def _iter_message_intersections(msg: V2xMessage) -> list[dict]:
+    intersections = msg.decoded_data.get("intersections")
+    if isinstance(intersections, list) and intersections:
+        return [intersection for intersection in intersections if isinstance(intersection, dict)]
+    return [{}]
+
+
+def _coerce_lat_lon(value: object) -> Optional[tuple[float, float]]:
+    if not isinstance(value, dict):
+        return None
+    lat = value.get("lat", value.get("latitude"))
+    lon = value.get("lon", value.get("longitude"))
+    if lat is None or lon is None:
+        return None
+    try:
+        lat_num = float(lat)
+        lon_num = float(lon)
+    except (TypeError, ValueError):
+        return None
+    if abs(lat_num) > 90 or abs(lon_num) > 180:
+        lat_num /= 1e7
+        lon_num /= 1e7
+    return (lat_num, lon_num)
+
+
+def _coerce_int(value: object) -> Optional[int]:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    if isinstance(value, tuple) and len(value) >= 2:
+        return _coerce_int(value[1])
+    if isinstance(value, dict):
+        for key in ("id", "value", "lane", "signalGroup"):
+            nested = _coerce_int(value.get(key))
+            if nested is not None:
+                return nested
+    return None
+
+
+def _intersection_point(intersection: dict, msg: V2xMessage) -> tuple[float, float]:
+    for key in ("refPoint", "referencePoint", "refPos", "referencePosition"):
+        point = _coerce_lat_lon(intersection.get(key))
+        if point is not None:
+            return point
+    return (msg.latitude, msg.longitude)
+
+
+def _intersection_key(intersection: dict, msg: V2xMessage) -> str:
+    for key in ("intersectionId", "id"):
+        numeric = _coerce_int(intersection.get(key))
+        if numeric is not None:
+            return f"id:{numeric}"
+    point = _intersection_point(intersection, msg)
+    return f"pos:{round(point[0], 4):.4f}:{round(point[1], 4):.4f}"
+
+
+def _lane_points(lane: dict) -> list[tuple[float, float]]:
+    node_list = lane.get("nodeList", lane.get("node-list"))
+    nodes = node_list.get("nodes", node_list.get("nodeSetXY")) if isinstance(node_list, dict) else node_list
+    if not isinstance(nodes, list):
+        return []
+    points: list[tuple[float, float]] = []
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        point = _coerce_lat_lon(node)
+        if point is None:
+            point = _coerce_lat_lon(node.get("delta"))
+        if point is not None:
+            points.append(point)
+    return points
+
+
+def _lane_role(lane: dict) -> Optional[str]:
+    role = lane.get("laneRole")
+    if isinstance(role, str):
+        return role
+    if lane.get("ingressApproach") is not None:
+        return "inbound"
+    if lane.get("egressApproach") is not None:
+        return "outbound"
+    return None
+
+
+def _stopline_points(lane: dict) -> Optional[list[tuple[float, float]]]:
+    stop_line = lane.get("stopLine")
+    if not isinstance(stop_line, dict):
+        return None
+    points = stop_line.get("points")
+    if not isinstance(points, list):
+        return None
+    normalized = [_coerce_lat_lon(point) for point in points if isinstance(point, dict)]
+    normalized = [point for point in normalized if point is not None]
+    return normalized if len(normalized) >= 2 else None
+
+
+def _lane_anchor_points(
+    lane: dict,
+    intersection_point: tuple[float, float],
+) -> Optional[tuple[tuple[float, float], tuple[float, float]]]:
+    points = _lane_points(lane)
+    if len(points) < 2:
+        return None
+    start_distance = _point_distance_meters(points[0], intersection_point)
+    end_distance = _point_distance_meters(points[-1], intersection_point)
+    return (points[0], points[-1]) if start_distance <= end_distance else (points[-1], points[0])
+
+
+def _connection_curve_points(
+    source_lane: dict,
+    target_lane: dict,
+    intersection_point: tuple[float, float],
+) -> Optional[list[tuple[float, float]]]:
+    source_anchors = _lane_anchor_points(source_lane, intersection_point)
+    target_anchors = _lane_anchor_points(target_lane, intersection_point)
+    if source_anchors is None or target_anchors is None:
+        return None
+    source_inner, _ = source_anchors
+    target_inner, _ = target_anchors
+    control_point = (
+        (source_inner[0] + target_inner[0] + intersection_point[0]) / 3.0,
+        (source_inner[1] + target_inner[1] + intersection_point[1]) / 3.0,
+    )
+    return [source_inner, control_point, target_inner]
+
+
+def _point_distance_meters(point_a: tuple[float, float], point_b: tuple[float, float]) -> float:
+    lat_scale = 111_320.0
+    lon_scale = max(1e-6, 111_320.0 * cos(radians((point_a[0] + point_b[0]) / 2.0)))
+    dx = (point_a[1] - point_b[1]) * lon_scale
+    dy = (point_a[0] - point_b[0]) * lat_scale
+    return hypot(dx, dy)
+
+
+def _request_overlay_offset_m(display_rank: int) -> float:
+    if display_rank <= 0:
+        return 0.0
+    step = ((display_rank + 1) // 2) * 2.5
+    return step if display_rank % 2 == 1 else -step
+
+
+def _offset_polyline(coords: list[tuple[float, float]], offset_m: float) -> list[tuple[float, float]]:
+    if abs(offset_m) < 0.01 or len(coords) < 2:
+        return coords
+    shifted: list[tuple[float, float]] = []
+    for index, point in enumerate(coords):
+        prev_point = coords[index - 1] if index > 0 else coords[index]
+        next_point = coords[index + 1] if index < len(coords) - 1 else coords[index]
+        lat_scale = 111_320.0
+        lon_scale = max(1e-6, 111_320.0 * cos(radians(point[0])))
+        dx = (next_point[1] - prev_point[1]) * lon_scale
+        dy = (next_point[0] - prev_point[0]) * lat_scale
+        length = hypot(dx, dy)
+        if length < 0.1:
+            shifted.append(point)
+            continue
+        shifted.append((point[0] + (((dx / length) * offset_m) / lat_scale), point[1] - (((dy / length) * offset_m) / lon_scale)))
+    return shifted

@@ -20,6 +20,7 @@ from pcap2kml_player.map_widget import (
     _js_escape,
     _marker_id_for_message,
     _marker_position_for_message,
+    _payload_bounds,
     _spat_color_for_intersection,
     LEAFLET_HTML,
 )
@@ -513,10 +514,41 @@ def test_leaflet_html_exposes_layer_toggles_and_label_renderer():
     assert "map.invalidateSize(false)" in LEAFLET_HTML
     assert "function setMapPerformanceMode(mode)" in LEAFLET_HTML
     assert "Leaflet unavailable; map bootstrap aborted." in LEAFLET_HTML
+    assert "fitToPayloadBounds(payload.bounds || null)" in LEAFLET_HTML
+    assert "function fitToPayloadBounds(bounds)" in LEAFLET_HTML
     assert "map: L.layerGroup()," in LEAFLET_HTML
     assert "spat: L.layerGroup()" in LEAFLET_HTML
     assert "map: L.layerGroup().addTo(map)" not in LEAFLET_HTML
     assert "spat: L.layerGroup().addTo(map)" not in LEAFLET_HTML
+
+
+def test_payload_bounds_include_markers_and_infrastructure():
+    bounds = _payload_bounds(
+        markers=[
+            {"lat": 48.895, "lon": 9.208},
+            {"lat": "invalid", "lon": 9.0},
+        ],
+        infrastructure=[
+            {"kind": "polyline", "coords": [[48.894, 9.207], [48.896, 9.21]]},
+            {"kind": "label", "lat": 48.893, "lon": 9.206},
+            {"kind": "label", "lat": 99.0, "lon": 9.0},
+        ],
+    )
+
+    assert bounds == [[48.893, 9.206], [48.896, 9.21]]
+
+
+def test_payload_bounds_expand_single_point():
+    bounds = _payload_bounds(
+        markers=[{"lat": 48.895, "lon": 9.208}],
+        infrastructure=[],
+    )
+
+    assert bounds is not None
+    assert round(bounds[0][0], 4) == 48.8945
+    assert round(bounds[0][1], 4) == 9.2075
+    assert round(bounds[1][0], 4) == 48.8955
+    assert round(bounds[1][1], 4) == 9.2085
 
 
 class _FakePage:
@@ -906,7 +938,7 @@ def test_render_playback_slice_applies_time_window(monkeypatch):
     assert payload["performanceMode"] == MAP_PERFORMANCE_SAVER
 
 
-def test_diagnostic_mode_suppresses_trajectories(monkeypatch):
+def test_diagnostic_mode_keeps_short_trajectories(monkeypatch):
     captured_scripts = []
 
     def fake_run_js(self, script):
@@ -919,20 +951,90 @@ def test_diagnostic_mode_suppresses_trajectories(monkeypatch):
     widget._station_color_map = {}
     widget._station_index = 0
     widget._performance_mode = MAP_PERFORMANCE_DIAGNOSTIC
-    msg = V2xMessage(
-        timestamp=datetime(2026, 4, 18, 12, 0, 0, tzinfo=timezone.utc),
-        station_id="car-1",
-        msg_type=MessageType.CAM,
-        latitude=52.0,
-        longitude=13.0,
-    )
+    messages = [
+        V2xMessage(
+            timestamp=datetime(2026, 4, 18, 12, 0, index, tzinfo=timezone.utc),
+            station_id="car-1",
+            msg_type=MessageType.CAM,
+            latitude=52.0 + (index / 1000.0),
+            longitude=13.0 + (index / 1000.0),
+        )
+        for index in range(2)
+    ]
 
-    widget.load_messages([msg])
+    widget.load_messages(messages)
 
     payload = _render_payload(captured_scripts)
     assert payload["markers"]
-    assert payload["trajectories"] == []
+    assert payload["trajectories"]
     assert payload["performanceMode"] == MAP_PERFORMANCE_DIAGNOSTIC
+
+
+def test_diagnostic_mode_keeps_essential_infrastructure_layers(monkeypatch):
+    captured_scripts = []
+
+    def fake_run_js(self, script):
+        captured_scripts.append(script)
+
+    monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
+    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
+
+    widget = MapWidget()
+    widget._station_color_map = {}
+    widget._station_index = 0
+    widget._performance_mode = MAP_PERFORMANCE_DIAGNOSTIC
+    map_msg = V2xMessage(
+        timestamp=datetime(2026, 4, 18, 12, 0, 0, tzinfo=timezone.utc),
+        station_id="rsu-1",
+        msg_type=MessageType.MAPEM,
+        latitude=52.0,
+        longitude=13.0,
+        decoded_data={
+            "intersections": [
+                {
+                    "id": {"id": 42},
+                    "refPoint": {"lat": 52.0, "lon": 13.0},
+                    "laneSet": [
+                        {
+                            "laneID": 17,
+                            "laneRole": "inbound",
+                            "nodeList": {
+                                "nodes": [
+                                    {"lat": 52.0000, "lon": 13.0000},
+                                    {"lat": 52.0001, "lon": 13.0002},
+                                ]
+                            },
+                            "stopLine": {
+                                "points": [
+                                    {"lat": 52.0000, "lon": 13.0000},
+                                    {"lat": 52.0000, "lon": 13.0001},
+                                ]
+                            },
+                        },
+                        {
+                            "laneID": 18,
+                            "laneRole": "outbound",
+                            "nodeList": {
+                                "nodes": [
+                                    {"lat": 52.0002, "lon": 13.0003},
+                                    {"lat": 52.0003, "lon": 13.0004},
+                                ]
+                            },
+                        },
+                    ],
+                }
+            ]
+        },
+    )
+
+    widget.load_messages([map_msg])
+
+    payload = _render_payload(captured_scripts)
+    layers = {item["layerName"] for item in payload["infrastructure"]}
+    assert "map_inbound" in layers
+    assert "map_outbound" in layers
+    assert "map_stoplines" in layers
+    assert "map" not in layers
 
 
 def test_render_payload_budget_caps_markers_and_records_telemetry(monkeypatch):
@@ -1147,6 +1249,7 @@ def test_bootstrap_timeout_fires_even_when_page_loaded():
     widget._bootstrap_generation = 1
     widget._page_ready = True          # simulates loadFinished(ok=True) having fired
     widget._bootstrap_probe_succeeded = False  # probe never returned True
+    widget._ever_bootstrapped = False
     issues: list[str] = []
     widget.map_issue_detected = type("Signal", (), {"emit": lambda self, msg: issues.append(msg)})()
 
@@ -1168,15 +1271,77 @@ def test_bootstrap_timeout_silent_after_probe_succeeded():
     assert issues == []
 
 
+def test_bootstrap_timeout_silent_after_any_previous_success():
+    """A later reload/timeout must not replace an already working geographic map."""
+    widget = MapWidget.__new__(MapWidget)
+    widget._bootstrap_generation = 1
+    widget._bootstrap_probe_succeeded = False
+    widget._ever_bootstrapped = True
+    widget._page_ready = False
+    issues: list[str] = []
+    widget.map_issue_detected = type("Signal", (), {"emit": lambda self, msg: issues.append(msg)})()
+
+    widget._check_bootstrap_timeout(1)
+
+    assert issues == []
+
+
 def test_bootstrap_probe_true_sets_succeeded_flag():
     """A True probe result must set _bootstrap_probe_succeeded so the timeout is suppressed."""
     widget = MapWidget.__new__(MapWidget)
     widget._bootstrap_probe_succeeded = False
+    widget._ever_bootstrapped = False
     widget.map_issue_detected = type("Signal", (), {"emit": lambda self, msg: None})()
 
     widget._on_bootstrap_probe_finished(True)
 
     assert widget._bootstrap_probe_succeeded is True
+    assert widget._ever_bootstrapped is True
+
+
+def test_dispose_cancels_pending_render_callbacks():
+    widget = MapWidget.__new__(MapWidget)
+    widget._disposed = False
+    widget._page_ready = True
+    widget._pending_scripts = ["highlightMarker('x')"]
+    widget._render_payload_in_flight = True
+    widget._queued_render_payload_script = "applyRenderPayload({})"
+    widget._render_payload_started_at = 1.0
+    widget._render_payload_stall_generation = 3
+    widget._bootstrap_generation = 4
+    widget._bootstrap_probe_succeeded = False
+
+    widget.dispose()
+    widget._on_render_payload_finished(None)
+    widget._check_render_payload_stall(-1)
+    widget._check_bootstrap_timeout(-1)
+
+    assert widget._disposed is True
+    assert widget._pending_scripts == []
+    assert widget._render_payload_in_flight is False
+    assert widget._queued_render_payload_script is None
+    assert widget._render_payload_started_at is None
+    assert widget._bootstrap_probe_succeeded is True
+
+
+def test_execute_js_marks_widget_disposed_when_qt_object_was_deleted():
+    class DeletedPage:
+        def runJavaScript(self, *_args):
+            raise RuntimeError("wrapped C/C++ object of type MapWidget has been deleted")
+
+    widget = MapWidget.__new__(MapWidget)
+    widget._disposed = False
+    widget._render_payload_in_flight = True
+    widget._queued_render_payload_script = "applyRenderPayload({})"
+    widget._render_payload_started_at = 1.0
+    widget.page = lambda: DeletedPage()
+
+    widget._execute_js("clearAll()")
+
+    assert widget._disposed is True
+    assert widget._render_payload_in_flight is False
+    assert widget._queued_render_payload_script is None
+    assert widget._render_payload_started_at is None
 
 
 def test_render_process_terminated_emits_map_issue():

@@ -48,8 +48,9 @@ def test_configure_qt_runtime_adds_directcomposition_mitigation_and_software_def
     assert "--disable-accelerated-video-decode" in chromium_flags
     assert "--disable-gpu-memory-buffer-video-frames" in chromium_flags
     assert "--force-color-profile=srgb" in chromium_flags
-    assert "--disable-gpu" in chromium_flags
-    assert "--disable-gpu-compositing" in chromium_flags
+    assert "--disable-gpu-rasterization" in chromium_flags
+    assert "--disable-oop-rasterization" in chromium_flags
+    assert "--disable-gpu" not in chromium_flags
     assert os.environ["QT_OPENGL"] == "software"
     assert os.environ["QSG_RHI_PREFER_SOFTWARE_RENDERER"] == "1"
     assert os.environ["QT_OPENGL_DLL"] == r"C:\PyQt6\Qt6\bin\opengl32sw.dll"
@@ -71,8 +72,9 @@ def test_configure_qt_runtime_can_force_software_rendering(monkeypatch):
     configure_qt_runtime_environment()
 
     chromium_flags = set(os.environ["QTWEBENGINE_CHROMIUM_FLAGS"].split())
-    assert "--disable-gpu" in chromium_flags
-    assert "--disable-gpu-compositing" in chromium_flags
+    assert "--disable-gpu-rasterization" in chromium_flags
+    assert "--disable-oop-rasterization" in chromium_flags
+    assert "--disable-gpu" not in chromium_flags
     assert os.environ["QT_OPENGL"] == "software"
     assert os.environ["QSG_RHI_PREFER_SOFTWARE_RENDERER"] == "1"
     assert "QT_OPENGL_DLL" not in os.environ

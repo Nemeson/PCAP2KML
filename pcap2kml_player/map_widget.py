@@ -15,10 +15,11 @@ from math import cos, hypot, radians
 from pathlib import Path
 from typing import Optional
 
+from PyQt6 import sip
 from PyQt6.QtCore import QObject, QTimer, QUrl, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QResizeEvent, QShowEvent
 from PyQt6.QtWebChannel import QWebChannel
-from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
+from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineSettings
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 
 from .data_model import MessageType, V2xMessage
@@ -51,12 +52,23 @@ MAP_RENDER_BUDGETS = {
     MAP_PERFORMANCE_DIAGNOSTIC: {
         "markers": 200,
         "infrastructure": 600,
-        "trajectories": 0,
-        "trajectory_points": 0,
+        "trajectories": 50,
+        "trajectory_points": 400,
     },
 }
 MAP_RENDER_STALL_SECONDS = 8.0
 MAP_BOOTSTRAP_TIMEOUT_SECONDS = 6.0
+
+
+def _qt_object_deleted(obj: object) -> bool:
+    """Return whether Qt already destroyed the wrapped C++ object."""
+    if not getattr(obj, "__dict__", {}).get("_qt_initialized", False):
+        return False
+    try:
+        return bool(sip.isdeleted(obj))
+    except (AttributeError, RuntimeError, TypeError):
+        return False
+
 
 # Color palette for station markers (hex strings for Leaflet)
 STATION_PALETTE = [
@@ -340,6 +352,55 @@ def _is_near_display_anchors(
         return True
     point = (msg.latitude, msg.longitude)
     return any(_point_distance_meters(point, anchor) <= radius_m for anchor in anchors)
+
+
+def _valid_lat_lon(lat: object, lon: object) -> Optional[tuple[float, float]]:
+    """Return a finite WGS84 coordinate pair suitable for Leaflet bounds."""
+    try:
+        lat_num = float(lat)
+        lon_num = float(lon)
+    except (TypeError, ValueError):
+        return None
+    if not (-90 <= lat_num <= 90 and -180 <= lon_num <= 180):
+        return None
+    return (lat_num, lon_num)
+
+
+def _payload_bounds(
+    markers: list[dict[str, object]],
+    infrastructure: list[dict[str, object]],
+) -> Optional[list[list[float]]]:
+    """Build stable Leaflet bounds from the explicit render payload."""
+    points: list[tuple[float, float]] = []
+    for marker in markers:
+        point = _valid_lat_lon(marker.get("lat"), marker.get("lon"))
+        if point is not None:
+            points.append(point)
+    for item in infrastructure:
+        if item.get("kind") == "polyline":
+            for coord in item.get("coords", []):
+                if not isinstance(coord, list | tuple) or len(coord) < 2:
+                    continue
+                point = _valid_lat_lon(coord[0], coord[1])
+                if point is not None:
+                    points.append(point)
+        else:
+            point = _valid_lat_lon(item.get("lat"), item.get("lon"))
+            if point is not None:
+                points.append(point)
+    if not points:
+        return None
+    min_lat = min(point[0] for point in points)
+    max_lat = max(point[0] for point in points)
+    min_lon = min(point[1] for point in points)
+    max_lon = max(point[1] for point in points)
+    if abs(max_lat - min_lat) < 1e-9:
+        min_lat -= 0.0005
+        max_lat += 0.0005
+    if abs(max_lon - min_lon) < 1e-9:
+        min_lon -= 0.0005
+        max_lon += 0.0005
+    return [[min_lat, min_lon], [max_lat, max_lon]]
 
 
 def _lane_anchor_points(
@@ -1454,7 +1515,7 @@ LEAFLET_HTML = """<!DOCTYPE html>
             syncInfrastructure(activeInfrastructureIds);
 
             if (payload.fitView) {
-                fitToMarkers();
+                fitToPayloadBounds(payload.bounds || null);
             }
         }
 
@@ -1505,6 +1566,26 @@ LEAFLET_HTML = """<!DOCTYPE html>
                     console.warn('fitToMarkers skipped:', error);
                 }
             }
+        }
+
+        function fitToPayloadBounds(bounds) {
+            map.invalidateSize(false);
+            if (!bounds || bounds.length !== 2) {
+                fitToMarkers();
+                return;
+            }
+            try {
+                var southWest = bounds[0];
+                var northEast = bounds[1];
+                var leafletBounds = L.latLngBounds(southWest, northEast);
+                if (leafletBounds.isValid()) {
+                    map.fitBounds(leafletBounds, {padding: [30, 30], maxZoom: 16});
+                    return;
+                }
+            } catch (error) {
+                console.warn('fitToPayloadBounds skipped:', error);
+            }
+            fitToMarkers();
         }
 
         function highlightRequest(intersectionId, requestId, sequenceNumber) {
@@ -1658,6 +1739,7 @@ class MapWidget(QWebEngineView):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._qt_initialized = True
 
         # Set a proper User-Agent so OSM tile servers don't reject requests with 403
         profile = QWebEngineProfile.defaultProfile()
@@ -1666,6 +1748,9 @@ class MapWidget(QWebEngineView):
         )
         self._diagnostic_page = DiagnosticWebEnginePage(profile, self)
         self.setPage(self._diagnostic_page)
+        self._diagnostic_page.settings().setAttribute(
+            QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True
+        )
         self._diagnostic_page.java_script_issue.connect(self._on_java_script_issue)
 
         self._bridge = MapBridge()
@@ -1685,6 +1770,8 @@ class MapWidget(QWebEngineView):
         self._render_payload_stall_generation = 0
         self._bootstrap_generation = 0
         self._bootstrap_probe_succeeded = False
+        self._ever_bootstrapped = False
+        self._disposed = False
         self._latest_telemetry: Optional[MapRenderTelemetry] = None
         self._last_payload_was_replaced = False
 
@@ -1695,6 +1782,18 @@ class MapWidget(QWebEngineView):
         logger.info("Map backend created: webengine")
         self.setHtml(_leaflet_runtime_html(), QUrl.fromLocalFile(str(_asset_base_path()) + "/"))
         self._schedule_bootstrap_timeout()
+
+    def dispose(self) -> None:
+        """Cancel pending async WebEngine work before the widget is replaced."""
+        self._disposed = True
+        self._page_ready = False
+        self._pending_scripts = []
+        self._render_payload_in_flight = False
+        self._queued_render_payload_script = None
+        self._render_payload_started_at = None
+        self._render_payload_stall_generation = -1
+        self._bootstrap_generation = -1
+        self._bootstrap_probe_succeeded = True
 
     def _get_station_color(self, station_id: str) -> str:
         """Assign a color to a station ID, creating a new one if needed."""
@@ -1711,6 +1810,8 @@ class MapWidget(QWebEngineView):
 
     def set_performance_mode(self, mode: str) -> None:
         """Set the map rendering detail level used for future payloads."""
+        if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
+            return
         if mode not in MAP_PERFORMANCE_MODES:
             mode = MAP_PERFORMANCE_NORMAL
         self._performance_mode = mode
@@ -1724,6 +1825,8 @@ class MapWidget(QWebEngineView):
 
     def reload_map_page(self) -> None:
         """Reload the embedded Leaflet page and drop pending JavaScript work."""
+        if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
+            return
         self._page_ready = False
         self._bootstrap_probe_succeeded = False
         self._pending_scripts = []
@@ -1735,6 +1838,8 @@ class MapWidget(QWebEngineView):
 
     def load_messages(self, messages: list[V2xMessage]) -> None:
         """Load all messages onto the map: markers, trajectories, and overlays."""
+        if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
+            return
         self._follow_station_id = None
         self._render_messages(
             messages,
@@ -1837,10 +1942,14 @@ class MapWidget(QWebEngineView):
         for overlay in _infrastructure_overlays_for_messages(messages, max_index=max_index):
             if performance_mode != MAP_PERFORMANCE_NORMAL and overlay["kind"] == "label":
                 continue
-            if (
-                performance_mode == MAP_PERFORMANCE_DIAGNOSTIC
-                and overlay.get("layer") not in {"map_connections", "map_requests", "spat"}
-            ):
+            if performance_mode == MAP_PERFORMANCE_DIAGNOSTIC and overlay.get("layer") not in {
+                "map_inbound",
+                "map_outbound",
+                "map_connections",
+                "map_stoplines",
+                "map_requests",
+                "spat",
+            }:
                 continue
             overlay_id = str(overlay["id"])
             layer_name = str(overlay["layer"])
@@ -1885,6 +1994,8 @@ class MapWidget(QWebEngineView):
         render_trajectories = performance_mode == MAP_PERFORMANCE_NORMAL
         if performance_mode == MAP_PERFORMANCE_SAVER and len(station_coords) <= 25:
             render_trajectories = True
+        if performance_mode == MAP_PERFORMANCE_DIAGNOSTIC and len(station_coords) <= 10:
+            render_trajectories = True
         for station_id, coords in station_coords.items():
             if not render_trajectories:
                 continue
@@ -1920,6 +2031,7 @@ class MapWidget(QWebEngineView):
         payload = {
             "clear": clear_first,
             "fitView": fit_view,
+            "bounds": _payload_bounds(marker_payload, infrastructure_payload),
             "performanceMode": performance_mode,
             "stationColors": self._station_color_map,
             "markers": marker_payload,
@@ -2039,6 +2151,8 @@ class MapWidget(QWebEngineView):
 
     def _on_load_finished(self, ok: bool) -> None:
         """Flush queued JavaScript once the embedded map page is ready."""
+        if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
+            return
         self._page_ready = ok
         self._bootstrap_probe_succeeded = False
         self._render_payload_in_flight = False
@@ -2060,10 +2174,12 @@ class MapWidget(QWebEngineView):
 
     def _on_bootstrap_probe_finished(self, result=None) -> None:
         """Report a visible issue if the page loaded but Leaflet did not bootstrap."""
+        if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
+            return
         if result is True:
             self._bootstrap_probe_succeeded = True
-            logger.info("Leaflet bootstrap probe succeeded — scheduling visual render check")
-            QTimer.singleShot(2500, self._check_visual_render)
+            self._ever_bootstrapped = True
+            logger.info("Leaflet bootstrap probe succeeded — map is ready")
         elif result is False:
             logger.warning("Leaflet bootstrap probe returned False — map not initialised")
             self._emit_map_issue("Leaflet wurde geladen, aber die Karte wurde nicht initialisiert")
@@ -2073,6 +2189,8 @@ class MapWidget(QWebEngineView):
 
     def _schedule_bootstrap_timeout(self) -> None:
         """Detect WebEngine pages that never finish because Chromium lost its GL context."""
+        if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
+            return
         generation = int(self.__dict__.get("_bootstrap_generation", 0)) + 1
         self._bootstrap_generation = generation
         QTimer.singleShot(
@@ -2082,11 +2200,20 @@ class MapWidget(QWebEngineView):
 
     def _check_bootstrap_timeout(self, generation: int) -> None:
         """Report a startup issue when Leaflet never becomes ready."""
+        if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
+            return
         if generation != self.__dict__.get("_bootstrap_generation", 0):
             logger.debug("Bootstrap timeout ignored: stale generation %d", generation)
             return
         if self.__dict__.get("_bootstrap_probe_succeeded", False):
             logger.debug("Bootstrap timeout suppressed: probe already succeeded")
+            return
+        if self.__dict__.get("_ever_bootstrapped", False):
+            logger.warning(
+                "Bootstrap timeout ignored after earlier successful Leaflet bootstrap "
+                "(page_ready=%s)",
+                self.__dict__.get("_page_ready", False),
+            )
             return
         logger.warning(
             "Bootstrap timeout fired after %.0fs — Leaflet probe never succeeded (page_ready=%s)",
@@ -2099,6 +2226,8 @@ class MapWidget(QWebEngineView):
 
     def _on_render_process_terminated(self, termination_status, exit_code: int) -> None:
         """Handle Chromium render process crash or abnormal exit."""
+        if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
+            return
         logger.error(
             "WebEngine render process terminated: status=%s exit_code=%d",
             termination_status,
@@ -2110,42 +2239,10 @@ class MapWidget(QWebEngineView):
             f"WebEngine Render-Prozess beendet (Status={termination_status}, Code={exit_code})"
         )
 
-    def _check_visual_render(self) -> None:
-        """Detect a blank WebEngine surface despite Leaflet claiming success.
-
-        When Chromium's GPU/Viz compositor fails to create GL contexts
-        (kFatalFailure), loadFinished fires and JS executes normally, but no
-        frame ever reaches the screen.  grab() captures what is visually
-        on-screen; a working Leaflet map has zoom controls, attribution, and
-        map-tile backgrounds — always more than 4 distinct RGB values.
-        """
-        if not self.__dict__.get("_bootstrap_probe_succeeded", False):
-            return
-        pixmap = self.grab()
-        if pixmap.isNull() or pixmap.width() < 40 or pixmap.height() < 40:
-            logger.debug("Visual render check skipped: widget too small or null (%dx%d)", pixmap.width(), pixmap.height())
-            return
-        image = pixmap.toImage()
-        w, h = image.width(), image.height()
-        step = max(5, min(w, h) // 10)
-        colors: set[int] = set()
-        for x in range(step, w - step, step):
-            for y in range(step, h - step, step):
-                colors.add(image.pixel(x, y) & 0x00FFFFFF)
-        unique = len(colors)
-        logger.info("Visual render check: %d distinct RGB values sampled (widget %dx%d)", unique, w, h)
-        if unique < 4:
-            logger.warning(
-                "Visual render check: only %d distinct colors — WebEngine surface is blank, triggering native fallback",
-                unique,
-            )
-            self._bootstrap_probe_succeeded = False
-            self._emit_map_issue(
-                "WebEngine Leinwand leer nach Bootstrap — GL-Compositor nicht verfügbar"
-            )
-
     def _run_js(self, script: str) -> None:
         """Execute JavaScript in the web page."""
+        if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
+            return
         if not self._page_ready:
             self._pending_scripts.append(script)
             return
@@ -2164,17 +2261,29 @@ class MapWidget(QWebEngineView):
 
     def _execute_js(self, script: str, callback=None) -> None:
         """Run JavaScript, using a completion callback when Qt supports it."""
-        if callback is None:
-            self.page().runJavaScript(script, 0)
+        if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
             return
         try:
-            self.page().runJavaScript(script, 0, callback)
-        except TypeError:
-            self.page().runJavaScript(script, 0)
-            callback(None)
+            page = self.page()
+            if callback is None:
+                page.runJavaScript(script, 0)
+                return
+            try:
+                page.runJavaScript(script, 0, callback)
+            except TypeError:
+                page.runJavaScript(script, 0)
+                callback(None)
+        except RuntimeError as exc:
+            self._disposed = True
+            self._render_payload_in_flight = False
+            self._queued_render_payload_script = None
+            self._render_payload_started_at = None
+            logger.debug("Ignored JavaScript call on deleted map widget: %s", exc)
 
     def _on_render_payload_finished(self, _result=None) -> None:
         """Flush only the newest queued map payload after the previous one completed."""
+        if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
+            return
         next_script = self._queued_render_payload_script
         self._queued_render_payload_script = None
         if next_script is None:
@@ -2187,6 +2296,8 @@ class MapWidget(QWebEngineView):
 
     def _schedule_render_stall_check(self) -> None:
         """Detect a payload that appears to hang inside QtWebEngine."""
+        if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
+            return
         generation = int(self.__dict__.get("_render_payload_stall_generation", 0)) + 1
         self._render_payload_stall_generation = generation
         QTimer.singleShot(
@@ -2196,6 +2307,8 @@ class MapWidget(QWebEngineView):
 
     def _check_render_payload_stall(self, generation: int) -> None:
         """Emit a map issue if the same render payload is still in flight."""
+        if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
+            return
         if generation != self._render_payload_stall_generation:
             return
         started_at = self.__dict__.get("_render_payload_started_at")

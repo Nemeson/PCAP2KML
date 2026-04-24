@@ -15,18 +15,12 @@ DEFAULT_CHROMIUM_FLAGS = (
     "--force-color-profile=srgb",
 )
 SOFTWARE_RENDERING_FLAGS = (
-    # Force Chromium's built-in SwiftShader renderer for ALL ANGLE/GL operations.
-    # Without this, on machines where D3D11/GLES context creation fails
-    # (kFatalFailure: Failed to create shared context for virtualization),
-    # the Viz display compositor has no GL context and the WebEngine surface
-    # stays gray even though loadFinished(ok=True) and JS executes fine.
-    # SwiftShader is pure software — no hardware GPU or D3D11 required.
-    "--use-angle=swiftshader",
-    "--disable-gpu",
-    "--disable-gpu-compositing",
-    "--disable-accelerated-2d-canvas",
-    "--disable-webgl",
-    "--disable-webgl2",
+    # Keep GPU rasterization off to reduce GPU memory use, but do NOT disable
+    # the GPU process or the display compositor — Chromium handles kFatalFailure
+    # GPU channel errors gracefully when the browser process itself has a working
+    # OpenGL context (provided here via QT_OPENGL=software / opengl32sw.dll).
+    # Adding --disable-gpu or --disable-gpu-compositing breaks this recovery path
+    # and leaves the WebEngine surface permanently blank.
     "--disable-gpu-rasterization",
     "--disable-oop-rasterization",
 )

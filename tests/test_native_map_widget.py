@@ -1,84 +1,76 @@
-"""Tests for NativeMapWidget helper functions."""
+from __future__ import annotations
 
 from datetime import datetime, timezone
 
 from pcap2kml_player.data_model import MessageType, V2xMessage
-from pcap2kml_player.native_map_widget import (
-    _bounds_for_messages,
-    _has_display_position,
-    _project_message,
-)
+from pcap2kml_player.native_map_widget import _native_infrastructure_overlays
 
 
-def _msg(lat: float, lon: float, station_id: str = "s1") -> V2xMessage:
-    return V2xMessage(
-        msg_type=MessageType.CAM,
-        station_id=station_id,
-        latitude=lat,
-        longitude=lon,
-        timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc),
+def test_native_infrastructure_overlays_include_lanes_stoplines_connections_and_requests():
+    map_msg = V2xMessage(
+        timestamp=datetime(2026, 4, 18, 12, 0, 0, tzinfo=timezone.utc),
+        station_id="rsu-1",
+        msg_type=MessageType.MAPEM,
+        latitude=52.0,
+        longitude=13.0,
+        decoded_data={
+            "intersections": [
+                {
+                    "id": {"id": 42},
+                    "refPoint": {"lat": 52.0, "lon": 13.0},
+                    "laneSet": [
+                        {
+                            "laneID": 17,
+                            "laneRole": "inbound",
+                            "connections": [{"signalGroup": 5, "targetLaneId": 18}],
+                            "nodeList": {
+                                "nodes": [
+                                    {"lat": 52.0000, "lon": 13.0000},
+                                    {"lat": 52.0001, "lon": 13.0002},
+                                ]
+                            },
+                            "stopLine": {
+                                "points": [
+                                    {"lat": 52.0000, "lon": 13.0000},
+                                    {"lat": 52.0000, "lon": 13.0001},
+                                ]
+                            },
+                        },
+                        {
+                            "laneID": 18,
+                            "laneRole": "outbound",
+                            "nodeList": {
+                                "nodes": [
+                                    {"lat": 52.0002, "lon": 13.0003},
+                                    {"lat": 52.0003, "lon": 13.0004},
+                                ]
+                            },
+                        },
+                    ],
+                }
+            ]
+        },
+    )
+    srem_msg = V2xMessage(
+        timestamp=datetime(2026, 4, 18, 12, 0, 1, tzinfo=timezone.utc),
+        station_id="bus-1",
+        msg_type=MessageType.SREM,
+        latitude=52.0,
+        longitude=13.0,
+        decoded_data={
+            "intersectionId": 42,
+            "requestId": 7,
+            "sequenceNumber": 1,
+            "inLane": 17,
+            "outLane": 18,
+        },
     )
 
+    overlays = _native_infrastructure_overlays([map_msg, srem_msg])
 
-# ---------------------------------------------------------------------------
-# _has_display_position
-# ---------------------------------------------------------------------------
-
-
-def test_has_display_position_valid():
-    assert _has_display_position(_msg(48.7758, 9.1829)) is True
-
-
-def test_has_display_position_zero_zero():
-    assert _has_display_position(_msg(0.0, 0.0)) is False
-
-
-def test_has_display_position_out_of_range_lat():
-    assert _has_display_position(_msg(91.0, 9.0)) is False
-
-
-def test_has_display_position_out_of_range_lon():
-    assert _has_display_position(_msg(48.0, 181.0)) is False
-
-
-# ---------------------------------------------------------------------------
-# _bounds_for_messages
-# ---------------------------------------------------------------------------
-
-
-def test_bounds_for_messages_empty_returns_none():
-    assert _bounds_for_messages([]) is None
-
-
-def test_bounds_for_messages_single_message_expands_bounds():
-    bounds = _bounds_for_messages([_msg(48.0, 9.0)])
-    assert bounds is not None
-    min_lat, max_lat, min_lon, max_lon = bounds
-    assert min_lat < 48.0 < max_lat
-    assert min_lon < 9.0 < max_lon
-
-
-def test_bounds_for_messages_multiple_messages():
-    msgs = [_msg(48.0, 9.0), _msg(49.0, 10.0)]
-    bounds = _bounds_for_messages(msgs)
-    assert bounds == (48.0, 49.0, 9.0, 10.0)
-
-
-# ---------------------------------------------------------------------------
-# _project_message
-# ---------------------------------------------------------------------------
-
-
-def test_project_message_center_maps_to_midpoint():
-    bounds = (47.0, 49.0, 8.0, 10.0)
-    msg = _msg(48.0, 9.0)
-    _, (px, py) = _project_message(msg, bounds)
-    assert 590 < px < 610
-    assert 390 < py < 410
-
-
-def test_project_message_returns_same_message_object():
-    bounds = (47.0, 49.0, 8.0, 10.0)
-    msg = _msg(48.0, 9.0)
-    returned_msg, _ = _project_message(msg, bounds)
-    assert returned_msg is msg
+    popups = [str(overlay.get("popup", "")) for overlay in overlays]
+    assert any("Lane 17" in popup and "inbound" in popup for popup in popups)
+    assert any("Lane 18" in popup and "outbound" in popup for popup in popups)
+    assert any("Stopline" in popup for popup in popups)
+    assert any("Connection" in popup for popup in popups)
+    assert any("Request 7/1" in popup for popup in popups)

@@ -987,7 +987,22 @@ class MainWindow(QMainWindow):
         self._map_widget = create_map_widget(backend=backend)
         self._connect_map_widget_signals()
         self._map_area_layout.removeWidget(old_widget)
+        if hasattr(old_widget, "dispose"):
+            old_widget.dispose()
         old_widget.setParent(None)
+        # Invalidate any pending QTimer/WebEngine callbacks on the old widget
+        # before deleteLater().  QtWebEngine can still finish async JS after the
+        # Python object is alive but the wrapped C++ view has been destroyed.
+        if hasattr(old_widget, "_bootstrap_generation"):
+            old_widget._bootstrap_generation = -1
+        if hasattr(old_widget, "_render_payload_stall_generation"):
+            old_widget._render_payload_stall_generation = -1
+        if hasattr(old_widget, "_bootstrap_probe_succeeded"):
+            old_widget._bootstrap_probe_succeeded = True
+        if hasattr(old_widget, "_render_payload_in_flight"):
+            old_widget._render_payload_in_flight = False
+        if hasattr(old_widget, "_queued_render_payload_script"):
+            old_widget._queued_render_payload_script = None
         old_widget.deleteLater()
         self._map_area_layout.insertWidget(0, self._map_widget, stretch=1)
         if hasattr(self, "_map_backend_combo"):
@@ -1060,7 +1075,8 @@ class MainWindow(QMainWindow):
             mode = PERFORMANCE_MODE_NORMAL
         self._performance_mode = mode
         self._performance_auto_downgraded = auto
-        self._settings.setValue("ui/performance_mode", mode)
+        if not auto:
+            self._settings.setValue("ui/performance_mode", mode)
         if hasattr(self, "_performance_mode_combo"):
             index = self._performance_mode_combo.findData(mode)
             if index >= 0:
@@ -1157,7 +1173,6 @@ class MainWindow(QMainWindow):
         fatal_markers = (
             "Karten-WebView",
             "Leaflet",
-            "Renderpayload",
             "WebEngine",
             "Bootstrap",
             "Initialisierungstimeout",
