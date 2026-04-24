@@ -7,6 +7,7 @@ on an interactive map with synchronized playback and KML export.
 from __future__ import annotations
 
 import logging
+import os
 import sys
 import traceback
 from pathlib import Path
@@ -16,7 +17,7 @@ project_root = Path(__file__).resolve().parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from pcap2kml_player.qt_runtime import configure_qt_runtime_environment
+from pcap2kml_player.qt_runtime import configure_qt_runtime_environment, prefer_software_rendering
 
 configure_qt_runtime_environment()
 
@@ -87,6 +88,17 @@ def main() -> int:
     setup_logging()
     logger = logging.getLogger("pcap2kml")
     logger.info("Starting PCAP2KML Player")
+    logger.info(
+        "Qt runtime: software=%s | QT_OPENGL=%s | QT_OPENGL_DLL=%s | QSG_RHI_PREFER_SOFTWARE_RENDERER=%s | flags=%s",
+        prefer_software_rendering(),
+        os.environ.get("QT_OPENGL", ""),
+        os.environ.get("QT_OPENGL_DLL", ""),
+        os.environ.get("QSG_RHI_PREFER_SOFTWARE_RENDERER", ""),
+        os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", ""),
+    )
+
+    if prefer_software_rendering():
+        QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseSoftwareOpenGL, True)
 
     app = QApplication(sys.argv)
     app.setApplicationName("PCAP2KML Player")

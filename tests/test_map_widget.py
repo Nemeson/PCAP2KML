@@ -569,6 +569,32 @@ def test_run_js_queues_until_map_page_is_loaded():
     assert "typeof L !== 'undefined'" in fake_page.scripts[0]
 
 
+def test_bootstrap_probe_false_emits_map_issue():
+    widget = MapWidget.__new__(MapWidget)
+    issues: list[str] = []
+    widget.map_issue_detected = type("Signal", (), {"emit": lambda self, msg: issues.append(msg)})()
+
+    widget._on_bootstrap_probe_finished(False)
+
+    assert issues == ["Leaflet wurde geladen, aber die Karte wurde nicht initialisiert"]
+
+
+def test_load_finished_false_emits_map_load_issue():
+    widget = MapWidget.__new__(MapWidget)
+    widget._pending_scripts = []
+    widget._render_payload_in_flight = True
+    widget._queued_render_payload_script = "applyRenderPayload({})"
+    issues: list[str] = []
+    widget.map_issue_detected = type("Signal", (), {"emit": lambda self, msg: issues.append(msg)})()
+
+    widget._on_load_finished(False)
+
+    assert widget._page_ready is False
+    assert widget._render_payload_in_flight is False
+    assert widget._queued_render_payload_script is None
+    assert issues == ["Karten-WebView konnte nicht geladen werden"]
+
+
 def test_run_js_coalesces_render_payloads_while_previous_payload_is_active():
     widget = MapWidget.__new__(MapWidget)
     fake_page = _CallbackPage()

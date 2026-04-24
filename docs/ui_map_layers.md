@@ -243,5 +243,12 @@ und die Python-UI erfasst den Fehler im Karten-Safe-Mode bzw. Diagnosebericht.
 Zusätzlich startet QtWebEngine standardmaessig mit Software-Rendering. Das ist
 auf Notebooks und Remote-/Docking-Setups robuster als GPU-Compositing, weil
 Chromium/Qt sonst je nach Treiber eine graue WebEngine-Flaeche anzeigen kann.
-GPU-Rendering kann fuer Vergleichstests mit `PCAP2KML_ENABLE_GPU=1` wieder
-aktiviert werden.
+Der Softwarepfad nutzt `QT_OPENGL=software` sowie
+`QT_OPENGL_DLL=<PyQt6>\\Qt6\\bin\\opengl32sw.dll`,
+`QSG_RHI_PREFER_SOFTWARE_RENDERER=1` und deaktiviert GPU-Compositing ueber
+Chromium-Flags. Das ist fuer Qt 6 auf Windows der robustere Pfad als ein
+ANGLE-SwiftShader-Erzwingen. GPU-Rendering kann fuer Vergleichstests mit
+`PCAP2KML_ENABLE_GPU=1` wieder aktiviert werden. Die Startup-Logs geben
+`QT_OPENGL_DLL` inzwischen explizit aus, damit bei Problemrechnern sofort
+sichtbar ist, ob wirklich die mit PyQt6 ausgelieferte `opengl32sw.dll`
+verwendet wird.

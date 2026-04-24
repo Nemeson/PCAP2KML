@@ -338,7 +338,8 @@ py pcap2kml_launcher.py
 Auf manchen Windows-Rechnern schreibt QtWebEngine/Chromium Meldungen wie
 `QueryVideoProcessorCustomExtForHDR: Failed to retrieve D3D11 device` ins
 Terminal. Die App setzt beim Start konservative Chromium-Flags gegen fragile
-DirectComposition-/HDR-/Video-Overlay-Pfade:
+DirectComposition-/HDR-/Video-Overlay-Pfade und bevorzugt im Standardbetrieb
+Software-OpenGL plus den Qt-Software-Rasterizer:
 
 ```text
 --disable-direct-composition
@@ -346,12 +347,22 @@ DirectComposition-/HDR-/Video-Overlay-Pfade:
 --disable-accelerated-video-decode
 --disable-gpu-memory-buffer-video-frames
 --force-color-profile=srgb
+--disable-gpu
+--disable-gpu-compositing
 ```
 
-Damit bleibt normale GPU-Beschleunigung fuer die Karte moeglich, waehrend der
-problematische D3D11/HDR-Pfad nicht mehr verwendet werden soll. Falls Karte
-oder WebEngine auf einem Rechner trotzdem instabil laufen, startet die App
-inzwischen standardmaessig mit Software-Rendering:
+Ergaenzend dazu werden gesetzt:
+
+```text
+QT_OPENGL=software
+QT_OPENGL_DLL=<PyQt6>\Qt6\bin\opengl32sw.dll
+QSG_RHI_PREFER_SOFTWARE_RENDERER=1
+```
+
+Damit wird der problematische D3D11-/SceneGraph-Treiberpfad auf vielen
+Windows-Rechnern umgangen. Falls Karte oder WebEngine auf einem Rechner
+trotzdem instabil laufen, startet die App inzwischen standardmaessig mit
+Software-Rendering:
 
 ```powershell
 $env:PCAP2KML_DISABLE_GPU="1"
@@ -454,7 +465,9 @@ damit die lokalen Leaflet-Dateien auch in der EXE verfuegbar sind.
 
 Die aktuelle Testsuite deckt Parser, Kartenlogik, Playback, Export, Sicherheitsparser und Szenenmodell breit ab.
 
-- Aktueller Stand: `212 passed`
+- Aktueller Stand: `221 passed`
+  - inklusive Runtime-/Entry-Point-Tests fuer Software-OpenGL, `QT_OPENGL_DLL`
+    und den QtWebEngine-Startup-Pfad
 - Vorhandene Testbereiche:
   - App-Memory
   - ASN.1-Schema-Update

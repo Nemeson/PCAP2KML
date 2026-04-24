@@ -119,3 +119,13 @@ def test_eta_dashboard_data_contains_metrics_and_events():
     assert metrics["letzter SSEM-Status"] == "granted"
     assert "SREM" in event_types
     assert "SSEM" in event_types
+
+
+def test_eta_dashboard_without_selection_returns_operator_fallback():
+    widget = EtaGraphWidget.__new__(EtaGraphWidget)
+    widget._selection = None
+
+    data = widget.dashboard_data()
+
+    assert data.metrics == [("Status", "Keine ETA-Auswahl vorhanden")]
+    assert data.events == []
