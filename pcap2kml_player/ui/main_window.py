@@ -77,6 +77,7 @@ from ..scene_model import (
     get_clock_skew_warnings,
     get_eta_accuracy_seconds,
 )
+from .dashboard_dialog import StatisticsDashboard
 from .eta_graph_widget import (
     EtaDashboardEvent,
     EtaGraphWidget,
@@ -411,6 +412,10 @@ class MainWindow(QMainWindow):
         self._btn_update_schemas = QPushButton("ASN.1-Schemas aktualisieren")
         self._btn_update_schemas.setToolTip("ASN.1-Schemadateien aus dem Git-Repo aktualisieren")
         toolbar.addWidget(self._btn_update_schemas)
+
+        self._btn_dashboard = QPushButton("Dashboard")
+        self._btn_dashboard.setToolTip("Statistik-Dashboard anzeigen")
+        toolbar.addWidget(self._btn_dashboard)
 
         toolbar.addSeparator()
         toolbar.addWidget(QLabel("Layout:"))
@@ -924,6 +929,7 @@ class MainWindow(QMainWindow):
         self._btn_export_diagnostics.clicked.connect(self._on_export_diagnostics)
         self._btn_reload_map.clicked.connect(self._on_reload_map)
         self._btn_update_schemas.clicked.connect(self._on_update_schemas)
+        self._btn_dashboard.clicked.connect(self._on_show_dashboard)
         self._layout_mode_combo.currentIndexChanged.connect(self._on_layout_mode_changed)
         self._map_backend_combo.currentIndexChanged.connect(self._on_map_backend_changed)
         self._performance_mode_combo.currentIndexChanged.connect(self._on_performance_mode_changed)
@@ -1573,6 +1579,14 @@ class MainWindow(QMainWindow):
             "ASN.1-Schemas konnten nicht aktualisiert werden.\nPruefen Sie Internetverbindung und Git-Installation.",
         )
 
+    def _on_show_dashboard(self) -> None:
+        """Open the statistics dashboard for the current session."""
+        if self._session is None:
+            QMessageBox.information(self, "Dashboard", "Keine Sitzung geladen.")
+            return
+        dialog = StatisticsDashboard(self._session, self)
+        dialog.exec()
+
     def _on_filter_changed(self) -> None:
         """Handle message type filter changes."""
         self._active_types = {msg_type for msg_type, checkbox in self._type_checkboxes.items() if checkbox.isChecked()}
@@ -2046,13 +2060,18 @@ class MainWindow(QMainWindow):
         if auto_focus:
             self._context_tabs.setCurrentIndex(0)
 
-        # Enable signature-verify button only for signed messages
-        if msg.security_info is not None and msg.security_info.signature_r is not None:
-            self._btn_verify_signature.setEnabled(True)
-            self._btn_verify_signature.show()
-        else:
-            self._btn_verify_signature.setEnabled(False)
-            self._btn_verify_signature.hide()
+        # Only toggle verify button when UI is fully initialized
+        try:
+            btn = self._btn_verify_signature
+        except RuntimeError:
+            btn = None
+        if btn is not None:
+            if msg.security_info is not None and msg.security_info.signature_r is not None:
+                btn.setEnabled(True)
+                btn.show()
+            else:
+                btn.setEnabled(False)
+                btn.hide()
 
     def _on_verify_signature(self) -> None:
         """Show a placeholder dialog for ECDSA signature verification.

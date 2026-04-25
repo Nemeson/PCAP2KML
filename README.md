@@ -38,6 +38,26 @@ Unterstuetzte Nachrichtentypen:
 - Problemstellen-Replay
 - CSV/JSON-Export der Priorisierungsfehler inklusive TXA/RXA-Provenance
 - JSON-Analyse-Report fuer Issue-Verteilung, Kreuzungen und Source-Rollen
+- **GeoJSON-Export** pro Station (Point + LineString Trajectory)
+- **CSV-Export** gefilterter Nachrichten (Header + Details als JSON)
+- **GPX-Export** pro Station (Waypoints + Track, GPX 1.1)
+- **Zeitanimierte KML-Tour** mit `gx:FlyTo` und `TimeSpan`
+- **Statistik-Dashboard** (Nachrichtenraten, Speed/Heading pro Station)
+
+## Karten- und Visualisierungs-Stand
+
+### Bereits implementiert
+- Basiskarten (Hell, OSM, Dunkel, Satellit) mit Layer-Control
+- MAP/SPAT als Infrastruktur-Layer
+- SREM/SSEM-Priorisierungs-Overlays
+- ETA-Analyse-Dashboard
+
+### In Entwicklung / Stubs
+- Offline-Karten mit Vector-Tiles (MapLibre)
+- Heatmap/Cluster-Overlay
+- Screenshot-Export
+- Dichte-Timeline, Loop-Modus, Frame-Navigation
+- Koordinaten- und Massstabsanzeige
 
 ## Karten- und Playback-Stand
 
