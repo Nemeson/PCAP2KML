@@ -82,6 +82,16 @@ class SpatForecast:
 
 
 @dataclass
+class LaneConnection:
+    """One ingress-to-egress connection from a MAPEM lane set."""
+
+    connection_id: int
+    ingress_lane_id: int
+    egress_lane_id: int
+    signal_group_id: int | None = None
+
+
+@dataclass
 class IntersectionState:
     """MAP + latest SPaT for one intersection."""
 
@@ -92,6 +102,7 @@ class IntersectionState:
     last_spat_time: datetime | None = None
     map_reference_point: tuple[float, float] | None = None
     lane_stopline_points: dict[int, tuple[float, float]] = field(default_factory=dict)
+    lane_connections: dict[int, list[LaneConnection]] = field(default_factory=dict)
     clock_skew_seconds: float | None = None
     signal_groups: dict[int, SignalGroupState] = field(default_factory=dict)
 
@@ -253,6 +264,32 @@ def find_overdue_requests(
     return overdue
 
 
+def resolve_flow_status(
+    scene: SceneSnapshot,
+    intersection_id: int,
+    ingress_lane: int,
+    egress_lane: int,
+) -> tuple[bool, datetime | None, ForecastConfidence | None]:
+    """Resolve flow status by looking up the lane connection and its signal group.
+
+    Returns (is_allowed_now, estimated_release_time_or_none, confidence_or_none).
+    """
+    isec = scene.intersections.get(intersection_id)
+    if isec is None:
+        return (False, None, None)
+
+    signal_group_id = None
+    for connections in isec.lane_connections.get(ingress_lane, []):
+        if connections.egress_lane_id == egress_lane:
+            signal_group_id = connections.signal_group_id
+            break
+
+    if signal_group_id is None:
+        return (False, None, None)
+
+    return is_flow_allowed(scene, intersection_id, ingress_lane, egress_lane, signal_group_id)
+
+
 def is_flow_allowed(
     scene: SceneSnapshot,
     intersection_id: int,
@@ -320,6 +357,7 @@ def build_scene_snapshot(
                 state.last_map_time = msg.timestamp
                 state.map_reference_point = _extract_map_reference_point(intersection)
                 state.lane_stopline_points = _extract_lane_stopline_points(intersection)
+                state.lane_connections = _extract_lane_connections(intersection)
         elif msg.msg_type == MessageType.SPATEM:
             raw_intersections = _iter_spat_intersections(msg)
             if not raw_intersections:
@@ -1196,6 +1234,50 @@ def _extract_lane_stopline_points(intersection: dict) -> dict[int, tuple[float, 
         lane_points = _extract_lane_points(lane)
         if lane_points:
             result[lane_id] = lane_points[0]
+    return result
+
+
+def _extract_lane_connections(intersection: dict) -> dict[int, list[LaneConnection]]:
+    """Extract lane-to-lane connectivity with signal-group mapping from a MAPEM."""
+    result: dict[int, list[LaneConnection]] = {}
+    lane_set = intersection.get("laneSet")
+    if not isinstance(lane_set, list):
+        return result
+
+    for lane in lane_set:
+        if not isinstance(lane, dict):
+            continue
+        lane_id = _coerce_int(lane.get("laneId", lane.get("laneID", lane.get("id"))))
+        if lane_id is None:
+            continue
+        connects_to = lane.get("connectsTo", lane.get("connectsto"))
+        if not isinstance(connects_to, dict):
+            continue
+        connections = connects_to.get("connections", connects_to.get("connectsTo"))
+        if not isinstance(connections, list):
+            continue
+        lane_conns: list[LaneConnection] = []
+        for conn in connections:
+            if not isinstance(conn, dict):
+                continue
+            target_lane_id = _coerce_int(
+                conn.get("connectingLane", {}).get("lane")
+                if isinstance(conn.get("connectingLane"), dict)
+                else conn.get("targetLaneId")
+            )
+            signal_group_id = _coerce_int(conn.get("signalGroup"))
+            connection_id = _coerce_int(conn.get("connectionId", conn.get("connectionID")))
+            if target_lane_id is not None:
+                lane_conns.append(
+                    LaneConnection(
+                        connection_id=connection_id if connection_id is not None else 0,
+                        ingress_lane_id=lane_id,
+                        egress_lane_id=target_lane_id,
+                        signal_group_id=signal_group_id,
+                    )
+                )
+        if lane_conns:
+            result[lane_id] = lane_conns
     return result
 
 
