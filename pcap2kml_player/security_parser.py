@@ -85,6 +85,16 @@ REGION_TYPE_NAMES = {
 }
 
 
+# ─── ITS-AID permission constants (hex) ─────────────────────────────
+
+ITS_AID_DENM = 0x00000024
+ITS_AID_CAM = 0x00000024
+ITS_AID_MAP_SPAT = 0x00000079
+
+
+# ─── Low-level helpers ───────────────────────────────────────────
+
+
 def _looks_like_plain_its_pdu(payload: bytes) -> bool:
     """Heuristic: distinguish plain ITS-PDU headers from TS 103 097 envelopes."""
     if len(payload) < 6 or payload[0] != 2:
@@ -107,21 +117,16 @@ def _read_uint16(data: bytes, offset: int) -> tuple[int, int]:
 
 
 def _read_length_determinant(data: bytes, offset: int) -> tuple[int, int]:
-    """Read an ASN.1 UPER length determinant.
-
-    For small lengths (<128): single byte.
-    For larger lengths: first byte = 0x80 | (high bits), second byte = low bits.
-    """
+    """Read an ASN.1 UPER length determinant."""
     if offset >= len(data):
         return 0, offset
     first = data[offset]
     if first < 128:
         return first, offset + 1
-    else:
-        if offset + 1 >= len(data):
-            return 0, offset
-        length = ((first & 0x7F) << 8) | data[offset + 1]
-        return length, offset + 2
+    if offset + 1 >= len(data):
+        return 0, offset
+    length = ((first & 0x7F) << 8) | data[offset + 1]
+    return length, offset + 2
 
 
 def _read_fixed_length(data: bytes, offset: int, length: int) -> tuple[bytes, int]:
@@ -142,59 +147,161 @@ def _bytes_to_hex(data: bytes, max_len: int = 16) -> str:
     return hex_str
 
 
-def _parse_certificate(cert_data: bytes) -> dict:
-    """Parse an ETSI TS 103 097 certificate (simplified field extraction).
+# ─── Certificate field scanners ─────────────────────────────────
 
-    Certificate structure per ETSI TS 103 097:
-      Version | SignerInfo | SubjectInfo | SubjectAssurance |
-      ValidityPeriod | Region | SubjectAttributes
 
-    Returns a dict with extracted fields. Fields that cannot be parsed
-    are set to None.
+def _scan_assurance_level(data: bytes, start: int, end: int) -> int | None:
+    """Heuristic: find SubjectAssurance byte (bits 5-7 = assuranceLevel 0-7)."""
+    for offset in range(start, min(end, len(data))):
+        byte_value = data[offset]
+        level = (byte_value >> 5) & 0x07
+        confidence = byte_value & 0x07
+        if 0 <= level <= 7 and 0 <= confidence <= 7:
+            # Additional sanity: byte should not be a regular ASCII char
+            if byte_value > 0x0F:
+                return level
+    return None
+
+
+def _scan_station_type(data: bytes, start: int, end: int) -> str | None:
+    """Heuristic: find StationType byte (0-15) in certificate attributes."""
+    for offset in range(start, min(end, len(data))):
+        value = data[offset]
+        if value in STATION_TYPE_NAMES:
+            # Context check: next byte(s) should not look like length field
+            if offset + 1 < end and data[offset + 1] < 128:
+                return STATION_TYPE_NAMES[value]
+    return None
+
+
+def _scan_validity_period(data: bytes, start: int, end: int) -> tuple[str | None, str | None]:
+    """Heuristic: find ValidityPeriod (StartTime + Duration/EndTime).
+
+    ETSI TS 103 097 ValidityPeriod:
+      start  : Time32 (32-bit Unix epoch seconds since 2004-01-01)
+      duration : Duration (1 byte: units * value)
     """
-    result: dict = {}
-    offset = 0
+    for offset in range(start, end - 4):
+        # Look for plausible Time32 values (2004-2026 ≈ 0-700M seconds)
+        time_val = struct.unpack_from("!I", data, offset)[0]
+        if 0 < time_val < 0x30000000:  # Roughly until ~2030
+            base_year = 2004
+            try:
+                from datetime import datetime, timedelta, timezone
 
-    if len(cert_data) < 2:
+                base = datetime(base_year, 1, 1, tzinfo=timezone.utc)
+                validity_start = (base + timedelta(seconds=time_val)).isoformat()
+            except (OverflowError, ValueError):
+                continue
+
+            # Duration byte follows
+            dur_offset = offset + 4
+            if dur_offset < end:
+                dur_byte = data[dur_offset]
+                # Duration: top 2 bits = unit (0=seconds,1=minutes,2=hours,3=64hours),
+                #           bottom 6 bits = value (0 = 1 unit, ..., 63 = 64 units)
+                unit_type = (dur_byte >> 6) & 0x03
+                unit_value = (dur_byte & 0x3F) + 1
+                unit_names = ["seconds", "minutes", "hours", "64hours"]
+                unit_name = unit_names[unit_type]
+                validity_end = f"+{unit_value} {unit_name}"
+                return validity_start, validity_end
+    return None, None
+
+
+def _scan_its_aid(data: bytes, start: int, end: int) -> list[int] | None:
+    """Heuristic: find ITS-AID (PSID) list in certificate permissions.
+
+    ITS-AIDs in ETSI are typically 1-4 bytes.
+    Known values: CAM/DENM=36 (0x24), MAP/SPAT/SREM/SSEM=121 (0x79).
+    """
+    found: set[int] = set()
+    for offset in range(start, min(end - 1, len(data))):
+        val = data[offset]
+        if val == 0x24:
+            found.add(ITS_AID_DENM)
+        elif val == 0x79:
+            found.add(ITS_AID_MAP_SPAT)
+    return list(found) if found else None
+
+
+def _scan_region(data: bytes, start: int, end: int) -> tuple[str | None, str | None]:
+    """Heuristic: find GeographicRegion in certificate.
+
+    RegionType is 1 byte (0=none,1=circular,2=rectangular,3=polygonal,4=country).
+    For country: 2-byte country code (e.g. 'DE') follows.
+    """
+    for offset in range(start, min(end, len(data))):
+        region_type = data[offset]
+        if region_type in REGION_TYPE_NAMES:
+            if region_type == 4 and offset + 2 < end:
+                country = data[offset + 1 : offset + 3].decode("ascii", errors="replace").upper()
+                return "country", country
+            if region_type == 0:
+                return "none", None
+            if region_type in (1, 2, 3):
+                return REGION_TYPE_NAMES[region_type], None
+    return None, None
+
+
+def _parse_certificate(cert_data: bytes) -> dict:
+    """Parse an ETSI TS 103 097 certificate with heuristic field extraction.
+
+    Returns parsed fields.  Many fields rely on byte-pattern heuristics rather
+    than full ASN.1/UPER decoding, so false negatives are expected.
+    """
+    result: dict = {
+        "version": None,
+        "signer_info_raw": None,
+        "assurance_level": None,
+        "station_type": None,
+        "validity_start": None,
+        "validity_end": None,
+        "its_aid_list": None,
+        "region_type": None,
+        "region_detail": None,
+    }
+
+    if len(cert_data) < 4:
         return result
 
-    # Version (1 byte)
+    offset = 0
     version, offset = _read_uint8(cert_data, offset)
     result["version"] = version
 
-    # Signer Info — determines who issued this certificate
-    if offset >= len(cert_data):
-        return result
+    # Signer Info — first byte after version
+    if offset < len(cert_data):
+        signer_info_type = cert_data[offset] & 0xC0  # Top 2 bits
+        result["signer_info_raw"] = _bytes_to_hex(cert_data[offset : offset + 8])
+        offset += 1
 
-    signer_info_type = cert_data[offset] & 0xC0  # Top 2 bits
-    # The signer info is UPER encoded; exact parsing depends on type
-    # For now, we skip detailed parsing of the signer info field
-    result["signer_info_raw"] = _bytes_to_hex(cert_data[offset : offset + 8])
+    # Try to extract certificate body via length determinant
+    if offset < len(cert_data):
+        body_len, body_start = _read_length_determinant(cert_data, offset)
+        if body_len > 0 and body_start + body_len <= len(cert_data):
+            body_end = body_start + body_len
+        else:
+            body_end = len(cert_data)
+    else:
+        body_end = len(cert_data)
 
-    # Skip to find subject info — this is a simplified parser
-    # In practice, we'd need full ASN.1 UPER decoding
-    # We'll extract what we can with heuristic byte scanning
+    scan_start = offset
+    scan_end = min(body_end, len(cert_data))
+
+    result["assurance_level"] = _scan_assurance_level(cert_data, scan_start, scan_end)
+    result["station_type"] = _scan_station_type(cert_data, scan_start, scan_end)
+    result["validity_start"], result["validity_end"] = _scan_validity_period(cert_data, scan_start, scan_end)
+    result["its_aid_list"] = _scan_its_aid(cert_data, scan_start, scan_end)
+    result["region_type"], result["region_detail"] = _scan_region(cert_data, scan_start, scan_end)
 
     return result
 
 
+# ─── Main parsing entrypoint ────────────────────────────────────────
+
+
 def parse_security_header(payload: bytes) -> SecurityInfo | None:
-    """Parse the ETSI TS 103 097 security envelope from a V2X payload.
-
-    Tries to extract security information from signed messages.
-    If the message is unsigned or the format is not recognized,
-    returns None.
-
-    The security envelope starts with:
-      - Protocol Version (1 byte): value 2 for current ETSI TS 103 097
-      - Content Type / Security Profile (1 byte): 0=unsecured, 1=signed, etc.
-
-    Args:
-        payload: Raw payload bytes (may include security header).
-
-    Returns:
-        SecurityInfo with extracted fields, or None if not a signed message.
-    """
+    """Parse the ETSI TS 103 097 security envelope from a V2X payload."""
     if len(payload) < 2:
         return None
 
@@ -205,27 +312,18 @@ def parse_security_header(payload: bytes) -> SecurityInfo | None:
 
     # ─── Protocol Version ────────────────────────────────────
     protocol_version, offset = _read_uint8(payload, offset)
-
-    # Only version 2 is defined in ETSI TS 103 097 V2.2.1
     if protocol_version != 2:
-        # Not a security envelope or unsupported version
         return None
 
     # ─── Security Profile (Content Type) ─────────────────────
     security_profile, offset = _read_uint8(payload, offset)
-
     profile_name = SECURITY_PROFILE_NAMES.get(security_profile, f"unknown({security_profile})")
 
-    # Unsecured messages have no further security data
     if security_profile == SECURITY_PROFILE_UNSECURED:
         return SecurityInfo(
             protocol_version=protocol_version,
             security_profile=profile_name,
         )
-
-    # ─── For signed messages, extract signer info ────────────
-    # The remaining structure depends on the security profile.
-    # We do our best to extract key fields.
 
     info = SecurityInfo(
         protocol_version=protocol_version,
@@ -236,82 +334,49 @@ def parse_security_header(payload: bytes) -> SecurityInfo | None:
         return info
 
     # ─── Signer Info (UPER encoded) ─────────────────────────
-    # SignerInfo ::= CHOICE {
-    #   self                  [0] HashedId8,
-    #   digest                [1] HashedId8,
-    #   certificateChain      [2] SequenceOfCertificate,
-    # }
-    # In UPER, choice index is 2 bits: 0=digest(8), 1=digest(8), 2=chain
-
-    # Read the signer info type byte
-    # UPER encodes choice index in first 2 bits
     signer_byte = payload[offset]
-    # Top 2 bits indicate signer type (0=self with signature, 1=digest, 2=chain, 3=digest+unknown)
     signer_type_bits = (signer_byte >> 6) & 0x03
-
     info.signer_type = SIGNER_TYPE_NAMES.get(signer_type_bits, f"unknown({signer_type_bits})")
 
-    # ─── Extract certificate digest or chain ─────────────────
     if signer_type_bits in (0, 1):
-        # HashedId8 (8 bytes) follows the choice byte
-        # The digest is embedded in the remaining bits of the first byte + next 7 bytes
-        # UPER alignment: after choice (2 bits), HashedId8 is 64 bits = 8 bytes
-        # We need to read 8 bytes starting from offset, but the first byte has 2 bits used
-        # For simplicity, extract the next 8 bytes as the digest
-        digest_start = offset + 1  # Skip the signer info byte
+        digest_start = offset + 1
         if digest_start + 8 <= len(payload):
-            digest_bytes = payload[digest_start : digest_start + 8]
-            info.signer_digest = digest_bytes.hex()
+            info.signer_digest = payload[digest_start : digest_start + 8].hex()
             offset = digest_start + 8
         else:
-            # Not enough data for digest
             return info
 
     elif signer_type_bits == 2:
-        # Certificate chain — length determinant followed by certificates
-        offset += 1  # Skip signer info byte
+        offset += 1
         chain_len, offset = _read_length_determinant(payload, offset)
-
         if chain_len > 0 and offset + 10 < len(payload):
-            # Try to extract the first certificate's data
-            # Certificate starts with version byte + length
-            cert_start = offset
-            # The certificate chain contains one or more certificates
-            # Each certificate has a length determinant
             cert_len, cert_start = _read_length_determinant(payload, offset)
-
             if cert_len > 0 and cert_start + cert_len <= len(payload):
                 cert_data = payload[cert_start : cert_start + cert_len]
-                # Try to extract basic fields from the certificate
                 cert_info = _parse_certificate(cert_data)
                 if cert_info.get("signer_info_raw"):
                     info.certificate_issuer = cert_info["signer_info_raw"]
+                if cert_info.get("assurance_level") is not None:
+                    info.assurance_level = cert_info["assurance_level"]
+                if cert_info.get("station_type") is not None:
+                    info.station_type = cert_info["station_type"]
+                if cert_info.get("validity_start") is not None:
+                    info.validity_start = cert_info["validity_start"]
+                if cert_info.get("validity_end") is not None:
+                    info.validity_end = cert_info["validity_end"]
+                if cert_info.get("its_aid_list") is not None:
+                    info.its_aid_list = cert_info["its_aid_list"]
+                if cert_info.get("region_type") is not None:
+                    info.region_type = cert_info["region_type"]
+                if cert_info.get("region_detail") is not None:
+                    info.region_detail = cert_info["region_detail"]
 
-    # ─── Header Info ─────────────────────────────────────────
-    # After signer info: HeaderInfo contains:
-    #   - PSID (ITS-AID)
-    #   - Generation time
-    #   - Generation location (optional)
-    #   - ... other optional fields
-
-    # We attempt to find the signature at the end of the message
-    # ETSI TS 103 097 signatures are always the last field
-
-    # ECDSA signature: 2 * field_size bytes (R + S)
-    # NIST P-256: 2 * 32 = 64 bytes
-    # BrainpoolP256r1: 2 * 32 = 64 bytes
-
-    # Try to extract signature from the end of the payload
+    # ─── Signature extraction ──────────────────────────────────
     remaining_len = len(payload) - offset
     if remaining_len >= 65:
-        # Most likely signature is at the end (64 bytes for P-256)
-        # The signature format: [algorithm byte][R (32 bytes)][S (32 bytes)]
-        # or for EcdsaP256: [R length][R (32 bytes)][S length][S (32 bytes)]
         sig_end = len(payload)
-        sig_start = max(offset, sig_end - 66)  # 1 byte algo + 32 R + 1 byte len + 32 S
+        sig_start = max(offset, sig_end - 66)
 
-        # Check for signature algorithm indicator
-        # UPER: 0 = NIST P-256, 1 = BrainpoolP256r1
         algo_offset = sig_start
         if algo_offset < len(payload):
             algo_byte = payload[algo_offset]
@@ -322,7 +387,6 @@ def parse_security_header(payload: bytes) -> SecurityInfo | None:
             else:
                 info.signature_algorithm = f"unknown({algo_byte})"
 
-        # Extract R and S values (last 64 bytes for P-256 signatures)
         if len(payload) >= 65:
             r_start = len(payload) - 64
             s_start = len(payload) - 32
@@ -332,54 +396,39 @@ def parse_security_header(payload: bytes) -> SecurityInfo | None:
     return info
 
 
+# ─── Decoded-message extractor (no raw payload) ──────────────────
+
+
 def extract_security_from_decoded(decoded: dict, msg_type: str) -> SecurityInfo | None:
-    """Extract security information from a decoded ITS message.
-
-    Decoded messages from asn1tools may contain security-related fields
-    in their header. This extracts them into a SecurityInfo structure.
-
-    Args:
-        decoded: Decoded message dict from asn1tools.
-        msg_type: Message type string (CAM, DENM, etc.)
-
-    Returns:
-        SecurityInfo with available fields, or None if no security data found.
-    """
+    """Extract security information from a decoded ITS message."""
     info = SecurityInfo()
 
-    # Try to extract from the ITS PDU header
     header = decoded.get("header", decoded.get("itsPduHeader", {}))
 
-    # Protocol version from ITS PDU header
     if "protocolVersion" in header:
         info.protocol_version = header["protocolVersion"]
 
-    # Message ID maps to ITS-AID
     msg_id = header.get("messageID", header.get("messageId"))
     if msg_id is not None:
-        # ITS-AID values per ETSI TS 102 965
         its_aid_map = {
-            1: 0x00000024,  # DENM = 36
-            2: 0x00000024,  # CAM = 36 (same ITS-AID)
-            3: 0x00000079,  # SPATEM = 121
-            4: 0x00000079,  # MAPEM = 121
-            5: 0x00000079,  # SPATEM = 121
-            9: 0x00000079,  # SREM = 121
-            10: 0x00000079,  # SSEM = 121
+            1: ITS_AID_DENM,
+            2: ITS_AID_CAM,
+            3: ITS_AID_MAP_SPAT,
+            4: ITS_AID_MAP_SPAT,
+            5: ITS_AID_MAP_SPAT,
+            9: ITS_AID_MAP_SPAT,
+            10: ITS_AID_MAP_SPAT,
         }
         info.its_aid_list = [its_aid_map.get(msg_id, msg_id)]
 
-    # Station ID from header
     station_id = header.get("stationID", header.get("stationId"))
     if station_id is not None:
         info.station_type = f"Station-ID: {station_id}"
 
-    # Try to extract from CAM/DENM specific fields
     if msg_type == "CAM":
         cam = decoded.get("cam", decoded)
         params = cam.get("camParameters", cam)
         basic = params.get("basicContainer", {})
-        # CAM basicContainer has stationType
         station_type_int = basic.get("stationType")
         if station_type_int is not None:
             info.station_type = STATION_TYPE_NAMES.get(station_type_int, f"type_{station_type_int}")

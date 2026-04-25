@@ -663,6 +663,14 @@ class MainWindow(QMainWindow):
         self._apply_table_readability_style(self._detail_table)
         self._detail_table.hide()
         details_layout.addWidget(self._detail_table, stretch=1)
+
+        self._btn_verify_signature = QPushButton("Signatur prüfen")
+        self._btn_verify_signature.setToolTip("ECDSA-Signaturverifikation (noch nicht implementiert)")
+        self._btn_verify_signature.setEnabled(False)
+        self._btn_verify_signature.clicked.connect(self._on_verify_signature)
+        self._btn_verify_signature.hide()
+        details_layout.addWidget(self._btn_verify_signature)
+
         self._context_tabs.addTab(details_tab, "Details")
 
         scene_tab = QWidget()
@@ -1684,7 +1692,12 @@ class MainWindow(QMainWindow):
         messages_id = id(self._player._messages)
         index = self._player.current_index
         now = time.perf_counter()
-        if self._last_map_messages_id != messages_id or self._last_map_slice_index is None or index < self._last_map_slice_index or now - self._last_map_slice_update_monotonic >= self._map_render_interval_seconds():
+        if (
+            self._last_map_messages_id != messages_id
+            or self._last_map_slice_index is None
+            or index < self._last_map_slice_index
+            or now - self._last_map_slice_update_monotonic >= self._map_render_interval_seconds()
+        ):
             should_render = True
         else:
             should_render = False
@@ -2032,6 +2045,35 @@ class MainWindow(QMainWindow):
         self._last_detail_key = detail_key
         if auto_focus:
             self._context_tabs.setCurrentIndex(0)
+
+        # Enable signature-verify button only for signed messages
+        if msg.security_info is not None and msg.security_info.signature_r is not None:
+            self._btn_verify_signature.setEnabled(True)
+            self._btn_verify_signature.show()
+        else:
+            self._btn_verify_signature.setEnabled(False)
+            self._btn_verify_signature.hide()
+
+    def _on_verify_signature(self) -> None:
+        """Show a placeholder dialog for ECDSA signature verification.
+
+        Real verification requires the certificate public key and the
+        full signed payload.  This is deliberately deferred to a future
+        opt-in build.
+        """
+        QMessageBox.information(
+            self,
+            "Signaturverifikation",
+            (
+                "ECDSA-Signaturverifikation ist noch nicht implementiert.\n\n"
+                "Benötigt werden:\n"
+                "  - Zertifikat der ausstellenden CA\n"
+                "  - Öffentlicher Schlüssel des Absenders\n"
+                "  - Vollständiger signierter Payload\n\n"
+                "Wenn du diese Funktion benötigst, öffne bitte ein Issue "
+                "oder kontaktiere das Entwicklerteam."
+            ),
+        )
 
     def _update_scene_for_message(self, msg: V2xMessage | None, *, force: bool = False) -> None:
         """Rebuild and display the current scene snapshot for one playback position."""
