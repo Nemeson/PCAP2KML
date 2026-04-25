@@ -38,3 +38,18 @@ def test_map_backend_can_force_native(monkeypatch):
 
     assert prefer_native_map_backend() is True
     assert selected_map_backend_name() == MAP_BACKEND_NATIVE
+
+
+def test_map_backend_env_uppercase(monkeypatch):
+    monkeypatch.setenv("PCAP2KML_MAP_BACKEND", "NATIVE")
+    assert prefer_native_map_backend() is True
+
+
+def test_map_backend_env_whitespace(monkeypatch):
+    monkeypatch.setenv("PCAP2KML_MAP_BACKEND", "  native  ")
+    assert prefer_native_map_backend() is True
+
+
+def test_map_backend_env_invalid(monkeypatch):
+    monkeypatch.setenv("PCAP2KML_MAP_BACKEND", "foobar")
+    assert prefer_native_map_backend() is False

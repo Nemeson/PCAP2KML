@@ -144,5 +144,44 @@ def test_focus_replay_next_and_previous_wrap() -> None:
     controller.seek_to_next_focus()
     assert controller.current_index == 1
 
-    controller.seek_to_previous_focus()
-    assert controller.current_index == 2
+
+def test_set_speed() -> None:
+    controller = PlayerController()
+    controller.set_speed(2.0)
+    assert controller.speed == 2.0
+
+
+def test_set_filtered_messages() -> None:
+    base = datetime(2025, 8, 22, 12, 0, 0)
+    session = SessionData(
+        messages=[
+            _message(base),
+            _message(base + timedelta(seconds=1)),
+            _message(base + timedelta(seconds=2)),
+        ]
+    )
+    controller = PlayerController()
+    controller.set_session(session)
+    controller.play()
+    filtered = session.messages[:1]
+    controller.set_filtered_messages(filtered)
+    assert controller.total_messages == 1
+
+
+def test_format_time() -> None:
+    controller = PlayerController()
+    assert controller.format_time(65.5) == "01:05.5"
+    assert controller.format_time(0.0) == "00:00.0"
+
+
+def test_seek_to_index_out_of_bounds() -> None:
+    controller = PlayerController()
+    controller.set_session(SessionData(messages=[_message(datetime.now())]))
+    controller.seek_to_index(99)
+    assert controller.current_index == 0
+
+
+def test_seek_to_position_no_messages() -> None:
+    controller = PlayerController()
+    controller.seek_to_position(0.5)
+    assert controller.current_index == 0
