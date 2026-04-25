@@ -1488,8 +1488,10 @@ class MainWindow(QMainWindow):
         if self._loader_thread is not None:
             self._loader_thread.quit()
             self._loader_thread.wait()
+            # Disconnect thread.started before deleting worker, since the slot
+            # references self._loader_worker which is about to be set to None.
             try:
-                self._loader_thread.started.disconnect(self._loader_worker.run)
+                self._loader_thread.started.disconnect()
             except (RuntimeError, TypeError):
                 pass
             self._loader_thread.deleteLater()
