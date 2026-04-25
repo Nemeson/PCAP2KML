@@ -83,7 +83,9 @@ def test_marker_position_offsets_map_and_spat_to_keep_both_visible():
         longitude=13.0,
     )
 
-    assert _marker_position_for_message(map_msg) != _marker_position_for_message(spat_msg)
+    assert _marker_position_for_message(map_msg) != _marker_position_for_message(
+        spat_msg
+    )
 
 
 def test_has_display_position_rejects_null_island_sentinel():
@@ -198,7 +200,10 @@ def test_infrastructure_overlays_create_spat_label_and_phase_color():
                             "stateTimeSpeed": [
                                 {
                                     "eventState": "stop-And-Remain",
-                                    "timing": {"likelyTime": 42, "timeConfidence": "high"},
+                                    "timing": {
+                                        "likelyTime": 42,
+                                        "timeConfidence": "high",
+                                    },
                                 },
                             ],
                         }
@@ -273,7 +278,10 @@ def test_infrastructure_overlays_for_messages_colors_connection_by_matching_spat
                             "stateTimeSpeed": [
                                 {
                                     "eventState": "stop-And-Remain",
-                                    "timing": {"likelyTime": 42, "timeConfidence": "high"},
+                                    "timing": {
+                                        "likelyTime": 42,
+                                        "timeConfidence": "high",
+                                    },
                                 },
                             ],
                         }
@@ -472,14 +480,26 @@ def test_infrastructure_overlays_for_messages_create_request_overlays_for_lane_a
     ]
 
     assert request_overlays
-    assert any(overlay["weight"] == 6 and overlay["color"] == "#16a34a" for overlay in request_overlays)
-    assert any(overlay["weight"] == 4 and overlay["dashArray"] == "6 6" for overlay in request_overlays)
-    assert any("Priorisierung" in overlay["popup"] and "granted" in overlay["popup"] for overlay in request_overlays)
+    assert any(
+        overlay["weight"] == 6 and overlay["color"] == "#16a34a"
+        for overlay in request_overlays
+    )
+    assert any(
+        overlay["weight"] == 4 and overlay["dashArray"] == "6 6"
+        for overlay in request_overlays
+    )
+    assert any(
+        "Priorisierung" in overlay["popup"] and "granted" in overlay["popup"]
+        for overlay in request_overlays
+    )
     connection_request_overlays = [
         overlay for overlay in request_overlays if "connection" in overlay["id"]
     ]
     assert len(connection_request_overlays) >= 2
-    assert connection_request_overlays[0]["coords"] != connection_request_overlays[1]["coords"]
+    assert (
+        connection_request_overlays[0]["coords"]
+        != connection_request_overlays[1]["coords"]
+    )
 
 
 def test_leaflet_html_exposes_layer_toggles_and_label_renderer():
@@ -578,7 +598,11 @@ class _NoSliceMessages(list):
 
 
 def _render_payload(captured_scripts: list[str]) -> dict:
-    script = next(script for script in captured_scripts if script.startswith("applyRenderPayload("))
+    script = next(
+        script
+        for script in captured_scripts
+        if script.startswith("applyRenderPayload(")
+    )
     return json.loads(script.removeprefix("applyRenderPayload(").removesuffix(")"))
 
 
@@ -604,7 +628,9 @@ def test_run_js_queues_until_map_page_is_loaded():
 def test_bootstrap_probe_false_emits_map_issue():
     widget = MapWidget.__new__(MapWidget)
     issues: list[str] = []
-    widget.map_issue_detected = type("Signal", (), {"emit": lambda self, msg: issues.append(msg)})()
+    widget.map_issue_detected = type(
+        "Signal", (), {"emit": lambda self, msg: issues.append(msg)}
+    )()
 
     widget._on_bootstrap_probe_finished(False)
 
@@ -614,7 +640,9 @@ def test_bootstrap_probe_false_emits_map_issue():
 def test_bootstrap_probe_none_emits_verification_issue():
     widget = MapWidget.__new__(MapWidget)
     issues: list[str] = []
-    widget.map_issue_detected = type("Signal", (), {"emit": lambda self, msg: issues.append(msg)})()
+    widget.map_issue_detected = type(
+        "Signal", (), {"emit": lambda self, msg: issues.append(msg)}
+    )()
 
     widget._on_bootstrap_probe_finished(None)
 
@@ -626,7 +654,9 @@ def test_bootstrap_timeout_emits_map_issue():
     widget._bootstrap_generation = 3
     widget._page_ready = False
     issues: list[str] = []
-    widget.map_issue_detected = type("Signal", (), {"emit": lambda self, msg: issues.append(msg)})()
+    widget.map_issue_detected = type(
+        "Signal", (), {"emit": lambda self, msg: issues.append(msg)}
+    )()
 
     widget._check_bootstrap_timeout(3)
 
@@ -638,7 +668,9 @@ def test_bootstrap_timeout_ignores_stale_generation():
     widget._bootstrap_generation = 4
     widget._page_ready = False
     issues: list[str] = []
-    widget.map_issue_detected = type("Signal", (), {"emit": lambda self, msg: issues.append(msg)})()
+    widget.map_issue_detected = type(
+        "Signal", (), {"emit": lambda self, msg: issues.append(msg)}
+    )()
 
     widget._check_bootstrap_timeout(3)
 
@@ -651,7 +683,9 @@ def test_load_finished_false_emits_map_load_issue():
     widget._render_payload_in_flight = True
     widget._queued_render_payload_script = "applyRenderPayload({})"
     issues: list[str] = []
-    widget.map_issue_detected = type("Signal", (), {"emit": lambda self, msg: issues.append(msg)})()
+    widget.map_issue_detected = type(
+        "Signal", (), {"emit": lambda self, msg: issues.append(msg)}
+    )()
 
     widget._on_load_finished(False)
 
@@ -668,20 +702,21 @@ def test_run_js_coalesces_render_payloads_while_previous_payload_is_active():
     widget._pending_scripts = []
     widget._render_payload_in_flight = False
     widget._queued_render_payload_script = None
+    widget._stall_timer = None
     widget.page = lambda: fake_page
 
-    widget._run_js("applyRenderPayload({\"id\": 1})")
-    widget._run_js("applyRenderPayload({\"id\": 2})")
-    widget._run_js("applyRenderPayload({\"id\": 3})")
+    widget._run_js('applyRenderPayload({"id": 1})')
+    widget._run_js('applyRenderPayload({"id": 2})')
+    widget._run_js('applyRenderPayload({"id": 3})')
 
-    assert fake_page.scripts == ["applyRenderPayload({\"id\": 1})"]
-    assert widget._queued_render_payload_script == "applyRenderPayload({\"id\": 3})"
+    assert fake_page.scripts == ['applyRenderPayload({"id": 1})']
+    assert widget._queued_render_payload_script == 'applyRenderPayload({"id": 3})'
 
     fake_page.callbacks.pop(0)(None)
 
     assert fake_page.scripts == [
-        "applyRenderPayload({\"id\": 1})",
-        "applyRenderPayload({\"id\": 3})",
+        'applyRenderPayload({"id": 1})',
+        'applyRenderPayload({"id": 3})',
     ]
 
 
@@ -1112,7 +1147,9 @@ def test_update_playback_position_follows_selected_station(monkeypatch):
 
     widget.update_playback_position(msg)
 
-    assert any("highlightMarker('station_car-1')" in script for script in captured_scripts)
+    assert any(
+        "highlightMarker('station_car-1')" in script for script in captured_scripts
+    )
     assert any("followMarker('station_car-1')" in script for script in captured_scripts)
 
 
@@ -1178,7 +1215,9 @@ def test_load_messages_skips_null_island_markers(monkeypatch):
     assert "good-cam" in station_ids
 
 
-def test_load_messages_skips_far_outliers_when_infrastructure_anchor_exists(monkeypatch):
+def test_load_messages_skips_far_outliers_when_infrastructure_anchor_exists(
+    monkeypatch,
+):
     captured_scripts = []
 
     def fake_run_js(self, script):
@@ -1197,7 +1236,9 @@ def test_load_messages_skips_far_outliers_when_infrastructure_anchor_exists(monk
         msg_type=MessageType.MAPEM,
         latitude=48.894068,
         longitude=9.208135,
-        decoded_data={"intersections": [{"refPoint": {"lat": 48.894068, "lon": 9.208135}}]},
+        decoded_data={
+            "intersections": [{"refPoint": {"lat": 48.894068, "lon": 9.208135}}]
+        },
     )
     outlier_msg = V2xMessage(
         timestamp=datetime(2026, 4, 18, 12, 0, 1, tzinfo=timezone.utc),
@@ -1247,11 +1288,13 @@ def test_bootstrap_timeout_fires_even_when_page_loaded():
     Leaflet probe never confirmed success (_bootstrap_probe_succeeded=False)."""
     widget = MapWidget.__new__(MapWidget)
     widget._bootstrap_generation = 1
-    widget._page_ready = True          # simulates loadFinished(ok=True) having fired
+    widget._page_ready = True  # simulates loadFinished(ok=True) having fired
     widget._bootstrap_probe_succeeded = False  # probe never returned True
     widget._ever_bootstrapped = False
     issues: list[str] = []
-    widget.map_issue_detected = type("Signal", (), {"emit": lambda self, msg: issues.append(msg)})()
+    widget.map_issue_detected = type(
+        "Signal", (), {"emit": lambda self, msg: issues.append(msg)}
+    )()
 
     widget._check_bootstrap_timeout(1)
 
@@ -1264,7 +1307,9 @@ def test_bootstrap_timeout_silent_after_probe_succeeded():
     widget._bootstrap_generation = 1
     widget._bootstrap_probe_succeeded = True
     issues: list[str] = []
-    widget.map_issue_detected = type("Signal", (), {"emit": lambda self, msg: issues.append(msg)})()
+    widget.map_issue_detected = type(
+        "Signal", (), {"emit": lambda self, msg: issues.append(msg)}
+    )()
 
     widget._check_bootstrap_timeout(1)
 
@@ -1279,7 +1324,9 @@ def test_bootstrap_timeout_silent_after_any_previous_success():
     widget._ever_bootstrapped = True
     widget._page_ready = False
     issues: list[str] = []
-    widget.map_issue_detected = type("Signal", (), {"emit": lambda self, msg: issues.append(msg)})()
+    widget.map_issue_detected = type(
+        "Signal", (), {"emit": lambda self, msg: issues.append(msg)}
+    )()
 
     widget._check_bootstrap_timeout(1)
 
@@ -1327,7 +1374,9 @@ def test_dispose_cancels_pending_render_callbacks():
 def test_execute_js_marks_widget_disposed_when_qt_object_was_deleted():
     class DeletedPage:
         def runJavaScript(self, *_args):
-            raise RuntimeError("wrapped C/C++ object of type MapWidget has been deleted")
+            raise RuntimeError(
+                "wrapped C/C++ object of type MapWidget has been deleted"
+            )
 
     widget = MapWidget.__new__(MapWidget)
     widget._disposed = False
@@ -1350,7 +1399,9 @@ def test_render_process_terminated_emits_map_issue():
     widget._bootstrap_probe_succeeded = True
     widget._page_ready = True
     issues: list[str] = []
-    widget.map_issue_detected = type("Signal", (), {"emit": lambda self, msg: issues.append(msg)})()
+    widget.map_issue_detected = type(
+        "Signal", (), {"emit": lambda self, msg: issues.append(msg)}
+    )()
 
     widget._on_render_process_terminated("NormalTerminationStatus", 0)
 

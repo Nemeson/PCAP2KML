@@ -19,7 +19,7 @@ import struct
 from typing import Optional
 
 from .data_model import SecurityInfo
-from .pcap_parser import ITS_PDU_MESSAGE_ID
+from .protocol_constants import ITS_PDU_MESSAGE_ID
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +129,7 @@ def _read_fixed_length(data: bytes, offset: int, length: int) -> tuple[bytes, in
     """Read a fixed-length byte sequence."""
     if offset + length > len(data):
         return b"", offset
-    return data[offset:offset + length], offset + length
+    return data[offset : offset + length], offset + length
 
 
 def _bytes_to_hex(data: bytes, max_len: int = 16) -> str:
@@ -170,7 +170,7 @@ def _parse_certificate(cert_data: bytes) -> dict:
     signer_info_type = cert_data[offset] & 0xC0  # Top 2 bits
     # The signer info is UPER encoded; exact parsing depends on type
     # For now, we skip detailed parsing of the signer info field
-    result["signer_info_raw"] = _bytes_to_hex(cert_data[offset:offset + 8])
+    result["signer_info_raw"] = _bytes_to_hex(cert_data[offset : offset + 8])
 
     # Skip to find subject info — this is a simplified parser
     # In practice, we'd need full ASN.1 UPER decoding
@@ -215,7 +215,9 @@ def parse_security_header(payload: bytes) -> Optional[SecurityInfo]:
     # ─── Security Profile (Content Type) ─────────────────────
     security_profile, offset = _read_uint8(payload, offset)
 
-    profile_name = SECURITY_PROFILE_NAMES.get(security_profile, f"unknown({security_profile})")
+    profile_name = SECURITY_PROFILE_NAMES.get(
+        security_profile, f"unknown({security_profile})"
+    )
 
     # Unsecured messages have no further security data
     if security_profile == SECURITY_PROFILE_UNSECURED:
@@ -250,7 +252,9 @@ def parse_security_header(payload: bytes) -> Optional[SecurityInfo]:
     # Top 2 bits indicate signer type (0=self with signature, 1=digest, 2=chain, 3=digest+unknown)
     signer_type_bits = (signer_byte >> 6) & 0x03
 
-    info.signer_type = SIGNER_TYPE_NAMES.get(signer_type_bits, f"unknown({signer_type_bits})")
+    info.signer_type = SIGNER_TYPE_NAMES.get(
+        signer_type_bits, f"unknown({signer_type_bits})"
+    )
 
     # ─── Extract certificate digest or chain ─────────────────
     if signer_type_bits in (0, 1):
@@ -261,7 +265,7 @@ def parse_security_header(payload: bytes) -> Optional[SecurityInfo]:
         # For simplicity, extract the next 8 bytes as the digest
         digest_start = offset + 1  # Skip the signer info byte
         if digest_start + 8 <= len(payload):
-            digest_bytes = payload[digest_start:digest_start + 8]
+            digest_bytes = payload[digest_start : digest_start + 8]
             info.signer_digest = digest_bytes.hex()
             offset = digest_start + 8
         else:
@@ -282,7 +286,7 @@ def parse_security_header(payload: bytes) -> Optional[SecurityInfo]:
             cert_len, cert_start = _read_length_determinant(payload, offset)
 
             if cert_len > 0 and cert_start + cert_len <= len(payload):
-                cert_data = payload[cert_start:cert_start + cert_len]
+                cert_data = payload[cert_start : cert_start + cert_len]
                 # Try to extract basic fields from the certificate
                 cert_info = _parse_certificate(cert_data)
                 if cert_info.get("signer_info_raw"):
@@ -327,13 +331,15 @@ def parse_security_header(payload: bytes) -> Optional[SecurityInfo]:
         if len(payload) >= 65:
             r_start = len(payload) - 64
             s_start = len(payload) - 32
-            info.signature_r = _bytes_to_hex(payload[r_start:r_start + 16], 16)
-            info.signature_s = _bytes_to_hex(payload[s_start:s_start + 16], 16)
+            info.signature_r = _bytes_to_hex(payload[r_start : r_start + 16], 16)
+            info.signature_s = _bytes_to_hex(payload[s_start : s_start + 16], 16)
 
     return info
 
 
-def extract_security_from_decoded(decoded: dict, msg_type: str) -> Optional[SecurityInfo]:
+def extract_security_from_decoded(
+    decoded: dict, msg_type: str
+) -> Optional[SecurityInfo]:
     """Extract security information from a decoded ITS message.
 
     Decoded messages from asn1tools may contain security-related fields
@@ -383,15 +389,24 @@ def extract_security_from_decoded(decoded: dict, msg_type: str) -> Optional[Secu
         # CAM basicContainer has stationType
         station_type_int = basic.get("stationType")
         if station_type_int is not None:
-            info.station_type = STATION_TYPE_NAMES.get(station_type_int, f"type_{station_type_int}")
+            info.station_type = STATION_TYPE_NAMES.get(
+                station_type_int, f"type_{station_type_int}"
+            )
 
     elif msg_type == "DENM":
         denm = decoded.get("denm", decoded)
         mgmt = denm.get("managementContainer", {})
         station_type_int = mgmt.get("stationType")
         if station_type_int is not None:
-            info.station_type = STATION_TYPE_NAMES.get(station_type_int, f"type_{station_type_int}")
+            info.station_type = STATION_TYPE_NAMES.get(
+                station_type_int, f"type_{station_type_int}"
+            )
 
-    return info if any(v is not None for v in [
-        info.protocol_version, info.its_aid_list, info.station_type
-    ]) else None
+    return (
+        info
+        if any(
+            v is not None
+            for v in [info.protocol_version, info.its_aid_list, info.station_type]
+        )
+        else None
+    )

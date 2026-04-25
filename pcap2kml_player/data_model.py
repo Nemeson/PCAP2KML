@@ -15,6 +15,7 @@ from typing import Optional
 
 class MessageType(Enum):
     """Supported V2X and GNSS message types."""
+
     CAM = "CAM"
     DENM = "DENM"
     SREM = "SREM"
@@ -26,6 +27,7 @@ class MessageType(Enum):
 
 class CaptureRole(Enum):
     """Best-effort role of a loaded capture file."""
+
     TXA = "txa"
     RXA = "rxa"
     UNKNOWN = "unknown"
@@ -34,6 +36,7 @@ class CaptureRole(Enum):
 @dataclass
 class CaptureSource:
     """Metadata for one loaded PCAP/capture file."""
+
     path: str
     source_index: int
     role: CaptureRole = CaptureRole.UNKNOWN
@@ -48,6 +51,7 @@ class CaptureSource:
 @dataclass
 class MessageSource:
     """Provenance for one decoded V2X/NMEA message."""
+
     path: str
     filename: str
     source_index: int
@@ -64,6 +68,7 @@ class MessageSource:
 @dataclass
 class MergedObservation:
     """A soft-merged group of observations that likely describe one event."""
+
     merge_id: str
     canonical_key: tuple[str, str, str]
     confidence: float
@@ -74,6 +79,7 @@ class MergedObservation:
 @dataclass
 class V2xMessage:
     """A single decoded V2X or NMEA message with position data."""
+
     timestamp: datetime
     station_id: str
     msg_type: MessageType
@@ -174,6 +180,7 @@ class SecurityInfo:
 
     Reference: ETSI TS 103 097 V2.2.1 (Security header and certificate formats)
     """
+
     # Security envelope
     protocol_version: Optional[int] = None
     """ITS Security protocol version (2 = current)."""
@@ -223,7 +230,12 @@ class SecurityInfo:
     def to_table_rows(self) -> list[tuple[str, str]]:
         """Convert to list of (field, value) pairs for table display."""
         rows = [
-            ("Protokollversion", str(self.protocol_version) if self.protocol_version is not None else "—"),
+            (
+                "Protokollversion",
+                str(self.protocol_version)
+                if self.protocol_version is not None
+                else "—",
+            ),
             ("Sicherheitsprofil", self.security_profile or "—"),
             ("Signer-Typ", self.signer_type or "—"),
             ("Signer-Digest", self.signer_digest or "—"),
@@ -234,9 +246,17 @@ class SecurityInfo:
             ("Signaturalgorithmus", self.signature_algorithm or "—"),
             ("Signatur R (gekürzt)", self.signature_r or "—"),
             ("Signatur S (gekürzt)", self.signature_s or "—"),
-            ("Assurance-Level", str(self.assurance_level) if self.assurance_level is not None else "—"),
+            (
+                "Assurance-Level",
+                str(self.assurance_level) if self.assurance_level is not None else "—",
+            ),
             ("Stations-Typ", self.station_type or "—"),
-            ("ITS-AIDs", ", ".join(str(a) for a in self.its_aid_list) if self.its_aid_list else "—"),
+            (
+                "ITS-AIDs",
+                ", ".join(str(a) for a in self.its_aid_list)
+                if self.its_aid_list
+                else "—",
+            ),
             ("SSP-Berechtigungen", self.ssp_permissions or "—"),
             ("Regionstyp", self.region_type or "—"),
             ("Region", self.region_detail or "—"),
@@ -247,11 +267,14 @@ class SecurityInfo:
 @dataclass
 class SessionData:
     """Container for all messages parsed from one or more PCAP files."""
+
     messages: list[V2xMessage] = field(default_factory=list)
     station_ids: set[str] = field(default_factory=set)
     msg_type_counts: dict[MessageType, int] = field(default_factory=dict)
     sources: list[CaptureSource] = field(default_factory=list)
     merge_groups: dict[str, MergedObservation] = field(default_factory=dict)
+    _canonical_cache: list[V2xMessage] = field(default_factory=list, repr=False)
+    _canonical_cache_valid: bool = field(default=False, repr=False)
 
     @property
     def time_range(self) -> tuple[datetime, datetime]:
@@ -272,9 +295,13 @@ class SessionData:
         """Add a message and update indices."""
         self.messages.append(msg)
         self.station_ids.add(msg.station_id)
-        self.msg_type_counts[msg.msg_type] = self.msg_type_counts.get(msg.msg_type, 0) + 1
+        self.msg_type_counts[msg.msg_type] = (
+            self.msg_type_counts.get(msg.msg_type, 0) + 1
+        )
 
-    def register_source(self, path: str, role: CaptureRole, message_count: int) -> CaptureSource:
+    def register_source(
+        self, path: str, role: CaptureRole, message_count: int
+    ) -> CaptureSource:
         """Register or update metadata for one capture source."""
         normalized = str(Path(path).resolve())
         for source in self.sources:
@@ -294,6 +321,7 @@ class SessionData:
     def finalize(self, *, build_merge_groups: bool = True) -> None:
         """Sort messages by timestamp after all parsing is complete."""
         self.messages.sort(key=lambda m: m.timestamp)
+        self._canonical_cache_valid = False
         if build_merge_groups:
             self.rebuild_merge_groups()
 
@@ -302,6 +330,7 @@ class SessionData:
         from .merge_model import build_merge_groups
 
         self.merge_groups = build_merge_groups(self.messages)
+        self._canonical_cache_valid = False
 
     def canonical_messages(self) -> list[V2xMessage]:
         """Return one canonical message per merge group plus unmerged messages."""
@@ -334,7 +363,8 @@ class SessionData:
         """Return messages matching the given type and station filters."""
         messages = self.canonical_messages() if canonical else self.messages
         return [
-            m for m in messages
+            m
+            for m in messages
             if m.msg_type in active_types and m.station_id in active_stations
         ]
 
