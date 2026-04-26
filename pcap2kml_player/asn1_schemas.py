@@ -231,17 +231,22 @@ def _get_schema_files(msg_type: str) -> list[Path]:
     return files
 
 
+def _required_schema_files() -> set[str]:
+    """Return the set of required ASN.1 schema filenames."""
+    return {CDD_FILE, DSRC_FILE, ERI_FILE, *MSG_TYPE_MODULES.values()}
+
+
 def update_from_git() -> bool:
-    """Pull or clone ETSI ITS ASN.1 schemas from official ETSI Forge.
+    """Clone or pull ETSI ITS ASN.1 schemas from official ETSI Forge repos.
 
-    Uses the ika-rwth-aachen/etsi_its_messages GitHub repository which
-    aggregates all ETSI ITS ASN.1 definitions in one place.
+    Clones each ETSI Forge GitLab repository (CAM, DENM, IS, CDD) with
+    --depth 1 and copies relevant ASN.1 files into the local schema dir.
 
-    Returns True if update succeeded, False otherwise.
+    Returns True if all CDD + all required PDU modules are present after update.
     """
-    aggregate_repo = "https://github.com/ika-rwth-aachen/etsi_its_messages.git"
     _ensure_schema_dir()
 
+    # In-place update if schema dir is already a git checkout
     git_dir = SCHEMAS_DIR / ".git"
     if git_dir.exists():
         try:
@@ -253,7 +258,7 @@ def update_from_git() -> bool:
                 check=True,
             )
             _invalidate_schema_caches()
-            logger.info("Updated ASN.1 schemas from %s", aggregate_repo)
+            logger.info("Updated ASN.1 schemas in-place")
             return True
         except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
             logger.warning("Failed to update ASN.1 schemas in-place: %s", e)
@@ -261,39 +266,103 @@ def update_from_git() -> bool:
 
     try:
         with tempfile.TemporaryDirectory(prefix="pcap2kml_asn1_") as temp_dir:
-            checkout_dir = Path(temp_dir) / "repo"
-            subprocess.run(
-                ["git", "clone", "--depth", "1", aggregate_repo, str(checkout_dir)],
-                capture_output=True,
-                text=True,
-                timeout=120,
-                check=True,
-            )
-            copied = _copy_schema_payloads_from_checkout(checkout_dir, SCHEMAS_DIR)
-            if copied == 0:
-                logger.warning("No ASN.1 schema files found in cloned repository")
+            temp_path = Path(temp_dir)
+            total_copied = 0
+            for name, repo_url in ETSI_FORGE_REPOS.items():
+                checkout_dir = temp_path / name.lower()
+                try:
+                    subprocess.run(
+                        ["git", "clone", "--depth", "1", repo_url, str(checkout_dir)],
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                        check=True,
+                    )
+                    copied = _copy_schema_payloads_from_checkout(checkout_dir, SCHEMAS_DIR)
+                    total_copied += copied
+                    logger.debug("Copied %d schema files from %s repo", copied, name)
+                except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
+                    logger.warning("Failed to clone %s: %s", repo_url, e)
+
+            _invalidate_schema_caches()
+
+            # Verify required files are present
+            required = _required_schema_files()
+            missing = [f for f in required if not (SCHEMAS_DIR / f).exists()]
+            if missing:
+                logger.warning("Missing required ASN.1 schema files after update: %s", missing)
                 return False
-        _invalidate_schema_caches()
-        logger.info("Refreshed %d ASN.1 schema files from %s", copied, aggregate_repo)
-        return True
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired, OSError) as e:
-        logger.warning("Failed to refresh ASN.1 schemas from clone: %s", e)
+
+            logger.info("Refreshed ASN.1 schema files from ETSI Forge repos")
+            return True
+    except OSError as e:
+        logger.warning("Failed to refresh ASN.1 schemas: %s", e)
         return False
 
 
 def _copy_schema_payloads_from_checkout(source_dir: Path, target_dir: Path) -> int:
-    """Copy only the relevant .asn files from a temporary checkout into the schema dir."""
+    """Copy relevant ASN.1 files from a git checkout into the schema dir.
+
+    Tries the standard file names first, then falls back to searching
+    in asn1/external/ and case-insensitive matching.
+    """
+    # Prefer the asn1/external directory in the checkout (ika-rwth-aachen repo structure)
+    external_dir = source_dir / "asn1" / "external"
+    if external_dir.exists():
+        source_dir = external_dir
+
+    # Map target names to a list of possible source names (case-insensitive fallback)
+    _candidates = {
+        CDD_FILE: [CDD_FILE, "cdd.asn", "ETSI_ITS_CDD.asn", "etsi_its_cdd.asn"],
+        DSRC_FILE: [DSRC_FILE, "dsrc.asn", "DSRC.asn"],
+        ERI_FILE: [ERI_FILE, "eri.asn", "ERI.asn"],
+    }
+    for msg_type, module_file in MSG_TYPE_MODULES.items():
+        # Try lower-case variants and underscore variants
+        candidates = [module_file]
+        # Common naming convention in the ika-rwth repo: cam-pdu-descriptions | etsi_its_cam_ts
+        msg_prefix = msg_type.lower().replace("em", "_ts")  # e.g. mapem -> map_ts
+        candidates.append(module_file.lower())
+        candidates.append(f"{msg_type.lower()}.asn")
+        candidates.append(f"etsi_its_{msg_type.lower()}.asn")
+        candidates.append(f"etsi_its_{msg_type.lower()}_ts.asn")
+        _candidates[module_file] = list(dict.fromkeys(candidates))
+
     copied = 0
     needed_files = {CDD_FILE, DSRC_FILE, ERI_FILE, *MSG_TYPE_MODULES.values()}
-    for file_name in sorted(needed_files):
-        candidates = list(source_dir.rglob(file_name))
-        if not candidates:
-            logger.debug("Schema file %s not found in checkout", file_name)
+
+    # Flat case-insensitive index of all files under source_dir
+    file_index_lower: dict[str, list[Path]] = {}
+    for candidate in source_dir.rglob("*.asn"):
+        key = candidate.name.lower()
+        file_index_lower.setdefault(key, []).append(candidate)
+
+    for target_name in sorted(needed_files):
+        target_path = target_dir / target_name
+
+        # 1) Exact match
+        exact = list(source_dir.rglob(target_name))
+        if exact:
+            shutil.copy2(exact[0], target_path)
+            copied += 1
             continue
-        source_path = candidates[0]
-        target_path = target_dir / file_name
-        shutil.copy2(source_path, target_path)
-        copied += 1
+
+        # 2) Case-insensitive match via index
+        source_name = next(
+            (
+                name
+                for name in (file_index_lower.get(k) for k in _candidates.get(target_name, [target_name]) if k)
+                if name
+            ),
+            None,
+        )
+        if source_name:
+            shutil.copy2(source_name[0], target_path)
+            copied += 1
+            continue
+
+        logger.debug("Schema file %s not found in checkout", target_name)
+
     return copied
 
 
