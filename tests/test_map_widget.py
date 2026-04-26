@@ -482,13 +482,13 @@ def test_leaflet_html_exposes_layer_toggles_and_label_renderer():
     assert "localStorage.setItem('pcap2kml.baseLayer', event.name)" not in LEAFLET_HTML
     assert "});\n            }\n        });" not in LEAFLET_HTML
     assert "L.control.layers(baseLayers" in LEAFLET_HTML
-    assert "MAP-Punkte" in LEAFLET_HTML
+    assert "MAP-Punkte" not in LEAFLET_HTML
     assert "Inbound-Lanes" in LEAFLET_HTML
     assert "Outbound-Lanes" in LEAFLET_HTML
     assert "Connections" in LEAFLET_HTML
     assert "Requests" in LEAFLET_HTML
     assert "Stoplines" in LEAFLET_HTML
-    assert "SPAT-Punkte" in LEAFLET_HTML
+    assert "SPAT-Punkte" not in LEAFLET_HTML
     assert "addInfrastructureLabel" in LEAFLET_HTML
     assert "bindTooltip" in LEAFLET_HTML
     assert "highlightRequest" in LEAFLET_HTML

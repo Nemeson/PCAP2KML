@@ -1241,13 +1241,11 @@ LEAFLET_HTML = """<!DOCTYPE html>
         var overlayControl = L.control.layers(baseLayers, {
             'Stationen': overlayGroups.markers,
             'Trajektorien': overlayGroups.trajectories,
-            'MAP-Punkte': overlayGroups.map,
             'Inbound-Lanes': overlayGroups.map_inbound,
             'Outbound-Lanes': overlayGroups.map_outbound,
             'Connections': overlayGroups.map_connections,
             'Stoplines': overlayGroups.map_stoplines,
             'Requests': overlayGroups.map_requests,
-            'SPAT-Punkte': overlayGroups.spat
         }, {collapsed: false}).addTo(map);
         var stationColors = {};
 
