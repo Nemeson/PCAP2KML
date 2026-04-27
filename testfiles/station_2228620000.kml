@@ -1,0 +1,486 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">
+    <Document id="21973">
+        <Style id="21977">
+            <IconStyle id="21978">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="21979">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="21983">
+            <IconStyle id="21984">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="21985">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="21989">
+            <IconStyle id="21990">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="21991">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="21995">
+            <IconStyle id="21996">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="21997">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="22001">
+            <IconStyle id="22002">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="22003">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="22007">
+            <IconStyle id="22008">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="22009">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="22013">
+            <IconStyle id="22014">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="22015">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="22019">
+            <IconStyle id="22020">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="22021">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="22025">
+            <IconStyle id="22026">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="22027">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="22031">
+            <IconStyle id="22032">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="22033">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="22037">
+            <IconStyle id="22038">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="22039">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="22043">
+            <IconStyle id="22044">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="22045">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="22049">
+            <IconStyle id="22050">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="22051">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="22055">
+            <IconStyle id="22056">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="22057">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="22061">
+            <IconStyle id="22062">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="22063">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="22067">
+            <IconStyle id="22068">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="22069">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="22073">
+            <IconStyle id="22074">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="22075">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="22079">
+            <IconStyle id="22080">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="22081">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="22085">
+            <IconStyle id="22086">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="22087">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="22091">
+            <IconStyle id="22092">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="22093">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="22097">
+            <IconStyle id="22098">
+                <color>ff0000ff</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="22099">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="22102">
+            <LineStyle id="22103">
+                <color>ffffff00</color>
+                <colorMode>normal</colorMode>
+                <width>3</width>
+            </LineStyle>
+        </Style>
+        <name>PCAP2KML - Station 2228620000</name>
+        <description>ASN.1 Schema-Versionen: ETSI-ITS-CDD: V2.1.1; SPATEM-PDU-Descriptions: V2.2.1; SREM-PDU-Descriptions: V2.2.1; SSEM-PDU-Descriptions: V2.2.1&lt;br&gt;Quellen: rsu_rxa.pcap (RXA, 617 Msgs); rsu_txa.pcap (TXA, 3109 Msgs)&lt;br&gt;Merge-Gruppen: 677; Export-Sicht: alle Beobachtungen</description>
+        <Placemark id="21975">
+            <name>CAM @ 08:29:00.417</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:00.417550+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.895490, 9.208935&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 6.3 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 203.1°</description>
+            <TimeStamp id="21976">
+                <when>2024-04-24T08:29:00Z</when>
+            </TimeStamp>
+            <styleUrl>#21977</styleUrl>
+            <Point id="21974">
+                <coordinates>9.2089348,48.8954898,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="21981">
+            <name>CAM @ 08:29:01.941</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:01.941146+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.895400, 9.208881&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 7.3 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 200.7°</description>
+            <TimeStamp id="21982">
+                <when>2024-04-24T08:29:01Z</when>
+            </TimeStamp>
+            <styleUrl>#21983</styleUrl>
+            <Point id="21980">
+                <coordinates>9.2088807,48.8953995,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="21987">
+            <name>CAM @ 08:29:05.684</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:05.684547+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.895129, 9.208729&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 9.9 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 200.4°</description>
+            <TimeStamp id="21988">
+                <when>2024-04-24T08:29:05Z</when>
+            </TimeStamp>
+            <styleUrl>#21989</styleUrl>
+            <Point id="21986">
+                <coordinates>9.2087287,48.8951287,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="21993">
+            <name>CAM @ 08:29:10.944</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:10.944304+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.894668, 9.208471&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 10.3 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 200.8°</description>
+            <TimeStamp id="21994">
+                <when>2024-04-24T08:29:10Z</when>
+            </TimeStamp>
+            <styleUrl>#21995</styleUrl>
+            <Point id="21992">
+                <coordinates>9.2084713,48.8946683,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="21999">
+            <name>CAM @ 08:29:13.058</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:13.058148+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.894489, 9.208373&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 10.0 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 199.9°</description>
+            <TimeStamp id="22000">
+                <when>2024-04-24T08:29:13Z</when>
+            </TimeStamp>
+            <styleUrl>#22001</styleUrl>
+            <Point id="21998">
+                <coordinates>9.2083733,48.8944892,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="22005">
+            <name>CAM @ 08:29:13.860</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:13.860576+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.894423, 9.208339&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 9.7 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 199.0°</description>
+            <TimeStamp id="22006">
+                <when>2024-04-24T08:29:13Z</when>
+            </TimeStamp>
+            <styleUrl>#22007</styleUrl>
+            <Point id="22004">
+                <coordinates>9.2083388,48.8944228,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="22011">
+            <name>CAM @ 08:29:15.370</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:15.370582+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.894304, 9.208279&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 8.8 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 198.1°</description>
+            <TimeStamp id="22012">
+                <when>2024-04-24T08:29:15Z</when>
+            </TimeStamp>
+            <styleUrl>#22013</styleUrl>
+            <Point id="22010">
+                <coordinates>9.2082787,48.8943043,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="22017">
+            <name>CAM @ 08:29:16.379</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:16.379796+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.894229, 9.208241&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 8.6 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 198.9°</description>
+            <TimeStamp id="22018">
+                <when>2024-04-24T08:29:16Z</when>
+            </TimeStamp>
+            <styleUrl>#22019</styleUrl>
+            <Point id="22016">
+                <coordinates>9.208241,48.894229,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="22023">
+            <name>CAM @ 08:29:16.876</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:16.876985+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.894192, 9.208222&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 8.6 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 199.0°</description>
+            <TimeStamp id="22024">
+                <when>2024-04-24T08:29:16Z</when>
+            </TimeStamp>
+            <styleUrl>#22025</styleUrl>
+            <Point id="22022">
+                <coordinates>9.2082222,48.8941918,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="22029">
+            <name>CAM @ 08:29:17.883</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:17.883746+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.894118, 9.208184&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 8.6 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 198.9°</description>
+            <TimeStamp id="22030">
+                <when>2024-04-24T08:29:17Z</when>
+            </TimeStamp>
+            <styleUrl>#22031</styleUrl>
+            <Point id="22028">
+                <coordinates>9.2081837,48.894118,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="22035">
+            <name>CAM @ 08:29:19.413</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:19.413113+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.894012, 9.208112&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 8.6 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 207.2°</description>
+            <TimeStamp id="22036">
+                <when>2024-04-24T08:29:19Z</when>
+            </TimeStamp>
+            <styleUrl>#22037</styleUrl>
+            <Point id="22034">
+                <coordinates>9.2081118,48.8940117,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="22041">
+            <name>CAM @ 08:29:19.909</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:19.909095+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.893977, 9.208083&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 8.7 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 210.0°</description>
+            <TimeStamp id="22042">
+                <when>2024-04-24T08:29:19Z</when>
+            </TimeStamp>
+            <styleUrl>#22043</styleUrl>
+            <Point id="22040">
+                <coordinates>9.2080828,48.893977,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="22047">
+            <name>CAM @ 08:29:20.426</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:20.426128+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.893943, 9.208052&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 8.8 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 211.6°</description>
+            <TimeStamp id="22048">
+                <when>2024-04-24T08:29:20Z</when>
+            </TimeStamp>
+            <styleUrl>#22049</styleUrl>
+            <Point id="22046">
+                <coordinates>9.2080523,48.8939432,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="22053">
+            <name>CAM @ 08:29:20.918</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:20.918133+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.893909, 9.208020&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 8.8 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 212.0°</description>
+            <TimeStamp id="22054">
+                <when>2024-04-24T08:29:20Z</when>
+            </TimeStamp>
+            <styleUrl>#22055</styleUrl>
+            <Point id="22052">
+                <coordinates>9.2080205,48.8939092,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="22059">
+            <name>CAM @ 08:29:21.419</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:21.419463+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.893875, 9.207988&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 8.8 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 211.6°</description>
+            <TimeStamp id="22060">
+                <when>2024-04-24T08:29:21Z</when>
+            </TimeStamp>
+            <styleUrl>#22061</styleUrl>
+            <Point id="22058">
+                <coordinates>9.2079883,48.8938748,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="22065">
+            <name>CAM @ 08:29:21.922</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:21.922382+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.893840, 9.207957&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 9.0 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 211.4°</description>
+            <TimeStamp id="22066">
+                <when>2024-04-24T08:29:21Z</when>
+            </TimeStamp>
+            <styleUrl>#22067</styleUrl>
+            <Point id="22064">
+                <coordinates>9.207957,48.8938402,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="22071">
+            <name>CAM @ 08:29:22.433</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:22.433193+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.893805, 9.207925&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 9.1 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 212.0°</description>
+            <TimeStamp id="22072">
+                <when>2024-04-24T08:29:22Z</when>
+            </TimeStamp>
+            <styleUrl>#22073</styleUrl>
+            <Point id="22070">
+                <coordinates>9.2079245,48.8938053,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="22077">
+            <name>CAM @ 08:29:25.649</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:25.649711+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.893572, 9.207707&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 9.3 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 211.6°</description>
+            <TimeStamp id="22078">
+                <when>2024-04-24T08:29:25Z</when>
+            </TimeStamp>
+            <styleUrl>#22079</styleUrl>
+            <Point id="22076">
+                <coordinates>9.207707,48.8935725,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="22083">
+            <name>CAM @ 08:29:26.152</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:26.152446+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.893537, 9.207674&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 9.2 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 211.2°</description>
+            <TimeStamp id="22084">
+                <when>2024-04-24T08:29:26Z</when>
+            </TimeStamp>
+            <styleUrl>#22085</styleUrl>
+            <Point id="22082">
+                <coordinates>9.2076738,48.8935368,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="22089">
+            <name>CAM @ 08:29:27.670</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:27.670091+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.893434, 9.207577&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 8.5 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 212.8°</description>
+            <TimeStamp id="22090">
+                <when>2024-04-24T08:29:27Z</when>
+            </TimeStamp>
+            <styleUrl>#22091</styleUrl>
+            <Point id="22088">
+                <coordinates>9.2075765,48.8934337,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="22095">
+            <name>CAM @ 08:29:32.333</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; CAM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 2228620000&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:32.333102+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 48.893167, 9.207323&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 6.9 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 213.2°</description>
+            <TimeStamp id="22096">
+                <when>2024-04-24T08:29:32Z</when>
+            </TimeStamp>
+            <styleUrl>#22097</styleUrl>
+            <Point id="22094">
+                <coordinates>9.2073232,48.8931673,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="22101">
+            <name>Trajectory - 2228620000</name>
+            <description>Path of station 2228620000 (21 points)</description>
+            <styleUrl>#22102</styleUrl>
+            <LineString id="22100">
+                <extrude>1</extrude>
+                <altitudeMode>clampToGround</altitudeMode>
+                <coordinates>9.2089348,48.8954898,0 9.2088807,48.8953995,0 9.2087287,48.8951287,0 9.2084713,48.8946683,0 9.2083733,48.8944892,0 9.2083388,48.8944228,0 9.2082787,48.8943043,0 9.208241,48.894229,0 9.2082222,48.8941918,0 9.2081837,48.894118,0 9.2081118,48.8940117,0 9.2080828,48.893977,0 9.2080523,48.8939432,0 9.2080205,48.8939092,0 9.2079883,48.8938748,0 9.207957,48.8938402,0 9.2079245,48.8938053,0 9.207707,48.8935725,0 9.2076738,48.8935368,0 9.2075765,48.8934337,0 9.2073232,48.8931673,0</coordinates>
+            </LineString>
+        </Placemark>
+    </Document>
+</kml>

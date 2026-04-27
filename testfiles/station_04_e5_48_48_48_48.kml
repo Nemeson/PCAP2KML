@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">
+    <Document id="21937">
+        <Style id="21941">
+            <IconStyle id="21942">
+                <color>ffff0000</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="21943">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="21947">
+            <IconStyle id="21948">
+                <color>ffff0000</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="21949">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="21953">
+            <IconStyle id="21954">
+                <color>ffff0000</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="21955">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="21959">
+            <IconStyle id="21960">
+                <color>ffff0000</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="21961">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="21965">
+            <IconStyle id="21966">
+                <color>ffff0000</color>
+                <colorMode>normal</colorMode>
+                <scale>1</scale>
+                <heading>0</heading>
+                <Icon id="21967">
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
+        <Style id="21970">
+            <LineStyle id="21971">
+                <color>ff800080</color>
+                <colorMode>normal</colorMode>
+                <width>3</width>
+            </LineStyle>
+        </Style>
+        <name>PCAP2KML - Station 04:e5:48:48:48:48</name>
+        <description>ASN.1 Schema-Versionen: ETSI-ITS-CDD: V2.1.1; SPATEM-PDU-Descriptions: V2.2.1; SREM-PDU-Descriptions: V2.2.1; SSEM-PDU-Descriptions: V2.2.1&lt;br&gt;Quellen: rsu_rxa.pcap (RXA, 617 Msgs); rsu_txa.pcap (TXA, 3109 Msgs)&lt;br&gt;Merge-Gruppen: 677; Export-Sicht: alle Beobachtungen</description>
+        <Placemark id="21939">
+            <name>DENM @ 08:24:37.781</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; DENM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 04:e5:48:48:48:48&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:24:37.781617+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 0.000000, 0.000000&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Altitude:&lt;/b&gt; 0.0 m&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 10.2 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 6553.5°</description>
+            <TimeStamp id="21940">
+                <when>2024-04-24T08:24:37Z</when>
+            </TimeStamp>
+            <styleUrl>#21941</styleUrl>
+            <Point id="21938">
+                <coordinates>0.0,0.0,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="21945">
+            <name>DENM @ 08:29:07.909</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; DENM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 04:e5:48:48:48:48&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:07.909033+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 0.000000, 0.000000&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Altitude:&lt;/b&gt; 0.0 m&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 10.2 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 6553.5°</description>
+            <TimeStamp id="21946">
+                <when>2024-04-24T08:29:07Z</when>
+            </TimeStamp>
+            <styleUrl>#21947</styleUrl>
+            <Point id="21944">
+                <coordinates>0.0,0.0,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="21951">
+            <name>DENM @ 08:29:15.790</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; DENM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 04:e5:48:48:48:48&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:15.790631+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 0.000000, 0.000000&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Altitude:&lt;/b&gt; 0.0 m&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 10.2 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 6553.5°</description>
+            <TimeStamp id="21952">
+                <when>2024-04-24T08:29:15Z</when>
+            </TimeStamp>
+            <styleUrl>#21953</styleUrl>
+            <Point id="21950">
+                <coordinates>0.0,0.0,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="21957">
+            <name>DENM @ 08:29:29.144</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; DENM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 04:e5:48:48:48:48&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:29.144174+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 0.000000, 0.000000&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Altitude:&lt;/b&gt; 0.0 m&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 10.2 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 6553.5°</description>
+            <TimeStamp id="21958">
+                <when>2024-04-24T08:29:29Z</when>
+            </TimeStamp>
+            <styleUrl>#21959</styleUrl>
+            <Point id="21956">
+                <coordinates>0.0,0.0,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="21963">
+            <name>DENM @ 08:29:30.793</name>
+            <description>&lt;b&gt;Type:&lt;/b&gt; DENM&lt;br&gt;&lt;b&gt;Station:&lt;/b&gt; 04:e5:48:48:48:48&lt;br&gt;&lt;b&gt;Time:&lt;/b&gt; 2024-04-24T08:29:30.793838+00:00&lt;br&gt;&lt;b&gt;Lat/Lon:&lt;/b&gt; 0.000000, 0.000000&lt;br&gt;&lt;b&gt;Source:&lt;/b&gt; rsu_rxa.pcap (RXA)&lt;br&gt;&lt;b&gt;Altitude:&lt;/b&gt; 0.0 m&lt;br&gt;&lt;b&gt;Speed:&lt;/b&gt; 10.2 m/s&lt;br&gt;&lt;b&gt;Heading:&lt;/b&gt; 6553.5°</description>
+            <TimeStamp id="21964">
+                <when>2024-04-24T08:29:30Z</when>
+            </TimeStamp>
+            <styleUrl>#21965</styleUrl>
+            <Point id="21962">
+                <coordinates>0.0,0.0,0</coordinates>
+            </Point>
+        </Placemark>
+        <Placemark id="21969">
+            <name>Trajectory - 04:e5:48:48:48:48</name>
+            <description>Path of station 04:e5:48:48:48:48 (5 points)</description>
+            <styleUrl>#21970</styleUrl>
+            <LineString id="21968">
+                <extrude>1</extrude>
+                <altitudeMode>clampToGround</altitudeMode>
+                <coordinates>0.0,0.0,0 0.0,0.0,0 0.0,0.0,0 0.0,0.0,0 0.0,0.0,0</coordinates>
+            </LineString>
+        </Placemark>
+    </Document>
+</kml>
