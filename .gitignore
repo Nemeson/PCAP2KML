@@ -20,3 +20,13 @@ venv/
 .omc/
 .claude/
 pcap2kml_player/assets/cache/*.pkl
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+.python-version
+.pdm-python
+*.code-workspace
+CON
+nul
+/tmp/
