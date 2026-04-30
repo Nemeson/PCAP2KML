@@ -1675,6 +1675,13 @@ LEAFLET_HTML = """<!DOCTYPE html>
         } else {
             console.warn('Qt WebChannel unavailable; marker click follow mode disabled.');
         }
+
+        map.on('movestart zoomstart', function() {
+            if (window.bridge) { window.bridge.onMapInteractionStart(); }
+        });
+        map.on('moveend zoomend', function() {
+            if (window.bridge) { window.bridge.onMapInteractionEnd(); }
+        });
         }
     </script>
 </body>
@@ -1737,10 +1744,20 @@ class MapBridge(QObject):
     """Bridge object exposed to JavaScript via QWebChannel."""
 
     message_clicked = pyqtSignal(str)  # station_id
+    map_interaction_started = pyqtSignal()
+    map_interaction_ended = pyqtSignal()
 
     @pyqtSlot(str)
     def onMarkerClicked(self, station_id: str) -> None:
         self.message_clicked.emit(station_id)
+
+    @pyqtSlot()
+    def onMapInteractionStart(self) -> None:
+        self.map_interaction_started.emit()
+
+    @pyqtSlot()
+    def onMapInteractionEnd(self) -> None:
+        self.map_interaction_ended.emit()
 
 
 class DiagnosticWebEnginePage(QWebEnginePage):
@@ -1761,6 +1778,7 @@ class MapWidget(QWebEngineView):
 
     telemetry_updated = pyqtSignal(dict)
     map_issue_detected = pyqtSignal(str)
+    map_interaction_ended = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1799,8 +1817,11 @@ class MapWidget(QWebEngineView):
         self._last_payload_was_replaced = False
         self._page_load_failures = 0
         self._page_reload_timer: QTimer | None = None
+        self._user_interacting = False
 
         self._bridge.message_clicked.connect(self._on_marker_clicked)
+        self._bridge.map_interaction_started.connect(self._on_user_interaction_start)
+        self._bridge.map_interaction_ended.connect(self._on_user_interaction_end)
         self.loadFinished.connect(self._on_load_finished)
         self._diagnostic_page.renderProcessTerminated.connect(self._on_render_process_terminated)
 
@@ -2191,6 +2212,17 @@ class MapWidget(QWebEngineView):
         """Remember which dynamic object should be followed during playback."""
         self._follow_station_id = station_id
 
+    def _on_user_interaction_start(self) -> None:
+        self._user_interacting = True
+
+    def _on_user_interaction_end(self) -> None:
+        self._user_interacting = False
+        self.map_interaction_ended.emit()
+
+    @property
+    def user_interacting(self) -> bool:
+        return self._user_interacting
+
     def _on_load_finished(self, ok: bool) -> None:
         """Flush queued JavaScript once the embedded map page is ready."""
         if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
@@ -2312,6 +2344,13 @@ class MapWidget(QWebEngineView):
         """Execute JavaScript in the web page."""
         if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
             return
+        if self.__dict__.get("_user_interacting", False):
+            if not (
+                script.startswith("applyRenderPayload(")
+                or script.startswith("highlightMarker(")
+                or script.startswith("addMarker(")
+            ):
+                return
         if not self._page_ready:
             self._pending_scripts.append(script)
             return
@@ -2396,7 +2435,9 @@ class MapWidget(QWebEngineView):
             self._render_payload_started_at = None
             queued = self._queued_render_payload_script
             self._queued_render_payload_script = None
-            self._emit_map_issue(f"Karten-Renderpayload lief seit >{MAP_RENDER_STALL_SECONDS:.0f}s — Flag zurückgesetzt")
+            self._emit_map_issue(
+                f"Karten-Renderpayload lief seit >{MAP_RENDER_STALL_SECONDS:.0f}s — Flag zurückgesetzt"
+            )
             if queued is not None:
                 logger.info("Flushing queued render payload after stall reset")
                 self._run_js(queued)

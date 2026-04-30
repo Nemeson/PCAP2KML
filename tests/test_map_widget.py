@@ -1359,3 +1359,52 @@ def test_render_process_terminated_emits_map_issue():
     assert widget._render_payload_in_flight is False
     assert widget._queued_render_payload_script is None
     assert issues and "Render-Prozess" in issues[0]
+
+
+def test_run_js_suppressed_during_interaction():
+    widget = MapWidget.__new__(MapWidget)
+    widget._disposed = False
+    widget._page_ready = True
+    widget._user_interacting = True
+
+    class CapturePage:
+        def runJavaScript(self, script, _world=0, _callback=None):
+            self._last_script = script
+
+    capture_page = CapturePage()
+    widget.page = lambda: capture_page
+
+    widget._run_js("addMarker('x', 's', 1, 2, 'p', 'r', 'm')")
+    widget._run_js("clearAll()")
+
+    assert capture_page._last_script == "addMarker('x', 's', 1, 2, 'p', 'r', 'm')"
+
+
+def test_run_js_allowed_after_interaction_ends():
+    widget = MapWidget.__new__(MapWidget)
+    widget._disposed = False
+    widget._page_ready = True
+    widget._user_interacting = False
+    captured: list[str] = []
+
+    def fake_run_js(script, _world=0, _callback=None):
+        captured.append(script)
+
+    widget.page = lambda: type("Page", (), {"runJavaScript": fake_run_js})()
+
+    widget._run_js("addMarker('x', 's', 1, 2, 'p', 'r', 'm')")
+    widget._run_js("setStationColors({})")
+
+    assert len(captured) == 2
+
+
+def test_interaction_end_flushes_signal():
+    widget = MapWidget.__new__(MapWidget)
+    widget._user_interacting = True
+    ended: list[bool] = []
+    widget.map_interaction_ended = type("Signal", (), {"emit": lambda self: ended.append(True)})()
+
+    widget._on_user_interaction_end()
+
+    assert widget._user_interacting is False
+    assert ended == [True]
