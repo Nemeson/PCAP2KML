@@ -18,7 +18,6 @@ from pathlib import Path
 from PyQt6.QtCore import (
     PYQT_VERSION_STR,
     QT_VERSION_STR,
-    QSettings,
     Qt,
     QThread,
     QTimer,
@@ -52,11 +51,13 @@ from PyQt6.QtWidgets import (
 
 from ..app_memory import AppMemory
 from ..data_model import MessageType, SessionData, V2xMessage
+from ..i18n import tr
 from ..kml_exporter import export_kml
 from ..map_backend import (
     MAP_PERFORMANCE_DIAGNOSTIC,
     MAP_PERFORMANCE_NORMAL,
     MAP_PERFORMANCE_SAVER,
+    create_settings,
 )
 from ..map_widget import MapWidget
 from ..parsing_worker import ParsingWorker
@@ -186,7 +187,7 @@ class MainWindow(QMainWindow):
         self.setAcceptDrops(True)
 
         self._memory = AppMemory.load()
-        self._settings = QSettings("PCAP2KML", "Player")
+        self._settings = create_settings()
         self._layout_preference = str(self._settings.value("ui/layout_mode", LAYOUT_MODE_AUTO))
         if self._layout_preference not in {
             LAYOUT_MODE_AUTO,
@@ -267,13 +268,13 @@ class MainWindow(QMainWindow):
 
         self._statusbar = QStatusBar()
         self.setStatusBar(self._statusbar)
-        self._status_metrics = QLabel("Noch keine Sitzung geladen")
+        self._status_metrics = QLabel(tr("Noch keine Sitzung geladen"))
         self._progress = QProgressBar()
         self._progress.setVisible(False)
         self._progress.setFixedWidth(180)
         self._statusbar.addPermanentWidget(self._status_metrics)
         self._statusbar.addPermanentWidget(self._progress)
-        self._statusbar.showMessage("Bereit - PCAP-Datei laden oder per Drag & Drop ablegen")
+        self._statusbar.showMessage(tr("Bereit - PCAP-Datei laden oder per Drag & Drop ablegen"))
 
     def _setup_map_area(self) -> QWidget:
         """Create the map with a compact prioritization issue side panel."""
@@ -299,11 +300,11 @@ class MainWindow(QMainWindow):
         header_row = QHBoxLayout()
         header_row.setContentsMargins(0, 0, 0, 0)
         header_row.setSpacing(6)
-        self._issue_panel_title = QLabel("Priorisierungsfehler")
+        self._issue_panel_title = QLabel(tr("Priorisierungsfehler"))
         self._issue_panel_title.setStyleSheet("font-weight: 700; color: #10233f;")
-        self._btn_toggle_issue_panel = QPushButton("Einklappen")
+        self._btn_toggle_issue_panel = QPushButton(tr("Einklappen"))
         self._btn_toggle_issue_panel.setCheckable(True)
-        self._btn_toggle_issue_panel.setToolTip("Priorisierungsfehler-Panel ein- oder ausklappen")
+        self._btn_toggle_issue_panel.setToolTip(tr("Priorisierungsfehler-Panel ein- oder ausklappen"))
         self._btn_toggle_issue_panel.toggled.connect(self._toggle_issue_panel_collapsed)
         header_row.addWidget(self._issue_panel_title, stretch=1)
         header_row.addWidget(self._btn_toggle_issue_panel)
@@ -314,7 +315,7 @@ class MainWindow(QMainWindow):
         issue_content_layout.setContentsMargins(0, 0, 0, 0)
         issue_content_layout.setSpacing(6)
 
-        self._issue_summary = QLabel("Keine Fehler.")
+        self._issue_summary = QLabel(tr("Keine Fehler."))
         self._issue_summary.setWordWrap(True)
         self._issue_summary.setStyleSheet("color: #42546b; font-size: 11px;")
         issue_content_layout.addWidget(self._issue_summary)
@@ -323,14 +324,14 @@ class MainWindow(QMainWindow):
         filter_row.setContentsMargins(0, 0, 0, 0)
         filter_row.setSpacing(6)
         self._issue_filter_combo = QComboBox()
-        self._issue_filter_combo.addItem("Alle", "all")
-        self._issue_filter_combo.addItem("Nur kritisch", "critical")
-        self._issue_filter_combo.addItem("Aktuelle Kreuzung", "intersection")
-        self._issue_filter_combo.setToolTip("Priorisierungsfehler nach Schwere oder Kreuzung filtern")
+        self._issue_filter_combo.addItem(tr("Alle"), "all")
+        self._issue_filter_combo.addItem(tr("Nur kritisch"), "critical")
+        self._issue_filter_combo.addItem(tr("Aktuelle Kreuzung"), "intersection")
+        self._issue_filter_combo.setToolTip(tr("Priorisierungsfehler nach Schwere oder Kreuzung filtern"))
         self._issue_filter_combo.currentIndexChanged.connect(self._on_issue_filter_changed)
         self._issue_intersection_combo = QComboBox()
-        self._issue_intersection_combo.addItem("Alle Kreuzungen", "all")
-        self._issue_intersection_combo.setToolTip("Fehler auf eine Kreuzung eingrenzen")
+        self._issue_intersection_combo.addItem(tr("Alle Kreuzungen"), "all")
+        self._issue_intersection_combo.setToolTip(tr("Fehler auf eine Kreuzung eingrenzen"))
         self._issue_intersection_combo.currentIndexChanged.connect(self._on_issue_filter_changed)
         filter_row.addWidget(self._issue_filter_combo, stretch=1)
         filter_row.addWidget(self._issue_intersection_combo, stretch=1)
@@ -361,62 +362,62 @@ class MainWindow(QMainWindow):
 
     def _setup_toolbar(self) -> None:
         """Create the toolbar with file operations."""
-        toolbar = QToolBar("Hauptwerkzeugleiste")
+        toolbar = QToolBar(tr("Hauptwerkzeugleiste"))
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
 
-        self._btn_load = QPushButton("PCAP laden")
-        self._btn_load.setToolTip("Eine oder mehrere PCAP-Dateien oeffnen")
+        self._btn_load = QPushButton(tr("PCAP laden"))
+        self._btn_load.setToolTip(tr("Eine oder mehrere PCAP-Dateien oeffnen"))
         toolbar.addWidget(self._btn_load)
 
-        self._btn_reload_last = QPushButton("Letzte Sitzung")
-        self._btn_reload_last.setToolTip("Zuletzt geoeffnete Dateien erneut laden")
+        self._btn_reload_last = QPushButton(tr("Letzte Sitzung"))
+        self._btn_reload_last.setToolTip(tr("Zuletzt geoeffnete Dateien erneut laden"))
         toolbar.addWidget(self._btn_reload_last)
 
-        self._btn_cancel_load = QPushButton("Laden abbrechen")
-        self._btn_cancel_load.setToolTip("Aktuellen Parse-Vorgang abbrechen")
+        self._btn_cancel_load = QPushButton(tr("Laden abbrechen"))
+        self._btn_cancel_load.setToolTip(tr("Aktuellen Parse-Vorgang abbrechen"))
         self._btn_cancel_load.setEnabled(False)
         toolbar.addWidget(self._btn_cancel_load)
 
         toolbar.addSeparator()
 
-        self._btn_export_kml = QPushButton("KML exportieren")
-        self._btn_export_kml.setToolTip("KML-Dateien fuer alle gefilterten Entitaeten exportieren")
+        self._btn_export_kml = QPushButton(tr("KML exportieren"))
+        self._btn_export_kml.setToolTip(tr("KML-Dateien fuer alle gefilterten Entitaeten exportieren"))
         toolbar.addWidget(self._btn_export_kml)
 
-        self._btn_export_issues = QPushButton("Fehler exportieren")
+        self._btn_export_issues = QPushButton(tr("Fehler exportieren"))
         self._btn_export_issues.setToolTip(
-            "Priorisierungsfehler als lesbare CSV, Maschinen-CSV, JSON und Report exportieren"
+            tr("Priorisierungsfehler als lesbare CSV, Maschinen-CSV, JSON und Report exportieren")
         )
         toolbar.addWidget(self._btn_export_issues)
 
-        self._btn_export_diagnostics = QPushButton("Diagnose exportieren")
+        self._btn_export_diagnostics = QPushButton(tr("Diagnose exportieren"))
         self._btn_export_diagnostics.setToolTip(
-            "Technischen Diagnosebericht mit RAM-, Karten- und Paketinformationen schreiben"
+            tr("Technischen Diagnosebericht mit RAM-, Karten- und Paketinformationen schreiben")
         )
         toolbar.addWidget(self._btn_export_diagnostics)
 
-        self._btn_reload_map = QPushButton("Karte neu laden")
-        self._btn_reload_map.setToolTip("WebEngine-Karte neu initialisieren und aktuelle Sitzung erneut rendern")
+        self._btn_reload_map = QPushButton(tr("Karte neu laden"))
+        self._btn_reload_map.setToolTip(tr("WebEngine-Karte neu initialisieren und aktuelle Sitzung erneut rendern"))
         toolbar.addWidget(self._btn_reload_map)
 
         toolbar.addSeparator()
 
-        self._btn_update_schemas = QPushButton("ASN.1-Schemas aktualisieren")
-        self._btn_update_schemas.setToolTip("ASN.1-Schemadateien aus dem Git-Repo aktualisieren")
+        self._btn_update_schemas = QPushButton(tr("ASN.1-Schemas aktualisieren"))
+        self._btn_update_schemas.setToolTip(tr("ASN.1-Schemadateien aus dem Git-Repo aktualisieren"))
         toolbar.addWidget(self._btn_update_schemas)
 
-        self._btn_dashboard = QPushButton("Dashboard")
-        self._btn_dashboard.setToolTip("Statistik-Dashboard anzeigen")
+        self._btn_dashboard = QPushButton(tr("Dashboard"))
+        self._btn_dashboard.setToolTip(tr("Statistik-Dashboard anzeigen"))
         toolbar.addWidget(self._btn_dashboard)
 
         toolbar.addSeparator()
-        toolbar.addWidget(QLabel("Layout:"))
+        toolbar.addWidget(QLabel(tr("Layout:")))
         self._layout_mode_combo = QComboBox()
-        self._layout_mode_combo.addItem("Auto", LAYOUT_MODE_AUTO)
-        self._layout_mode_combo.addItem("Desktop", LAYOUT_MODE_DESKTOP)
-        self._layout_mode_combo.addItem("Kompakt", LAYOUT_MODE_COMPACT)
-        self._layout_mode_combo.setToolTip("Layoutmodus automatisch oder manuell waehlen")
+        self._layout_mode_combo.addItem(tr("Auto"), LAYOUT_MODE_AUTO)
+        self._layout_mode_combo.addItem(tr("Desktop"), LAYOUT_MODE_DESKTOP)
+        self._layout_mode_combo.addItem(tr("Kompakt"), LAYOUT_MODE_COMPACT)
+        self._layout_mode_combo.setToolTip(tr("Layoutmodus automatisch oder manuell waehlen"))
         self._layout_mode_combo.setFixedWidth(110)
         for index in range(self._layout_mode_combo.count()):
             if self._layout_mode_combo.itemData(index) == self._layout_preference:
@@ -425,13 +426,13 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self._layout_mode_combo)
 
         toolbar.addSeparator()
-        toolbar.addWidget(QLabel("Leistung:"))
+        toolbar.addWidget(QLabel(tr("Leistung:")))
         self._performance_mode_combo = QComboBox()
-        self._performance_mode_combo.addItem("Normal", PERFORMANCE_MODE_NORMAL)
-        self._performance_mode_combo.addItem("Schonend", PERFORMANCE_MODE_SAVER)
-        self._performance_mode_combo.addItem("Diagnose", PERFORMANCE_MODE_DIAGNOSTIC)
+        self._performance_mode_combo.addItem(tr("Normal"), PERFORMANCE_MODE_NORMAL)
+        self._performance_mode_combo.addItem(tr("Schonend"), PERFORMANCE_MODE_SAVER)
+        self._performance_mode_combo.addItem(tr("Diagnose"), PERFORMANCE_MODE_DIAGNOSTIC)
         self._performance_mode_combo.setToolTip(
-            "Kartenrendering fuer starke Rechner, schwache Notebooks oder Diagnose reduzieren"
+            tr("Kartenrendering fuer starke Rechner, schwache Notebooks oder Diagnose reduzieren")
         )
         self._performance_mode_combo.setFixedWidth(120)
         for index in range(self._performance_mode_combo.count()):
@@ -440,8 +441,8 @@ class MainWindow(QMainWindow):
                 break
         toolbar.addWidget(self._performance_mode_combo)
 
-        self._memory_watch_label = QLabel("RAM: -")
-        self._memory_watch_label.setToolTip("Arbeitsspeicher des App-Prozesses")
+        self._memory_watch_label = QLabel(tr("RAM: -"))
+        self._memory_watch_label.setToolTip(tr("Arbeitsspeicher des App-Prozesses"))
         toolbar.addWidget(self._memory_watch_label)
 
     def _setup_overview_panel(self, parent_layout: QVBoxLayout) -> None:
@@ -456,11 +457,11 @@ class MainWindow(QMainWindow):
         header_row = QHBoxLayout()
         header_row.setContentsMargins(0, 0, 0, 0)
         header_row.setSpacing(8)
-        self._overview_compact_label = QLabel("PCAP2KML Player")
+        self._overview_compact_label = QLabel(tr("PCAP2KML Player"))
         self._overview_compact_label.setStyleSheet("font-weight: 700; color: #10233f;")
-        self._btn_toggle_overview = QPushButton("Header einklappen")
+        self._btn_toggle_overview = QPushButton(tr("Header einklappen"))
         self._btn_toggle_overview.setCheckable(True)
-        self._btn_toggle_overview.setToolTip("Kopfbereich ein- oder ausklappen")
+        self._btn_toggle_overview.setToolTip(tr("Kopfbereich ein- oder ausklappen"))
         self._btn_toggle_overview.toggled.connect(self._set_overview_collapsed)
         header_row.addWidget(self._overview_compact_label, stretch=1)
         header_row.addWidget(self._btn_toggle_overview)
@@ -473,9 +474,9 @@ class MainWindow(QMainWindow):
         text_layout = QVBoxLayout()
         text_layout.setSpacing(3)
 
-        self._lbl_title = QLabel("PCAP2KML Player")
+        self._lbl_title = QLabel(tr("PCAP2KML Player"))
         self._lbl_title.setStyleSheet("font-size: 20px; font-weight: 700; color: #10233f;")
-        self._lbl_subtitle = QLabel("Datenorientierte V2X-Analyse in einer klaren, operativen SWARCO-ITS-Anmutung.")
+        self._lbl_subtitle = QLabel(tr("Datenorientierte V2X-Analyse in einer klaren, operativen SWARCO-ITS-Anmutung."))
         self._lbl_subtitle.setStyleSheet("color: #5a6b81;")
         self._lbl_memory = QLabel("")
         self._lbl_memory.setStyleSheet("color: #b2192b; font-weight: 700;")
@@ -486,9 +487,9 @@ class MainWindow(QMainWindow):
 
         stats_layout = QHBoxLayout()
         stats_layout.setSpacing(10)
-        self._stat_files = self._create_stat_card("Dateien", "0")
-        self._stat_messages = self._create_stat_card("Nachrichten", "0")
-        self._stat_stations = self._create_stat_card("Stationen", "0")
+        self._stat_files = self._create_stat_card(tr("Dateien"), "0")
+        self._stat_messages = self._create_stat_card(tr("Nachrichten"), "0")
+        self._stat_stations = self._create_stat_card(tr("Stationen"), "0")
         stats_layout.addWidget(self._stat_files)
         stats_layout.addWidget(self._stat_messages)
         stats_layout.addWidget(self._stat_stations)
@@ -529,7 +530,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_overview_content"):
             self._overview_content.setVisible(not collapsed)
         if hasattr(self, "_btn_toggle_overview"):
-            self._btn_toggle_overview.setText("Header anzeigen" if collapsed else "Header einklappen")
+            self._btn_toggle_overview.setText(tr("Header anzeigen") if collapsed else tr("Header einklappen"))
             self._btn_toggle_overview.setChecked(collapsed)
         self._update_compact_overview_text()
 
@@ -538,14 +539,14 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "_overview_compact_label"):
             return
         if self._session is not None:
-            text = (
-                "PCAP2KML | "
-                f"{len(self._session.sources) or 1} Datei(en) | "
-                f"{len(self._session.messages)} Nachrichten | "
-                f"{len(self._session.station_ids)} Stationen"
+            text = tr(
+                "PCAP2KML | {0} Datei(en) | {1} Nachrichten | {2} Stationen",
+                len(self._session.sources) or 1,
+                len(self._session.messages),
+                len(self._session.station_ids),
             )
         else:
-            text = "PCAP2KML Player | Bereit zum Laden einer PCAP-Sitzung"
+            text = tr("PCAP2KML Player | Bereit zum Laden einer PCAP-Sitzung")
         self._overview_compact_label.setText(text)
 
     def _setup_filter_row(self, parent_layout: QVBoxLayout) -> None:
@@ -554,7 +555,7 @@ class MainWindow(QMainWindow):
         filter_layout = QHBoxLayout(filter_widget)
         filter_layout.setContentsMargins(0, 0, 0, 0)
 
-        filter_layout.addWidget(QLabel("Nachrichtentyp:"))
+        filter_layout.addWidget(QLabel(tr("Nachrichtentyp:")))
         self._type_checkboxes: dict[MessageType, QCheckBox] = {}
         for msg_type in MessageType:
             checkbox = QCheckBox(msg_type.value)
@@ -564,7 +565,7 @@ class MainWindow(QMainWindow):
             filter_layout.addWidget(checkbox)
 
         filter_layout.addSpacing(16)
-        filter_layout.addWidget(QLabel("Stationen:"))
+        filter_layout.addWidget(QLabel(tr("Stationen:")))
 
         self._station_list = QListWidget()
         self._station_list.setMaximumHeight(92)
@@ -572,11 +573,11 @@ class MainWindow(QMainWindow):
         self._station_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
         filter_layout.addWidget(self._station_list)
 
-        self._lbl_filter_hint = QLabel("Alle Typen und Stationen aktiv")
+        self._lbl_filter_hint = QLabel(tr("Alle Typen und Stationen aktiv"))
         self._lbl_filter_hint.setStyleSheet("color: #667891;")
         filter_layout.addWidget(self._lbl_filter_hint)
-        self._merge_view_checkbox = QCheckBox("Gemergte Sicht")
-        self._merge_view_checkbox.setToolTip("TXA/RXA-Mehrfachbeobachtungen nur einmal kanonisch anzeigen")
+        self._merge_view_checkbox = QCheckBox(tr("Gemergte Sicht"))
+        self._merge_view_checkbox.setToolTip(tr("TXA/RXA-Mehrfachbeobachtungen nur einmal kanonisch anzeigen"))
         self._merge_view_checkbox.stateChanged.connect(self._on_merge_view_changed)
         filter_layout.addWidget(self._merge_view_checkbox)
         filter_layout.addStretch()
@@ -592,12 +593,12 @@ class MainWindow(QMainWindow):
         header_row = QHBoxLayout()
         header_row.setContentsMargins(0, 0, 0, 0)
         header_row.setSpacing(8)
-        header_label = QLabel("Nachrichten")
+        header_label = QLabel(tr("Nachrichten"))
         header_label.setStyleSheet("font-weight: 700; color: #10233f;")
-        self._btn_toggle_message_table = QPushButton("Tabelle maximieren")
+        self._btn_toggle_message_table = QPushButton(tr("Tabelle maximieren"))
         self._btn_toggle_message_table.setCheckable(True)
         self._btn_toggle_message_table.setToolTip(
-            "Die Nachrichtentabelle auf kleinen Bildschirmen voruebergehend vergroessern"
+            tr("Die Nachrichtentabelle auf kleinen Bildschirmen voruebergehend vergroessern")
         )
         header_row.addWidget(header_label)
         header_row.addStretch()
@@ -610,7 +611,7 @@ class MainWindow(QMainWindow):
         table_layout.setSpacing(0)
 
         self._msg_table = QTableWidget(0, NUM_COLUMNS)
-        self._msg_table.setHorizontalHeaderLabels(TABLE_HEADERS)
+        self._msg_table.setHorizontalHeaderLabels([tr(h) for h in TABLE_HEADERS])
         self._msg_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._msg_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._msg_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -633,12 +634,12 @@ class MainWindow(QMainWindow):
         details_layout.setContentsMargins(10, 10, 10, 10)
         details_layout.setSpacing(6)
 
-        detail_label = QLabel("Nachrichten- und PKI-Details")
+        detail_label = QLabel(tr("Nachrichten- und PKI-Details"))
         detail_label.setStyleSheet("font-weight: 700; color: #10233f;")
         details_layout.addWidget(detail_label)
 
         self._detail_table = QTableWidget(0, 2)
-        self._detail_table.setHorizontalHeaderLabels(["Feld", "Wert"])
+        self._detail_table.setHorizontalHeaderLabels([tr("Feld"), tr("Wert")])
         self._detail_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self._detail_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self._detail_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -649,28 +650,28 @@ class MainWindow(QMainWindow):
         self._detail_table.hide()
         details_layout.addWidget(self._detail_table, stretch=1)
 
-        self._btn_verify_signature = QPushButton("Signatur prüfen")
-        self._btn_verify_signature.setToolTip("ECDSA-Signaturverifikation (noch nicht implementiert)")
+        self._btn_verify_signature = QPushButton(tr("Signatur prüfen"))
+        self._btn_verify_signature.setToolTip(tr("ECDSA-Signaturverifikation (noch nicht implementiert)"))
         self._btn_verify_signature.setEnabled(False)
         self._btn_verify_signature.clicked.connect(self._on_verify_signature)
         self._btn_verify_signature.hide()
         details_layout.addWidget(self._btn_verify_signature)
 
-        self._context_tabs.addTab(details_tab, "Details")
+        self._context_tabs.addTab(details_tab, tr("Details"))
 
         scene_tab = QWidget()
         scene_layout = QVBoxLayout(scene_tab)
         scene_layout.setContentsMargins(10, 10, 10, 10)
         scene_layout.setSpacing(6)
         self._setup_scene_panel(scene_layout)
-        self._context_tabs.addTab(scene_tab, "Szene")
+        self._context_tabs.addTab(scene_tab, tr("Szene"))
 
         eta_tab = QWidget()
         eta_layout = QVBoxLayout(eta_tab)
         eta_layout.setContentsMargins(10, 10, 10, 10)
         eta_layout.setSpacing(8)
         self._setup_eta_panel(eta_layout)
-        self._context_tabs.addTab(eta_tab, "ETA Analyse")
+        self._context_tabs.addTab(eta_tab, tr("ETA Analyse"))
 
         self._right_splitter = QSplitter(Qt.Orientation.Vertical)
         self._right_splitter.addWidget(table_container)
@@ -705,7 +706,7 @@ class MainWindow(QMainWindow):
 
     def _setup_scene_panel(self, parent_layout: QVBoxLayout) -> None:
         """Create the scene aggregation panel for phase forecasts and requests."""
-        scene_label = QLabel("Szenenlage & Phasenprognose")
+        scene_label = QLabel(tr("Szenenlage & Phasenprognose"))
         scene_label.setStyleSheet("font-weight: 700; color: #10233f; padding-top: 4px;")
         parent_layout.addWidget(scene_label)
 
@@ -717,7 +718,7 @@ class MainWindow(QMainWindow):
         scene_layout.setContentsMargins(10, 10, 10, 10)
         scene_layout.setSpacing(8)
 
-        self._scene_summary = QLabel("Keine Szene verfuegbar. Lade eine PCAP-Datei und starte die Wiedergabe.")
+        self._scene_summary = QLabel(tr("Keine Szene verfuegbar. Lade eine PCAP-Datei und starte die Wiedergabe."))
         self._scene_summary.setWordWrap(True)
         self._scene_summary.setStyleSheet("color: #42546b;")
         scene_layout.addWidget(self._scene_summary)
@@ -734,22 +735,22 @@ class MainWindow(QMainWindow):
         scene_layout.addWidget(self._scene_metrics)
 
         self._scene_legend = QLabel(
-            "Timeline-Legende: G=Freigabe, R=Halt, C=Clearance, P=Vorlauf, !=Konflikt, ? unbekannt"
+            tr("Timeline-Legende: G=Freigabe, R=Halt, C=Clearance, P=Vorlauf, !=Konflikt, ? unbekannt")
         )
         self._scene_legend.setWordWrap(True)
         self._scene_legend.setStyleSheet("color: #667891; font-size: 11px;")
         scene_layout.addWidget(self._scene_legend)
 
         self._scene_request_legend = QLabel(
-            "Request-Legende: pending=blau, acknowledged=gelb, granted=gruen, "
-            "rejected=rot, timeout=dunkelrot | dominante Anfrage = kraeftig, weitere = gestrichelt"
+            tr("Request-Legende: pending=blau, acknowledged=gelb, granted=gruen, "
+            "rejected=rot, timeout=dunkelrot | dominante Anfrage = kraeftig, weitere = gestrichelt")
         )
         self._scene_request_legend.setWordWrap(True)
         self._scene_request_legend.setStyleSheet("color: #667891; font-size: 11px;")
         scene_layout.addWidget(self._scene_request_legend)
 
         self._scene_intersection_table = QTableWidget(0, len(SCENE_INTERSECTION_HEADERS))
-        self._scene_intersection_table.setHorizontalHeaderLabels(SCENE_INTERSECTION_HEADERS)
+        self._scene_intersection_table.setHorizontalHeaderLabels([tr(h) for h in SCENE_INTERSECTION_HEADERS])
         self._scene_intersection_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._scene_intersection_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._scene_intersection_table.verticalHeader().setVisible(False)
@@ -764,7 +765,7 @@ class MainWindow(QMainWindow):
         scene_layout.addWidget(self._scene_intersection_table)
 
         self._scene_requests_table = QTableWidget(0, len(SCENE_REQUEST_HEADERS))
-        self._scene_requests_table.setHorizontalHeaderLabels(SCENE_REQUEST_HEADERS)
+        self._scene_requests_table.setHorizontalHeaderLabels([tr(h) for h in SCENE_REQUEST_HEADERS])
         self._scene_requests_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._scene_requests_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._scene_requests_table.verticalHeader().setVisible(False)
@@ -782,25 +783,25 @@ class MainWindow(QMainWindow):
 
     def _setup_eta_panel(self, parent_layout: QVBoxLayout) -> None:
         """Create the ETA analysis graph tab."""
-        header = QLabel("ETA-Verlauf, Fahrzeuggeschwindigkeit und SRM/SSEM-Updates")
+        header = QLabel(tr("ETA-Verlauf, Fahrzeuggeschwindigkeit und SRM/SSEM-Updates"))
         header.setStyleSheet("font-weight: 700; color: #10233f;")
         parent_layout.addWidget(header)
 
         controls = QHBoxLayout()
         controls.setContentsMargins(0, 0, 0, 0)
-        controls.addWidget(QLabel("Request/Merge-Spur:"))
+        controls.addWidget(QLabel(tr("Request/Merge-Spur:")))
         self._eta_station_combo = QComboBox()
         self._eta_station_combo.setMinimumWidth(180)
         controls.addWidget(self._eta_station_combo)
-        self._btn_export_eta_dashboard = QPushButton("ETA exportieren")
+        self._btn_export_eta_dashboard = QPushButton(tr("ETA exportieren"))
         self._btn_export_eta_dashboard.setToolTip(
-            "Aktuelle ETA-Kennzahlen und SREM/SSEM-Ereignisse als CSV und JSON exportieren"
+            tr("Aktuelle ETA-Kennzahlen und SREM/SSEM-Ereignisse als CSV und JSON exportieren")
         )
         controls.addWidget(self._btn_export_eta_dashboard)
         controls.addStretch()
         parent_layout.addLayout(controls)
 
-        self._eta_summary = QLabel("Keine PCAP-Sitzung geladen.")
+        self._eta_summary = QLabel(tr("Keine PCAP-Sitzung geladen."))
         self._eta_summary.setWordWrap(True)
         self._eta_summary.setStyleSheet("color: #42546b;")
         parent_layout.addWidget(self._eta_summary)
@@ -810,7 +811,7 @@ class MainWindow(QMainWindow):
 
         dashboard_splitter = QSplitter(Qt.Orientation.Horizontal)
         self._eta_metric_table = QTableWidget(0, 2)
-        self._eta_metric_table.setHorizontalHeaderLabels(["Kennzahl", "Wert"])
+        self._eta_metric_table.setHorizontalHeaderLabels([tr("Kennzahl"), tr("Wert")])
         self._eta_metric_table.horizontalHeader().setSectionResizeMode(
             0,
             QHeaderView.ResizeMode.ResizeToContents,
@@ -826,7 +827,7 @@ class MainWindow(QMainWindow):
         dashboard_splitter.addWidget(self._eta_metric_table)
 
         self._eta_event_table = QTableWidget(0, 4)
-        self._eta_event_table.setHorizontalHeaderLabels(["Zeit", "Typ", "Inhalt", "Details"])
+        self._eta_event_table.setHorizontalHeaderLabels([tr("Zeit"), tr("Typ"), tr("Inhalt"), tr("Details")])
         self._eta_event_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._eta_event_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._eta_event_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -840,10 +841,10 @@ class MainWindow(QMainWindow):
         parent_layout.addWidget(dashboard_splitter, stretch=1)
 
         suggestions = QLabel(
-            "ETA-Diagnose: Restzeit bis MAP-Stopline als blaue Kurve, geglaettete "
+            tr("ETA-Diagnose: Restzeit bis MAP-Stopline als blaue Kurve, geglaettete "
             "Geschwindigkeit als gruene Kurve, SREM als vertikale Ereignislinien und "
             "SSEM als farbige Statusbaender. Diagnosemarker zeigen ETA-Spruenge, "
-            "fehlende SSEM, spaetes/fehlendes granted und Stopline-Passage ohne granted."
+            "fehlende SSEM, spaetes/fehlendes granted und Stopline-Passage ohne granted.")
         )
         suggestions.setWordWrap(True)
         suggestions.setStyleSheet("color: #667891; font-size: 11px;")
@@ -855,19 +856,19 @@ class MainWindow(QMainWindow):
         layout = QHBoxLayout(controls)
         layout.setContentsMargins(4, 2, 4, 2)
 
-        self._btn_play = QPushButton("Play")
-        self._btn_pause = QPushButton("Pause")
-        self._btn_stop = QPushButton("Stop")
-        self._btn_prev_issue = QPushButton("Fehler zurueck")
-        self._btn_next_issue = QPushButton("Naechster Fehler")
-        self._chk_problem_replay = QCheckBox("Nur Problemstellen")
+        self._btn_play = QPushButton(tr("Play"))
+        self._btn_pause = QPushButton(tr("Pause"))
+        self._btn_stop = QPushButton(tr("Stop"))
+        self._btn_prev_issue = QPushButton(tr("Fehler zurueck"))
+        self._btn_next_issue = QPushButton(tr("Naechster Fehler"))
+        self._chk_problem_replay = QCheckBox(tr("Nur Problemstellen"))
         self._btn_play.setFixedWidth(72)
         self._btn_pause.setFixedWidth(72)
         self._btn_stop.setFixedWidth(72)
-        self._btn_prev_issue.setToolTip("Zur vorherigen priorisierungsrelevanten Problemstelle springen")
-        self._btn_next_issue.setToolTip("Zur naechsten priorisierungsrelevanten Problemstelle springen")
+        self._btn_prev_issue.setToolTip(tr("Zur vorherigen priorisierungsrelevanten Problemstelle springen"))
+        self._btn_next_issue.setToolTip(tr("Zur naechsten priorisierungsrelevanten Problemstelle springen"))
         self._chk_problem_replay.setToolTip(
-            "Playback emittiert nur Nachrichten an Zeitpunkten mit Priorisierungsfehlern"
+            tr("Playback emittiert nur Nachrichten an Zeitpunkten mit Priorisierungsfehlern")
         )
 
         layout.addWidget(self._btn_play)
@@ -881,7 +882,7 @@ class MainWindow(QMainWindow):
         self._slider.setRange(0, 1000)
         layout.addWidget(self._slider, stretch=1)
 
-        layout.addWidget(QLabel("Geschw.:"))
+        layout.addWidget(QLabel(tr("Geschw.:")))
         self._speed_combo = QComboBox()
         for speed in SPEED_OPTIONS:
             self._speed_combo.addItem(f"{speed}x")
@@ -991,7 +992,8 @@ class MainWindow(QMainWindow):
         if warning_level and warning_level != self._last_memory_warning_level:
             self._last_memory_warning_level = warning_level
             self._statusbar.showMessage(
-                f"RAM {memory_mb:.0f} MB - Kartenmodus automatisch auf {PERFORMANCE_MODE_LABELS[target_mode]} reduziert"
+                tr("RAM {0:.0f} MB - Kartenmodus automatisch auf {1} reduziert",
+                   memory_mb, PERFORMANCE_MODE_LABELS[target_mode])
             )
 
     def _set_performance_mode(self, mode: str, *, auto: bool) -> None:
@@ -1060,7 +1062,7 @@ class MainWindow(QMainWindow):
         if dropped_total and self.__dict__.get("_performance_mode") == PERFORMANCE_MODE_NORMAL:
             self._set_performance_mode(PERFORMANCE_MODE_SAVER, auto=True)
             self._statusbar.showMessage(
-                "Karten-Payload war zu gross - Leistung automatisch auf Schonend reduziert",
+                tr("Karten-Payload war zu gross - Leistung automatisch auf Schonend reduziert"),
                 5000,
             )
 
@@ -1073,14 +1075,20 @@ class MainWindow(QMainWindow):
 
         if self.__dict__.get("_map_safe_mode_active", False):
             return
+        cooldown_until = self.__dict__.get("_map_recovery_cooldown_until", 0.0)
+        if cooldown_until and time.monotonic() < cooldown_until:
+            self._statusbar.showMessage(
+                tr("Kartenhinweis (Cooldown): {0}", message), 3000
+            )
+            return
         if len(issues) < MAP_SAFE_MODE_ISSUE_THRESHOLD:
-            self._statusbar.showMessage(f"Kartenhinweis: {message}", 5000)
+            self._statusbar.showMessage(tr("Kartenhinweis: {0}", message), 5000)
             return
 
         self._map_safe_mode_active = True
         self._set_performance_mode(PERFORMANCE_MODE_DIAGNOSTIC, auto=True)
         self._statusbar.showMessage(
-            "Karten-Safe-Mode aktiv: wiederholte WebEngine/JavaScript-Probleme erkannt",
+            tr("Karten-Safe-Mode aktiv: wiederholte WebEngine/JavaScript-Probleme erkannt"),
             8000,
         )
 
@@ -1099,19 +1107,24 @@ class MainWindow(QMainWindow):
             if hasattr(self._map_widget, "reload_map_page"):
                 self._map_widget.reload_map_page()
             self._map_issue_history.clear()
+            self._map_recovery_cooldown_until = time.monotonic() + 10.0
             self._apply_performance_mode()
-            if self._session:
-                self._map_widget.load_messages(self._player._messages)
-            self._statusbar.showMessage("Karte wurde neu geladen (Safe-Mode)", 4000)
+            if self._session and self._player._messages:
+                self._map_widget.render_playback_slice(
+                    self._player._messages,
+                    self._player.current_index,
+                    window_seconds=self._map_playback_window_seconds(),
+                )
+            self._statusbar.showMessage(tr("Karte wurde neu geladen (Safe-Mode)"), 4000)
             return
 
         logger.error("Map recovery failed after %d attempts", crash_counter)
         QMessageBox.warning(
             self,
-            "Kartenfehler",
-            "Die Karte konnte nach mehreren Versuchen nicht wiederhergestellt werden.\n\n"
+            tr("Kartenfehler"),
+            tr("Die Karte konnte nach mehreren Versuchen nicht wiederhergestellt werden.\n\n"
             "Bitte starte die Anwendung neu oder exportiere die Diagnose "
-            "(Menü → Diagnose exportieren).",
+            "(Menü → Diagnose exportieren)."),
         )
 
     def _on_reload_map(self) -> None:
@@ -1121,16 +1134,20 @@ class MainWindow(QMainWindow):
         self._map_safe_mode_active = False
         self._map_issue_history.clear()
         self._apply_performance_mode()
-        if self._session:
-            self._map_widget.load_messages(self._player._messages)
-        self._statusbar.showMessage("Karte wurde neu geladen", 4000)
+        if self._session and self._player._messages:
+            self._map_widget.render_playback_slice(
+                self._player._messages,
+                self._player.current_index,
+                window_seconds=self._map_playback_window_seconds(),
+            )
+        self._statusbar.showMessage(tr("Karte wurde neu geladen"), 4000)
 
     def _on_export_diagnostics(self) -> None:
         """Write a technical diagnostics report for support and regression analysis."""
         start_dir = self._memory.last_export_directory or self._memory.last_directory or str(Path.cwd())
         dir_path = QFileDialog.getExistingDirectory(
             self,
-            "Diagnose-Exportverzeichnis waehlen",
+            tr("Diagnose-Exportverzeichnis waehlen"),
             start_dir,
         )
         if not dir_path:
@@ -1142,16 +1159,18 @@ class MainWindow(QMainWindow):
                 encoding="utf-8",
             )
         except Exception as exc:  # pragma: no cover
-            QMessageBox.critical(self, "Diagnose-Export fehlgeschlagen", str(exc))
+            QMessageBox.critical(self, tr("Diagnose-Export fehlgeschlagen"), str(exc))
             return
 
         self._memory.remember_export_directory(dir_path)
         self._memory.save()
-        self._statusbar.showMessage(f"Diagnosebericht exportiert nach {report_path}", 5000)
+        self._statusbar.showMessage(
+            tr("Diagnosebericht exportiert nach {0}", report_path), 5000
+        )
         QMessageBox.information(
             self,
-            "Diagnose exportiert",
-            f"Der Diagnosebericht wurde geschrieben:\n{report_path}",
+            tr("Diagnose exportiert"),
+            tr("Der Diagnosebericht wurde geschrieben:\n{0}", report_path),
         )
 
     def _build_diagnostics_report(self) -> dict[str, object]:
@@ -1266,13 +1285,13 @@ class MainWindow(QMainWindow):
         self._btn_stop.setFixedWidth(button_width)
         self._speed_combo.setFixedWidth(74 if compact else 84)
         self._lbl_time.setFixedWidth(118 if compact else 140)
-        self._btn_prev_issue.setText("Fehler <" if compact else "Fehler zurueck")
-        self._btn_next_issue.setText("Fehler >" if compact else "Naechster Fehler")
-        self._btn_export_kml.setText("KML" if compact else "KML exportieren")
-        self._btn_export_issues.setText("Fehler Export" if compact else "Fehler exportieren")
-        self._btn_export_diagnostics.setText("Diagnose" if compact else "Diagnose exportieren")
-        self._btn_reload_map.setText("Karte neu" if compact else "Karte neu laden")
-        self._btn_update_schemas.setText("Schemas" if compact else "ASN.1-Schemas aktualisieren")
+        self._btn_prev_issue.setText(tr("Fehler <") if compact else tr("Fehler zurueck"))
+        self._btn_next_issue.setText(tr("Fehler >") if compact else tr("Naechster Fehler"))
+        self._btn_export_kml.setText(tr("KML") if compact else tr("KML exportieren"))
+        self._btn_export_issues.setText(tr("Fehler Export") if compact else tr("Fehler exportieren"))
+        self._btn_export_diagnostics.setText(tr("Diagnose") if compact else tr("Diagnose exportieren"))
+        self._btn_reload_map.setText(tr("Karte neu") if compact else tr("Karte neu laden"))
+        self._btn_update_schemas.setText(tr("Schemas") if compact else tr("ASN.1-Schemas aktualisieren"))
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         """Switch Auto layout when the window crosses compact width."""
@@ -1285,9 +1304,9 @@ class MainWindow(QMainWindow):
         start_dir = self._memory.last_directory or str(Path.cwd())
         paths, _ = QFileDialog.getOpenFileNames(
             self,
-            "PCAP-Dateien oeffnen",
+            tr("PCAP-Dateien oeffnen"),
             start_dir,
-            "PCAP-Dateien (*.pcap *.pcapng *.cap);;Alle Dateien (*)",
+            tr("PCAP-Dateien (*.pcap *.pcapng *.cap);;Alle Dateien (*)"),
         )
         if paths:
             self._load_paths(paths)
@@ -1298,8 +1317,8 @@ class MainWindow(QMainWindow):
         if not paths:
             QMessageBox.information(
                 self,
-                "Keine Sitzung vorhanden",
-                "Es wurden keine gueltigen Dateien aus der letzten Sitzung gefunden.",
+                tr("Keine Sitzung vorhanden"),
+                tr("Es wurden keine gueltigen Dateien aus der letzten Sitzung gefunden."),
             )
             return
         self._load_paths(paths)
@@ -1309,13 +1328,13 @@ class MainWindow(QMainWindow):
         if self._loader_thread is not None:
             QMessageBox.information(
                 self,
-                "Ladevorgang aktiv",
-                "Es laeuft bereits ein Parse-Vorgang. Bitte warte oder brich ihn ab.",
+                tr("Ladevorgang aktiv"),
+                tr("Es laeuft bereits ein Parse-Vorgang. Bitte warte oder brich ihn ab."),
             )
             return
 
         normalized = [str(Path(path).resolve()) for path in paths]
-        self._set_loading_state(True, 0, 100, "PCAP-Dateien werden im Hintergrund geladen...")
+        self._set_loading_state(True, 0, 100, tr("PCAP-Dateien werden im Hintergrund geladen..."))
 
         self._loader_thread = QThread(self)
         self._loader_worker = ParsingWorker(normalized)
@@ -1332,12 +1351,12 @@ class MainWindow(QMainWindow):
         """Request cancellation of the current load process."""
         if self._loader_worker is not None:
             self._loader_worker.cancel()
-            self._statusbar.showMessage("Abbruch angefordert...")
+            self._statusbar.showMessage(tr("Abbruch angefordert..."))
 
     def _on_load_progress(self, percent: int, filename: str) -> None:
         """Update the progress UI while the worker is parsing."""
         self._progress.setValue(percent)
-        self._statusbar.showMessage(f"Lade {filename}... {percent}%")
+        self._statusbar.showMessage(tr("Lade {0}... {1}%", filename, percent))
 
     def _on_load_finished(self, session: SessionData, paths: list[str], errors: list[str]) -> None:
         """Finalize a successful background parse."""
@@ -1346,15 +1365,15 @@ class MainWindow(QMainWindow):
         if not session.messages:
             self._session = None
             self._clear_session_views()
-            self._statusbar.showMessage("Keine verarbeitbaren Nachrichten gefunden")
+            self._statusbar.showMessage(tr("Keine verarbeitbaren Nachrichten gefunden"))
             self._refresh_memory_banner()
             if errors:
-                QMessageBox.warning(self, "Laden fehlgeschlagen", "\n".join(errors))
+                QMessageBox.warning(self, tr("Laden fehlgeschlagen"), "\n".join(errors))
             else:
                 QMessageBox.information(
                     self,
-                    "Keine Daten gefunden",
-                    "In den geladenen PCAP-Dateien wurden keine verarbeitbaren Nachrichten erkannt.",
+                    tr("Keine Daten gefunden"),
+                    tr("In den geladenen PCAP-Dateien wurden keine verarbeitbaren Nachrichten erkannt."),
                 )
             return
 
@@ -1386,21 +1405,24 @@ class MainWindow(QMainWindow):
         self._memory.save()
 
         self._statusbar.showMessage(
-            f"{len(session.messages)} Nachrichten geladen - "
-            f"{len(session.station_ids)} Stationen - "
-            f"Dauer: {self._player.format_time(session.duration_seconds)}"
+            tr(
+                "{0} Nachrichten geladen - {1} Stationen - Dauer: {2}",
+                len(session.messages),
+                len(session.station_ids),
+                self._player.format_time(session.duration_seconds),
+            )
         )
         if errors:
             QMessageBox.warning(
                 self,
-                "Teilweise geladen",
-                "Einige Dateien konnten nicht vollstaendig verarbeitet werden:\n\n" + "\n".join(errors),
+                tr("Teilweise geladen"),
+                tr("Einige Dateien konnten nicht vollstaendig verarbeitet werden:\n\n{0}", "\n".join(errors)),
             )
 
     def _on_load_cancelled(self) -> None:
         """Restore the UI after a cancelled load."""
         self._set_loading_state(False)
-        self._statusbar.showMessage("Ladevorgang abgebrochen")
+        self._statusbar.showMessage(tr("Ladevorgang abgebrochen"))
 
     def _cleanup_loader(self, *args) -> None:
         """Dispose the worker thread after completion or cancellation."""
@@ -1441,7 +1463,7 @@ class MainWindow(QMainWindow):
         start_dir = self._memory.last_export_directory or self._memory.last_directory or str(Path.cwd())
         dir_path = QFileDialog.getExistingDirectory(
             self,
-            "KML-Exportverzeichnis waehlen",
+            tr("KML-Exportverzeichnis waehlen"),
             start_dir,
         )
         if not dir_path:
@@ -1456,16 +1478,18 @@ class MainWindow(QMainWindow):
                 canonical=self._show_canonical_messages,
             )
         except (OSError, PermissionError, ValueError) as exc:  # pragma: no cover
-            QMessageBox.critical(self, "Export-Fehler", str(exc))
+            QMessageBox.critical(self, tr("Export-Fehler"), str(exc))
             return
 
         self._memory.remember_export_directory(dir_path)
         self._memory.save()
-        self._statusbar.showMessage(f"{len(created)} KML-Dateien exportiert nach {dir_path}")
+        self._statusbar.showMessage(
+            tr("{0} KML-Dateien exportiert nach {1}", len(created), dir_path)
+        )
         QMessageBox.information(
             self,
-            "Export erfolgreich",
-            f"{len(created)} KML-Dateien wurden exportiert nach:\n{dir_path}",
+            tr("Export erfolgreich"),
+            tr("{0} KML-Dateien wurden exportiert nach:\n{1}", len(created), dir_path),
         )
 
     def _on_export_prioritization_issues(self) -> None:
@@ -1476,7 +1500,7 @@ class MainWindow(QMainWindow):
         start_dir = self._memory.last_export_directory or self._memory.last_directory or str(Path.cwd())
         dir_path = QFileDialog.getExistingDirectory(
             self,
-            "Fehleranalyse-Exportverzeichnis waehlen",
+            tr("Fehleranalyse-Exportverzeichnis waehlen"),
             start_dir,
         )
         if not dir_path:
@@ -1485,16 +1509,18 @@ class MainWindow(QMainWindow):
         try:
             created = export_prioritization_issues(self._player._messages, Path(dir_path))
         except Exception as exc:  # pragma: no cover
-            QMessageBox.critical(self, "Export-Fehler", str(exc))
+            QMessageBox.critical(self, tr("Export-Fehler"), str(exc))
             return
 
         self._memory.remember_export_directory(dir_path)
         self._memory.save()
-        self._statusbar.showMessage(f"Priorisierungsfehler exportiert nach {dir_path}")
+        self._statusbar.showMessage(
+            tr("Priorisierungsfehler exportiert nach {0}", dir_path)
+        )
         QMessageBox.information(
             self,
-            "Export erfolgreich",
-            "Priorisierungsfehler wurden exportiert:\n" + "\n".join(str(path) for path in created),
+            tr("Export erfolgreich"),
+            tr("Priorisierungsfehler wurden exportiert:\n{0}", "\n".join(str(path) for path in created)),
         )
 
     def _on_update_schemas(self) -> None:
@@ -1502,25 +1528,25 @@ class MainWindow(QMainWindow):
         try:
             from ..asn1_schemas import update_from_git
         except ImportError:
-            QMessageBox.warning(self, "Hinweis", "asn1tools ist nicht installiert.")
+            QMessageBox.warning(self, tr("Hinweis"), tr("asn1tools ist nicht installiert."))
             return
 
         if update_from_git():
-            self._statusbar.showMessage("ASN.1-Schemas erfolgreich aktualisiert")
-            QMessageBox.information(self, "Erfolg", "ASN.1-Schemas wurden aktualisiert.")
+            self._statusbar.showMessage(tr("ASN.1-Schemas erfolgreich aktualisiert"))
+            QMessageBox.information(self, tr("Erfolg"), tr("ASN.1-Schemas wurden aktualisiert."))
             return
 
-        self._statusbar.showMessage("ASN.1-Schema-Update fehlgeschlagen")
+        self._statusbar.showMessage(tr("ASN.1-Schema-Update fehlgeschlagen"))
         QMessageBox.warning(
             self,
-            "Fehler",
-            "ASN.1-Schemas konnten nicht aktualisiert werden.\nPruefen Sie Internetverbindung und Git-Installation.",
+            tr("Fehler"),
+            tr("ASN.1-Schemas konnten nicht aktualisiert werden.\nPruefen Sie Internetverbindung und Git-Installation."),
         )
 
     def _on_show_dashboard(self) -> None:
         """Open the statistics dashboard for the current session."""
         if self._session is None:
-            QMessageBox.information(self, "Dashboard", "Keine Sitzung geladen.")
+            QMessageBox.information(self, tr("Dashboard"), tr("Keine Sitzung geladen."))
             return
         dialog = StatisticsDashboard(self._session, self)
         dialog.exec()
@@ -1558,8 +1584,12 @@ class MainWindow(QMainWindow):
         self._player.set_filtered_messages(filtered)
         self._refresh_problem_replay_indices(filtered)
         self._update_scene_for_message(filtered[0] if filtered else None, force=True)
-        self._lbl_filter_hint.setText(f"{len(filtered)} von {len(self._session.messages)} Nachrichten sichtbar")
-        self._statusbar.showMessage(f"Filter aktiv: {len(filtered)} / {len(self._session.messages)} Nachrichten")
+        self._lbl_filter_hint.setText(
+            tr("{0} von {1} Nachrichten sichtbar", len(filtered), len(self._session.messages))
+        )
+        self._statusbar.showMessage(
+            tr("Filter aktiv: {0} / {1} Nachrichten", len(filtered), len(self._session.messages))
+        )
         self._update_status_metrics(len(filtered))
 
     def _populate_station_list(self) -> None:
@@ -1795,11 +1825,13 @@ class MainWindow(QMainWindow):
             self._highlight_table_row(msg)
             self._show_security_detail(msg, auto_focus=True, force_refresh=True)
             self._focus_eta_event_request(event)
-            self._statusbar.showMessage(f"ETA-Ereignis geoeffnet: {event.kind} {event.time_text}", 4000)
+            self._statusbar.showMessage(
+                tr("ETA-Ereignis geoeffnet: {0} {1}", event.kind, event.time_text), 4000
+            )
             return True
         self._focus_eta_event_request(event)
         self._statusbar.showMessage(
-            f"Keine passende Nachricht fuer ETA-Ereignis {event.time_text} gefunden",
+            tr("Keine passende Nachricht fuer ETA-Ereignis {0} gefunden", event.time_text),
             4000,
         )
         return False
@@ -1839,7 +1871,7 @@ class MainWindow(QMainWindow):
         start_dir = self._memory.last_export_directory or self._memory.last_directory or str(Path.cwd())
         dir_path = QFileDialog.getExistingDirectory(
             self,
-            "ETA-Dashboard-Exportverzeichnis waehlen",
+            tr("ETA-Dashboard-Exportverzeichnis waehlen"),
             start_dir,
         )
         if not dir_path:
@@ -1851,28 +1883,38 @@ class MainWindow(QMainWindow):
         try:
             self._write_eta_dashboard_exports(data, csv_path, json_path)
         except Exception as exc:  # pragma: no cover
-            QMessageBox.critical(self, "ETA-Export fehlgeschlagen", str(exc))
+            QMessageBox.critical(self, tr("ETA-Export fehlgeschlagen"), str(exc))
             return
         self._memory.remember_export_directory(dir_path)
         self._memory.save()
-        self._statusbar.showMessage(f"ETA-Dashboard exportiert nach {target_dir}", 5000)
+        self._statusbar.showMessage(
+            tr("ETA-Dashboard exportiert nach {0}", target_dir), 5000
+        )
         QMessageBox.information(
             self,
-            "ETA exportiert",
-            f"ETA-Dashboard wurde exportiert:\n{csv_path}\n{json_path}",
+            tr("ETA exportiert"),
+            tr("ETA-Dashboard wurde exportiert:\n{0}\n{1}", csv_path, json_path),
         )
 
     def _write_eta_dashboard_exports(self, data, csv_path: Path, json_path: Path) -> None:
         """Write ETA dashboard metrics and events to CSV and JSON files."""
         with csv_path.open("w", encoding="utf-8-sig", newline="") as handle:
             writer = csv.writer(handle, delimiter=";")
-            writer.writerow(["Bereich", "Kennzahl/Zeit", "Typ", "Inhalt", "Details"])
+            writer.writerow(
+                [
+                    tr("Bereich"),
+                    tr("Kennzahl/Zeit"),
+                    tr("Typ"),
+                    tr("Inhalt"),
+                    tr("Details"),
+                ]
+            )
             for metric, value in data.metrics:
-                writer.writerow(["Kennzahl", metric, "", value, ""])
+                writer.writerow([tr("Kennzahl"), metric, "", value, ""])
             for event in data.events:
                 writer.writerow(
                     [
-                        "Ereignis",
+                        tr("Ereignis"),
                         event.time_text,
                         event.kind,
                         event.content,
@@ -1907,7 +1949,7 @@ class MainWindow(QMainWindow):
             else:
                 self._right_splitter.setSizes([460, 280])
         self._btn_toggle_message_table.setText(
-            "Tabellenbereich wiederherstellen" if maximized else "Tabelle maximieren"
+            tr("Tabellenbereich wiederherstellen") if maximized else tr("Tabelle maximieren")
         )
 
     def _on_speed_changed(self, index: int) -> None:
@@ -1919,14 +1961,14 @@ class MainWindow(QMainWindow):
         """Enable or disable replay that jumps only between issue timestamps."""
         self._player.set_focus_replay_enabled(enabled)
         if enabled and not self._problem_replay_indices:
-            self._statusbar.showMessage("Keine Problemstellen fuer den aktuellen Filter gefunden", 4000)
+            self._statusbar.showMessage(tr("Keine Problemstellen fuer den aktuellen Filter gefunden"), 4000)
         elif enabled:
             self._statusbar.showMessage(
-                f"Problemstellen-Replay aktiv: {len(self._problem_replay_indices)} Zeitpunkt(e)",
+                tr("Problemstellen-Replay aktiv: {0} Zeitpunkt(e)", len(self._problem_replay_indices)),
                 4000,
             )
         else:
-            self._statusbar.showMessage("Problemstellen-Replay deaktiviert", 3000)
+            self._statusbar.showMessage(tr("Problemstellen-Replay deaktiviert"), 3000)
 
     def _on_slider_moved(self, value: int) -> None:
         """Seek playback when the timeline slider is moved."""
@@ -1983,8 +2025,8 @@ class MainWindow(QMainWindow):
         if msg.security_info is None:
             rows.append(
                 (
-                    "Sicherheitsheader",
-                    "Kein Sicherheitsheader vorhanden oder nicht extrahierbar",
+                    tr("Sicherheitsheader"),
+                    tr("Kein Sicherheitsheader vorhanden oder nicht extrahierbar"),
                 )
             )
         else:
@@ -2020,8 +2062,8 @@ class MainWindow(QMainWindow):
         """
         QMessageBox.information(
             self,
-            "Signaturverifikation",
-            (
+            tr("Signaturverifikation"),
+            tr(
                 "ECDSA-Signaturverifikation ist noch nicht implementiert.\n\n"
                 "Benötigt werden:\n"
                 "  - Zertifikat der ausstellenden CA\n"
@@ -2067,39 +2109,52 @@ class MainWindow(QMainWindow):
         msg_rate = self._estimate_visible_message_rate(scene.timeline_position)
 
         self._scene_summary.setText(
-            "Zeitpunkt: "
-            f"{scene.timeline_position.strftime('%H:%M:%S.%f')[:-3]} | "
-            f"{len(intersections)} Kreuzung(en), "
-            f"{len(scene.active_requests)} offene Anforderung(en), "
-            f"{max(0, len(scene.request_states) - len(scene.active_requests))} kuerzlich beantwortet"
+            tr(
+                "Zeitpunkt: {0} | {1} Kreuzung(en), {2} offene Anforderung(en), {3} kuerzlich beantwortet",
+                scene.timeline_position.strftime("%H:%M:%S.%f")[:-3],
+                len(intersections),
+                len(scene.active_requests),
+                max(0, len(scene.request_states) - len(scene.active_requests)),
+            )
         )
         self._scene_metrics.setText(
-            "Forecasts: "
-            f"{forecast_groups} Signalgruppe(n) | "
-            f"Overdue Requests: {len(overdue_requests)} | "
-            f"Revisionen abweichend: {revision_mismatch_count} | "
-            f"Clock Skew: {len(clock_skew_warnings)} | "
-            f"ETA MAE: {self._format_eta_accuracy(eta_accuracy_seconds)} | "
-            f"Msgs/s: {msg_rate:.1f}"
+            tr(
+                "Forecasts: {0} Signalgruppe(n) | "
+                "Overdue Requests: {1} | "
+                "Revisionen abweichend: {2} | "
+                "Clock Skew: {3} | "
+                "ETA MAE: {4} | "
+                "Msgs/s: {5:.1f}",
+                forecast_groups,
+                len(overdue_requests),
+                revision_mismatch_count,
+                len(clock_skew_warnings),
+                self._format_eta_accuracy(eta_accuracy_seconds),
+                msg_rate,
+            )
         )
 
         warnings: list[str] = []
         if not intersections:
-            warnings.append("Noch keine MAP/SPAT-Szene fuer den aktuellen Zeitbereich erkannt.")
+            warnings.append(tr("Noch keine MAP/SPAT-Szene fuer den aktuellen Zeitbereich erkannt."))
         if any(state.map_revision is None for state in intersections):
-            warnings.append("Mindestens eine SPAT-Nachricht ohne passende MAP-Basis.")
+            warnings.append(tr("Mindestens eine SPAT-Nachricht ohne passende MAP-Basis."))
         if any(state.revision_mismatch for state in intersections):
-            warnings.append("MAP/SPAT-Revisionen weichen voneinander ab.")
+            warnings.append(tr("MAP/SPAT-Revisionen weichen voneinander ab."))
         if overdue_requests:
-            warnings.append(f"{len(overdue_requests)} Anforderung(en) ohne SSEM-Antwort ueber Timeout.")
+            warnings.append(
+                tr("{0} Anforderung(en) ohne SSEM-Antwort ueber Timeout.", len(overdue_requests))
+            )
         if clock_skew_warnings:
             warnings.append(
-                "Uhrenversatz erkannt: "
+                tr("Uhrenversatz erkannt: ")
                 + ", ".join(f"Int {intersection_id} {skew:+.1f}s" for intersection_id, skew in clock_skew_warnings[:3])
             )
         inaccurate_eta = [item for item in scene.eta_verifications if not item.is_accurate]
         if inaccurate_eta:
-            warnings.append(f"ETA-Abweichung > 2s bei {len(inaccurate_eta)} verifizierten Anfrage(n).")
+            warnings.append(
+                tr("ETA-Abweichung > 2s bei {0} verifizierten Anfrage(n).", len(inaccurate_eta))
+            )
         self._scene_warning_label.setVisible(bool(warnings))
         self._scene_warning_label.setText(" | ".join(warnings))
 
@@ -2121,7 +2176,7 @@ class MainWindow(QMainWindow):
             self._scene_intersection_table.setItem(row, 0, QTableWidgetItem(str(intersection.intersection_id)))
             self._scene_intersection_table.setItem(row, 1, QTableWidgetItem(revision_text))
             self._scene_intersection_table.setItem(
-                row, 2, QTableWidgetItem(signal_group_summary or "Keine Signalgruppen")
+                row, 2, QTableWidgetItem(signal_group_summary or tr("Keine Signalgruppen"))
             )
             self._scene_intersection_table.setItem(row, 3, QTableWidgetItem(forecast_summary))
             self._scene_intersection_table.setItem(row, 4, QTableWidgetItem(self._format_forecast_timeline(forecast)))
@@ -2185,18 +2240,20 @@ class MainWindow(QMainWindow):
         self._issue_list.clear()
         self._refresh_issue_intersection_filter(issues)
         if not issues:
-            self._issue_summary.setText("Keine priorisierungsrelevanten Fehler im aktuellen Zeitpunkt.")
+            self._issue_summary.setText(tr("Keine priorisierungsrelevanten Fehler im aktuellen Zeitpunkt."))
             return
 
         filtered_issues = self._filter_prioritization_issues(issues)
         errors = sum(1 for issue in filtered_issues if issue.severity == "error")
         warnings = len(filtered_issues) - errors
-        filter_suffix = "" if len(filtered_issues) == len(issues) else f" von {len(issues)}"
+        filter_suffix = "" if len(filtered_issues) == len(issues) else tr(" von {0}", len(issues))
         self._issue_summary.setText(
-            f"{errors} Fehler, {warnings} Warnung(en){filter_suffix}. Klick fokussiert Request."
+            tr("{0} Fehler, {1} Warnung(en){2}. Klick fokussiert Request.", errors, warnings, filter_suffix)
         )
         if not filtered_issues:
-            self._issue_summary.setText(f"Keine Fehler im aktuellen Filter ({len(issues)} insgesamt).")
+            self._issue_summary.setText(
+                tr("Keine Fehler im aktuellen Filter ({0} insgesamt).", len(issues))
+            )
             return
 
         for issue in filtered_issues:
@@ -2229,12 +2286,12 @@ class MainWindow(QMainWindow):
             self._issue_panel.setMinimumWidth(44 if collapsed else 260)
             self._issue_panel.setMaximumWidth(44 if collapsed else 320)
         if hasattr(self, "_issue_panel_title"):
-            self._issue_panel_title.setText("!" if collapsed else "Priorisierungsfehler")
-            self._issue_panel_title.setToolTip("Priorisierungsfehler" if collapsed else "")
+            self._issue_panel_title.setText("!" if collapsed else tr("Priorisierungsfehler"))
+            self._issue_panel_title.setToolTip(tr("Priorisierungsfehler") if collapsed else "")
         if hasattr(self, "_btn_toggle_issue_panel"):
-            self._btn_toggle_issue_panel.setText(">" if collapsed else "Einklappen")
+            self._btn_toggle_issue_panel.setText(">" if collapsed else tr("Einklappen"))
             self._btn_toggle_issue_panel.setToolTip(
-                "Priorisierungsfehler-Panel ausklappen" if collapsed else "Priorisierungsfehler-Panel einklappen"
+                tr("Priorisierungsfehler-Panel ausklappen") if collapsed else tr("Priorisierungsfehler-Panel einklappen")
             )
 
     def _refresh_issue_intersection_filter(self, issues: list[PrioritizationIssue]) -> None:
@@ -2245,7 +2302,7 @@ class MainWindow(QMainWindow):
         intersection_ids = sorted({issue.intersection_id for issue in issues})
         self._issue_intersection_combo.blockSignals(True)
         self._issue_intersection_combo.clear()
-        self._issue_intersection_combo.addItem("Alle Kreuzungen", "all")
+        self._issue_intersection_combo.addItem(tr("Alle Kreuzungen"), "all")
         for intersection_id in intersection_ids:
             self._issue_intersection_combo.addItem(f"I{intersection_id}", str(intersection_id))
         index = self._issue_intersection_combo.findData(current)
@@ -2353,7 +2410,7 @@ class MainWindow(QMainWindow):
     def _format_forecast_summary(self, forecast) -> str:
         """Build a compact one-line summary of a SPAT forecast."""
         if forecast is None or not forecast.segments_by_group:
-            return "Keine Prognose"
+            return tr("Keine Prognose")
 
         parts: list[str] = []
         for signal_group_id, segments in sorted(forecast.segments_by_group.items())[:3]:
@@ -2363,8 +2420,8 @@ class MainWindow(QMainWindow):
             duration = max(0.0, (next_segment.end - next_segment.start).total_seconds())
             parts.append(f"SG {signal_group_id}: {next_segment.phase.value} ({duration:.1f}s)")
         if len(forecast.segments_by_group) > 3:
-            parts.append(f"+{len(forecast.segments_by_group) - 3} weitere")
-        return " | ".join(parts) if parts else "Keine Prognose"
+            parts.append(tr("+{0} weitere", len(forecast.segments_by_group) - 3))
+        return " | ".join(parts) if parts else tr("Keine Prognose")
 
     def _format_forecast_timeline(self, forecast) -> str:
         """Render a compact ASCII timeline for the next 30 seconds."""
@@ -2512,15 +2569,19 @@ class MainWindow(QMainWindow):
 
     def _update_overview_for_session(self, paths: list[str], session: SessionData) -> None:
         """Refresh the overview cards after a successful load."""
-        self._lbl_title.setText("Sitzung geladen")
+        self._lbl_title.setText(tr("Sitzung geladen"))
         self._lbl_subtitle.setText(
-            f"{Path(paths[0]).name}" if len(paths) == 1 else f"{len(paths)} PCAP-Dateien kombiniert"
+            Path(paths[0]).name
+            if len(paths) == 1
+            else tr("{0} PCAP-Dateien kombiniert", len(paths))
         )
         msg_types = ", ".join(
             f"{msg_type.value}: {count}"
             for msg_type, count in sorted(session.msg_type_counts.items(), key=lambda item: item[0].value)
         )
-        self._lbl_memory.setText(f"Nachrichtentypen: {msg_types}" if msg_types else "Keine Typverteilung verfuegbar")
+        self._lbl_memory.setText(
+            tr("Nachrichtentypen: {0}", msg_types) if msg_types else tr("Keine Typverteilung verfuegbar")
+        )
         self._set_stat_card_value(self._stat_files, str(len(paths)))
         self._set_stat_card_value(self._stat_messages, str(len(session.messages)))
         self._set_stat_card_value(self._stat_stations, str(len(session.station_ids)))
@@ -2529,37 +2590,46 @@ class MainWindow(QMainWindow):
 
     def _refresh_memory_banner(self) -> None:
         """Show a startup banner based on persistent memory."""
-        self._lbl_title.setText("PCAP2KML Player")
-        self._lbl_subtitle.setText("Ziehe PCAP-Dateien ins Fenster oder lade die letzte Sitzung mit einem Klick.")
+        self._lbl_title.setText(tr("PCAP2KML Player"))
+        self._lbl_subtitle.setText(
+            tr("Ziehe PCAP-Dateien ins Fenster oder lade die letzte Sitzung mit einem Klick.")
+        )
         last_files = self._memory.existing_last_session_files()
         if last_files:
             self._lbl_memory.setText(
-                f"Letzte Sitzung: {len(last_files)} Datei(en), "
-                f"{self._memory.last_session_message_count} Nachrichten, "
-                f"{self._memory.last_session_station_count} Stationen"
+                tr(
+                    "Letzte Sitzung: {0} Datei(en), {1} Nachrichten, {2} Stationen",
+                    len(last_files),
+                    self._memory.last_session_message_count,
+                    self._memory.last_session_station_count,
+                )
             )
             self._set_stat_card_value(self._stat_files, str(len(last_files)))
             self._set_stat_card_value(self._stat_messages, str(self._memory.last_session_message_count))
             self._set_stat_card_value(self._stat_stations, str(self._memory.last_session_station_count))
-            self._status_metrics.setText("Bereit fuer letzte Sitzung")
+            self._status_metrics.setText(tr("Bereit fuer letzte Sitzung"))
             self._update_compact_overview_text()
             return
 
-        self._lbl_memory.setText("Noch keine persistente Sitzung gespeichert")
+        self._lbl_memory.setText(tr("Noch keine persistente Sitzung gespeichert"))
         self._set_stat_card_value(self._stat_files, "0")
         self._set_stat_card_value(self._stat_messages, "0")
         self._set_stat_card_value(self._stat_stations, "0")
-        self._status_metrics.setText("Noch keine Sitzung geladen")
+        self._status_metrics.setText(tr("Noch keine Sitzung geladen"))
         self._update_compact_overview_text()
 
     def _update_status_metrics(self, visible_messages: int) -> None:
         """Update the compact status metrics label."""
         if not self._session:
-            self._status_metrics.setText("Noch keine Sitzung geladen")
+            self._status_metrics.setText(tr("Noch keine Sitzung geladen"))
             return
         self._status_metrics.setText(
-            f"Sichtbar: {visible_messages} | Stationen: {len(self._active_stations)} | "
-            f"Dauer: {self._player.format_time(self._session.duration_seconds)}"
+            tr(
+                "Sichtbar: {0} | Stationen: {1} | Dauer: {2}",
+                visible_messages,
+                len(self._active_stations),
+                self._player.format_time(self._session.duration_seconds),
+            )
         )
 
     def _clear_session_views(self) -> None:
@@ -2584,14 +2654,14 @@ class MainWindow(QMainWindow):
             self._eta_graph.set_current_time(None)
             self._refresh_eta_dashboard()
         if hasattr(self, "_eta_summary"):
-            self._eta_summary.setText("Keine PCAP-Sitzung geladen.")
+            self._eta_summary.setText(tr("Keine PCAP-Sitzung geladen."))
         if hasattr(self, "_context_tabs"):
             self._context_tabs.setCurrentIndex(1)
             self._context_tabs.setVisible(True)
         if hasattr(self, "_btn_toggle_message_table"):
             self._btn_toggle_message_table.blockSignals(True)
             self._btn_toggle_message_table.setChecked(False)
-            self._btn_toggle_message_table.setText("Tabelle maximieren")
+            self._btn_toggle_message_table.setText(tr("Tabelle maximieren"))
             self._btn_toggle_message_table.blockSignals(False)
         if hasattr(self, "_right_splitter"):
             self._right_splitter.setSizes([460, 280])
@@ -2607,7 +2677,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_issue_intersection_combo"):
             self._issue_intersection_combo.blockSignals(True)
             self._issue_intersection_combo.clear()
-            self._issue_intersection_combo.addItem("Alle Kreuzungen", "all")
+            self._issue_intersection_combo.addItem(tr("Alle Kreuzungen"), "all")
             self._issue_intersection_combo.blockSignals(False)
         self._player.set_filtered_messages([])
         self._player.set_focus_indices([])
@@ -2620,12 +2690,12 @@ class MainWindow(QMainWindow):
             self._merge_view_checkbox.blockSignals(True)
             self._merge_view_checkbox.setChecked(False)
             self._merge_view_checkbox.blockSignals(False)
-        self._lbl_filter_hint.setText("Alle Typen und Stationen aktiv")
+        self._lbl_filter_hint.setText(tr("Alle Typen und Stationen aktiv"))
         self._update_controls_enabled(False)
 
     def _clear_scene_panel(self) -> None:
         """Reset the scene panel to its empty state."""
-        self._scene_summary.setText("Keine Szene verfuegbar. Lade eine PCAP-Datei und starte die Wiedergabe.")
+        self._scene_summary.setText(tr("Keine Szene verfuegbar. Lade eine PCAP-Datei und starte die Wiedergabe."))
         self._scene_metrics.setText("")
         self._scene_warning_label.clear()
         self._scene_warning_label.hide()

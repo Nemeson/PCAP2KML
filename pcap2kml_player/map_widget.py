@@ -22,19 +22,18 @@ from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineS
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 
 from .data_model import MessageType, V2xMessage
+from .map_backend import (
+    MAP_PERFORMANCE_DIAGNOSTIC,
+    MAP_PERFORMANCE_MODES,
+    MAP_PERFORMANCE_NORMAL,
+    MAP_PERFORMANCE_SAVER,
+    METERS_PER_DEGREE_LATITUDE,
+)
 from .scene_model import build_scene_snapshot
 
 logger = logging.getLogger(__name__)
 PLAYBACK_TRAIL_POINTS = 8
 DISPLAY_CLUSTER_RADIUS_M = 5000.0
-MAP_PERFORMANCE_NORMAL = "normal"
-MAP_PERFORMANCE_SAVER = "saver"
-MAP_PERFORMANCE_DIAGNOSTIC = "diagnostic"
-MAP_PERFORMANCE_MODES = {
-    MAP_PERFORMANCE_NORMAL,
-    MAP_PERFORMANCE_SAVER,
-    MAP_PERFORMANCE_DIAGNOSTIC,
-}
 MAP_RENDER_BUDGETS = {
     MAP_PERFORMANCE_NORMAL: {
         "markers": 1500,
@@ -326,8 +325,8 @@ def _polyline_label_point(
 
 def _point_distance_meters(point_a: tuple[float, float], point_b: tuple[float, float]) -> float:
     """Approximate local distance in meters between two nearby points."""
-    lat_scale = 111_320.0
-    lon_scale = max(1e-6, 111_320.0 * cos(radians((point_a[0] + point_b[0]) / 2.0)))
+    lat_scale = METERS_PER_DEGREE_LATITUDE
+    lon_scale = max(1e-6, METERS_PER_DEGREE_LATITUDE * cos(radians((point_a[0] + point_b[0]) / 2.0)))
     dx = (point_a[1] - point_b[1]) * lon_scale
     dy = (point_a[0] - point_b[0]) * lat_scale
     return hypot(dx, dy)
@@ -504,8 +503,8 @@ def _offset_polyline(coords: list[tuple[float, float]], offset_m: float) -> list
     for index, point in enumerate(coords):
         prev_point = coords[index - 1] if index > 0 else coords[index]
         next_point = coords[index + 1] if index < len(coords) - 1 else coords[index]
-        lat_scale = 111_320.0
-        lon_scale = max(1e-6, 111_320.0 * cos(radians(point[0])))
+        lat_scale = METERS_PER_DEGREE_LATITUDE
+        lon_scale = max(1e-6, METERS_PER_DEGREE_LATITUDE * cos(radians(point[0])))
         dx = (next_point[1] - prev_point[1]) * lon_scale
         dy = (next_point[0] - prev_point[0]) * lat_scale
         length = hypot(dx, dy)
@@ -2342,7 +2341,6 @@ class MapWidget(QWebEngineView):
                 page.runJavaScript(script, 0, callback)
             except TypeError:
                 page.runJavaScript(script, 0)
-                callback(None)
         except RuntimeError as exc:
             self._disposed = True
             self._render_payload_in_flight = False

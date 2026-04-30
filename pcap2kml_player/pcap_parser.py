@@ -23,6 +23,7 @@ from .data_model import (
     V2xMessage,
     infer_capture_role,
 )
+from .map_backend import METERS_PER_DEGREE_LATITUDE
 from .nmea_parser import parse_nmea_sentence
 from .protocol_constants import ITS_PDU_MESSAGE_ID
 
@@ -44,10 +45,11 @@ GEONET_BTP_PORT_SCAN_STOP = 96
 
 # Pyshark display filter: keep ITS-specific layers; broad "or gps" kept for
 # GNSS sources that present as neither udp.port 2947 nor a named nmea layer.
+# Generated from BTP_PORTS so port numbers stay in sync automatically.
+_udp_port_filters = " or ".join(f"udp.port == {p}" for p in sorted(BTP_PORTS))
 PYSHARK_DISPLAY_FILTER = (
-    "btp or nmea or gnw or gn or its or "
-    "eth.type == 0x8947 or udp.port == 2001 or udp.port == 2002 or "
-    "udp.port == 2003 or udp.port == 2004 or udp.port == 2007 or udp.port == 2008"
+    f"btp or nmea or gnw or gn or its or "
+    f"eth.type == 0x8947 or {_udp_port_filters}"
 )
 PYSHARK_OPEN_TIMEOUT_S = 30.0
 
@@ -413,8 +415,8 @@ def _delta_to_geo(
     """Approximate ISO 19091 local XY deltas as absolute WGS84 points."""
     meters_east = delta_x_cm / 100.0
     meters_north = delta_y_cm / 100.0
-    lat += meters_north / 111_320.0
-    lon += meters_east / max(1e-6, 111_320.0 * cos(radians(lat)))
+    lat += meters_north / METERS_PER_DEGREE_LATITUDE
+    lon += meters_east / max(1e-6, METERS_PER_DEGREE_LATITUDE * cos(radians(lat)))
     return (lat, lon)
 
 
@@ -496,8 +498,8 @@ def _perpendicular_stopline(
     width_m: float,
 ) -> list[dict[str, float]] | None:
     """Build a short stopline perpendicular to a lane centerline."""
-    lat_scale = 111_320.0
-    lon_scale = max(1e-6, 111_320.0 * cos(radians(anchor[0])))
+    lat_scale = METERS_PER_DEGREE_LATITUDE
+    lon_scale = max(1e-6, METERS_PER_DEGREE_LATITUDE * cos(radians(anchor[0])))
     dx = (neighbor[1] - anchor[1]) * lon_scale
     dy = (neighbor[0] - anchor[0]) * lat_scale
     length = hypot(dx, dy)
@@ -543,12 +545,12 @@ def _derive_stopline(
     direction_neighbor = points[1]
     if ref_point is not None:
         start_distance = hypot(
-            (points[0]["lat"] - ref_point["lat"]) * 111_320.0,
-            (points[0]["lon"] - ref_point["lon"]) * max(1e-6, 111_320.0 * cos(radians(ref_point["lat"]))),
+            (points[0]["lat"] - ref_point["lat"]) * METERS_PER_DEGREE_LATITUDE,
+            (points[0]["lon"] - ref_point["lon"]) * max(1e-6, METERS_PER_DEGREE_LATITUDE * cos(radians(ref_point["lat"]))),
         )
         end_distance = hypot(
-            (points[-1]["lat"] - ref_point["lat"]) * 111_320.0,
-            (points[-1]["lon"] - ref_point["lon"]) * max(1e-6, 111_320.0 * cos(radians(ref_point["lat"]))),
+            (points[-1]["lat"] - ref_point["lat"]) * METERS_PER_DEGREE_LATITUDE,
+            (points[-1]["lon"] - ref_point["lon"]) * max(1e-6, METERS_PER_DEGREE_LATITUDE * cos(radians(ref_point["lat"]))),
         )
         if end_distance < start_distance:
             intersection_anchor = points[-1]

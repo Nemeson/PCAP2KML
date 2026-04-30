@@ -742,7 +742,7 @@ def test_reload_map_resets_safe_mode_and_rerenders_session():
     assert window._map_widget.reloads == 1
     assert window._map_safe_mode_active is False
     assert window._map_issue_history == []
-    assert window._map_widget.loaded_messages[-1] == window._player._messages
+    assert window._map_widget.render_calls[-1][0] == window._player._messages
 
 
 def test_build_diagnostics_report_contains_runtime_session_and_map(monkeypatch):
