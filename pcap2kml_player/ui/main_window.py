@@ -742,8 +742,10 @@ class MainWindow(QMainWindow):
         scene_layout.addWidget(self._scene_legend)
 
         self._scene_request_legend = QLabel(
-            tr("Request-Legende: pending=blau, acknowledged=gelb, granted=gruen, "
-            "rejected=rot, timeout=dunkelrot | dominante Anfrage = kraeftig, weitere = gestrichelt")
+            tr(
+                "Request-Legende: pending=blau, acknowledged=gelb, granted=gruen, "
+                "rejected=rot, timeout=dunkelrot | dominante Anfrage = kraeftig, weitere = gestrichelt"
+            )
         )
         self._scene_request_legend.setWordWrap(True)
         self._scene_request_legend.setStyleSheet("color: #667891; font-size: 11px;")
@@ -841,10 +843,12 @@ class MainWindow(QMainWindow):
         parent_layout.addWidget(dashboard_splitter, stretch=1)
 
         suggestions = QLabel(
-            tr("ETA-Diagnose: Restzeit bis MAP-Stopline als blaue Kurve, geglaettete "
-            "Geschwindigkeit als gruene Kurve, SREM als vertikale Ereignislinien und "
-            "SSEM als farbige Statusbaender. Diagnosemarker zeigen ETA-Spruenge, "
-            "fehlende SSEM, spaetes/fehlendes granted und Stopline-Passage ohne granted.")
+            tr(
+                "ETA-Diagnose: Restzeit bis MAP-Stopline als blaue Kurve, geglaettete "
+                "Geschwindigkeit als gruene Kurve, SREM als vertikale Ereignislinien und "
+                "SSEM als farbige Statusbaender. Diagnosemarker zeigen ETA-Spruenge, "
+                "fehlende SSEM, spaetes/fehlendes granted und Stopline-Passage ohne granted."
+            )
         )
         suggestions.setWordWrap(True)
         suggestions.setStyleSheet("color: #667891; font-size: 11px;")
@@ -941,6 +945,7 @@ class MainWindow(QMainWindow):
         """Connect the current map widget implementation to diagnostics."""
         self._map_widget.telemetry_updated.connect(self._on_map_telemetry_updated)
         self._map_widget.map_issue_detected.connect(self._on_map_issue_detected)
+        self._map_widget.map_interaction_ended.connect(self._on_map_interaction_ended)
 
     def _on_layout_mode_changed(self, *_args) -> None:
         """Persist and apply the selected responsive layout mode."""
@@ -992,8 +997,11 @@ class MainWindow(QMainWindow):
         if warning_level and warning_level != self._last_memory_warning_level:
             self._last_memory_warning_level = warning_level
             self._statusbar.showMessage(
-                tr("RAM {0:.0f} MB - Kartenmodus automatisch auf {1} reduziert",
-                   memory_mb, PERFORMANCE_MODE_LABELS[target_mode])
+                tr(
+                    "RAM {0:.0f} MB - Kartenmodus automatisch auf {1} reduziert",
+                    memory_mb,
+                    PERFORMANCE_MODE_LABELS[target_mode],
+                )
             )
 
     def _set_performance_mode(self, mode: str, *, auto: bool) -> None:
@@ -1077,9 +1085,7 @@ class MainWindow(QMainWindow):
             return
         cooldown_until = self.__dict__.get("_map_recovery_cooldown_until", 0.0)
         if cooldown_until and time.monotonic() < cooldown_until:
-            self._statusbar.showMessage(
-                tr("Kartenhinweis (Cooldown): {0}", message), 3000
-            )
+            self._statusbar.showMessage(tr("Kartenhinweis (Cooldown): {0}", message), 3000)
             return
         if len(issues) < MAP_SAFE_MODE_ISSUE_THRESHOLD:
             self._statusbar.showMessage(tr("Kartenhinweis: {0}", message), 5000)
@@ -1122,10 +1128,22 @@ class MainWindow(QMainWindow):
         QMessageBox.warning(
             self,
             tr("Kartenfehler"),
-            tr("Die Karte konnte nach mehreren Versuchen nicht wiederhergestellt werden.\n\n"
-            "Bitte starte die Anwendung neu oder exportiere die Diagnose "
-            "(Menü → Diagnose exportieren)."),
-        )
+            tr(
+                "Die Karte konnte nach mehreren Versuchen nicht wiederhergestellt werden.\n\n"
+                "Bitte starte die Anwendung neu oder exportiere die Diagnose "
+                "(Menü → Diagnose exportieren)."
+            ),
+
+    def _on_map_interaction_ended(self) -> None:
+        if self._session and self._player._messages:
+            self._last_map_slice_update_monotonic = 0.0
+            self._last_map_slice_index = None
+            self._last_map_messages_id = None
+            self._map_widget.render_playback_slice(
+                self._player._messages,
+                self._player.current_index,
+                window_seconds=self._map_playback_window_seconds(),
+            )
 
     def _on_reload_map(self) -> None:
         """Reload the WebEngine map and re-render the current session."""
@@ -1164,9 +1182,7 @@ class MainWindow(QMainWindow):
 
         self._memory.remember_export_directory(dir_path)
         self._memory.save()
-        self._statusbar.showMessage(
-            tr("Diagnosebericht exportiert nach {0}", report_path), 5000
-        )
+        self._statusbar.showMessage(tr("Diagnosebericht exportiert nach {0}", report_path), 5000)
         QMessageBox.information(
             self,
             tr("Diagnose exportiert"),
@@ -1483,9 +1499,7 @@ class MainWindow(QMainWindow):
 
         self._memory.remember_export_directory(dir_path)
         self._memory.save()
-        self._statusbar.showMessage(
-            tr("{0} KML-Dateien exportiert nach {1}", len(created), dir_path)
-        )
+        self._statusbar.showMessage(tr("{0} KML-Dateien exportiert nach {1}", len(created), dir_path))
         QMessageBox.information(
             self,
             tr("Export erfolgreich"),
@@ -1514,9 +1528,7 @@ class MainWindow(QMainWindow):
 
         self._memory.remember_export_directory(dir_path)
         self._memory.save()
-        self._statusbar.showMessage(
-            tr("Priorisierungsfehler exportiert nach {0}", dir_path)
-        )
+        self._statusbar.showMessage(tr("Priorisierungsfehler exportiert nach {0}", dir_path))
         QMessageBox.information(
             self,
             tr("Export erfolgreich"),
@@ -1540,7 +1552,9 @@ class MainWindow(QMainWindow):
         QMessageBox.warning(
             self,
             tr("Fehler"),
-            tr("ASN.1-Schemas konnten nicht aktualisiert werden.\nPruefen Sie Internetverbindung und Git-Installation."),
+            tr(
+                "ASN.1-Schemas konnten nicht aktualisiert werden.\nPruefen Sie Internetverbindung und Git-Installation."
+            ),
         )
 
     def _on_show_dashboard(self) -> None:
@@ -1657,7 +1671,7 @@ class MainWindow(QMainWindow):
         if msg is None:
             return
 
-        if self._should_render_full_map_slice(msg):
+        if not self._map_widget.user_interacting and self._should_render_full_map_slice(msg):
             self._map_widget.render_playback_slice(
                 self._player._messages,
                 self._player.current_index,
@@ -1825,9 +1839,7 @@ class MainWindow(QMainWindow):
             self._highlight_table_row(msg)
             self._show_security_detail(msg, auto_focus=True, force_refresh=True)
             self._focus_eta_event_request(event)
-            self._statusbar.showMessage(
-                tr("ETA-Ereignis geoeffnet: {0} {1}", event.kind, event.time_text), 4000
-            )
+            self._statusbar.showMessage(tr("ETA-Ereignis geoeffnet: {0} {1}", event.kind, event.time_text), 4000)
             return True
         self._focus_eta_event_request(event)
         self._statusbar.showMessage(
@@ -1887,9 +1899,7 @@ class MainWindow(QMainWindow):
             return
         self._memory.remember_export_directory(dir_path)
         self._memory.save()
-        self._statusbar.showMessage(
-            tr("ETA-Dashboard exportiert nach {0}", target_dir), 5000
-        )
+        self._statusbar.showMessage(tr("ETA-Dashboard exportiert nach {0}", target_dir), 5000)
         QMessageBox.information(
             self,
             tr("ETA exportiert"),
@@ -2142,9 +2152,7 @@ class MainWindow(QMainWindow):
         if any(state.revision_mismatch for state in intersections):
             warnings.append(tr("MAP/SPAT-Revisionen weichen voneinander ab."))
         if overdue_requests:
-            warnings.append(
-                tr("{0} Anforderung(en) ohne SSEM-Antwort ueber Timeout.", len(overdue_requests))
-            )
+            warnings.append(tr("{0} Anforderung(en) ohne SSEM-Antwort ueber Timeout.", len(overdue_requests)))
         if clock_skew_warnings:
             warnings.append(
                 tr("Uhrenversatz erkannt: ")
@@ -2152,9 +2160,7 @@ class MainWindow(QMainWindow):
             )
         inaccurate_eta = [item for item in scene.eta_verifications if not item.is_accurate]
         if inaccurate_eta:
-            warnings.append(
-                tr("ETA-Abweichung > 2s bei {0} verifizierten Anfrage(n).", len(inaccurate_eta))
-            )
+            warnings.append(tr("ETA-Abweichung > 2s bei {0} verifizierten Anfrage(n).", len(inaccurate_eta)))
         self._scene_warning_label.setVisible(bool(warnings))
         self._scene_warning_label.setText(" | ".join(warnings))
 
@@ -2251,9 +2257,7 @@ class MainWindow(QMainWindow):
             tr("{0} Fehler, {1} Warnung(en){2}. Klick fokussiert Request.", errors, warnings, filter_suffix)
         )
         if not filtered_issues:
-            self._issue_summary.setText(
-                tr("Keine Fehler im aktuellen Filter ({0} insgesamt).", len(issues))
-            )
+            self._issue_summary.setText(tr("Keine Fehler im aktuellen Filter ({0} insgesamt).", len(issues)))
             return
 
         for issue in filtered_issues:
@@ -2291,7 +2295,9 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_btn_toggle_issue_panel"):
             self._btn_toggle_issue_panel.setText(">" if collapsed else tr("Einklappen"))
             self._btn_toggle_issue_panel.setToolTip(
-                tr("Priorisierungsfehler-Panel ausklappen") if collapsed else tr("Priorisierungsfehler-Panel einklappen")
+                tr("Priorisierungsfehler-Panel ausklappen")
+                if collapsed
+                else tr("Priorisierungsfehler-Panel einklappen")
             )
 
     def _refresh_issue_intersection_filter(self, issues: list[PrioritizationIssue]) -> None:
@@ -2571,9 +2577,7 @@ class MainWindow(QMainWindow):
         """Refresh the overview cards after a successful load."""
         self._lbl_title.setText(tr("Sitzung geladen"))
         self._lbl_subtitle.setText(
-            Path(paths[0]).name
-            if len(paths) == 1
-            else tr("{0} PCAP-Dateien kombiniert", len(paths))
+            Path(paths[0]).name if len(paths) == 1 else tr("{0} PCAP-Dateien kombiniert", len(paths))
         )
         msg_types = ", ".join(
             f"{msg_type.value}: {count}"
@@ -2591,9 +2595,7 @@ class MainWindow(QMainWindow):
     def _refresh_memory_banner(self) -> None:
         """Show a startup banner based on persistent memory."""
         self._lbl_title.setText(tr("PCAP2KML Player"))
-        self._lbl_subtitle.setText(
-            tr("Ziehe PCAP-Dateien ins Fenster oder lade die letzte Sitzung mit einem Klick.")
-        )
+        self._lbl_subtitle.setText(tr("Ziehe PCAP-Dateien ins Fenster oder lade die letzte Sitzung mit einem Klick."))
         last_files = self._memory.existing_last_session_files()
         if last_files:
             self._lbl_memory.setText(
