@@ -54,7 +54,7 @@ MAP_RENDER_BUDGETS = {
         "trajectory_points": 400,
     },
 }
-MAP_RENDER_STALL_SECONDS = 8.0
+MAP_RENDER_STALL_SECONDS = 5.0
 MAP_BOOTSTRAP_TIMEOUT_SECONDS = 6.0
 
 
@@ -1818,6 +1818,8 @@ class MapWidget(QWebEngineView):
         self._page_load_failures = 0
         self._page_reload_timer: QTimer | None = None
         self._user_interacting = False
+        self._render_stall_count = 0
+        self._first_stall_at: float | None = None
 
         self._bridge.message_clicked.connect(self._on_marker_clicked)
         self._bridge.map_interaction_started.connect(self._on_user_interaction_start)
@@ -2436,11 +2438,28 @@ class MapWidget(QWebEngineView):
             queued = self._queued_render_payload_script
             self._queued_render_payload_script = None
             self._emit_map_issue(
-                f"Karten-Renderpayload lief seit >{MAP_RENDER_STALL_SECONDS:.0f}s — Flag zurückgesetzt"
+                f"Karten-Renderpayload lief seit >{MAP_RENDER_STALL_SECONDS:.0f}s — Flag zurueckgesetzt"
             )
             if queued is not None:
                 logger.info("Flushing queued render payload after stall reset")
                 self._run_js(queued)
+
+            now = time.monotonic()
+            if self._first_stall_at is None or now - self._first_stall_at > 60.0:
+                self._first_stall_at = now
+                self._render_stall_count = 0
+            self._render_stall_count += 1
+            if self._render_stall_count >= 3:
+                logger.warning(
+                    "Map page reload triggered after %d stall events in %ds",
+                    self._render_stall_count,
+                    int(now - self._first_stall_at),
+                )
+                self._first_stall_at = None
+                self._render_stall_count = 0
+                self._bootstrap_generation += 1
+                self.setHtml(_leaflet_runtime_html(), QUrl.fromLocalFile(str(_asset_base_path()) + "/"))
+                self._schedule_bootstrap_timeout()
 
     def _on_java_script_issue(self, message: str) -> None:
         """Forward JavaScript errors from the map page to the main window."""

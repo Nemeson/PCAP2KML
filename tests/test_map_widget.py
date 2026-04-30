@@ -1,6 +1,7 @@
 """Tests for JavaScript escaping helpers in the map widget."""
 
 import json
+import time
 from datetime import UTC, datetime
 
 from pcap2kml_player.data_model import MessageType, V2xMessage
@@ -1408,3 +1409,58 @@ def test_interaction_end_flushes_signal():
 
     assert widget._user_interacting is False
     assert ended == [True]
+
+
+def test_stall_escalation_triggers_reload_after_three_stalls():
+    widget = MapWidget.__new__(MapWidget)
+    widget._disposed = False
+    widget._render_payload_in_flight = True
+    widget._render_payload_started_at = 0.0
+    widget._render_payload_stall_generation = 1
+    widget._queued_render_payload_script = "applyRenderPayload({})"
+    widget._render_stall_count = 2
+    widget._first_stall_at = time.monotonic() - 30.0
+    widget._bootstrap_generation = 1
+
+    reload_calls: list[bool] = []
+
+    def fake_set_html(html, base_url):
+        reload_calls.append(True)
+
+    widget.setHtml = fake_set_html
+    widget._schedule_bootstrap_timeout = lambda: None
+    widget._emit_map_issue = lambda msg: None
+    widget._run_js = lambda script: None
+
+    widget._check_render_payload_stall(1)
+
+    assert widget._render_payload_in_flight is False
+    assert widget._render_payload_started_at is None
+    assert len(reload_calls) == 1
+    assert widget._render_stall_count == 0
+
+
+def test_stall_count_resets_after_60s_window():
+    widget = MapWidget.__new__(MapWidget)
+    widget._disposed = False
+    widget._render_payload_in_flight = True
+    widget._render_payload_started_at = 0.0
+    widget._render_payload_stall_generation = 1
+    widget._queued_render_payload_script = "applyRenderPayload({})"
+    widget._render_stall_count = 2
+    widget._first_stall_at = time.monotonic() - 65.0
+
+    reload_calls: list[bool] = []
+
+    def fake_set_html(html, base_url):
+        reload_calls.append(True)
+
+    widget.setHtml = fake_set_html
+    widget._schedule_bootstrap_timeout = lambda: None
+    widget._emit_map_issue = lambda msg: None
+    widget._run_js = lambda script: None
+
+    widget._check_render_payload_stall(1)
+
+    assert len(reload_calls) == 0
+    assert widget._render_stall_count == 1
