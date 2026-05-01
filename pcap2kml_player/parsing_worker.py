@@ -54,7 +54,9 @@ class ParsingWorker(QObject):
             errors.append(str(exc))
 
         session.finalize()
-        if not self._cancel_check_fn():
+        if self._cancel_check_fn():
+            self.cancelled.emit()
+        else:
             self.finished.emit(session, self._paths, errors)
 
     @pyqtSlot()

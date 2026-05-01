@@ -1133,6 +1133,7 @@ class MainWindow(QMainWindow):
                 "Bitte starte die Anwendung neu oder exportiere die Diagnose "
                 "(Menü → Diagnose exportieren)."
             ),
+        )
 
     def _on_map_interaction_ended(self) -> None:
         if self._session and self._player._messages:

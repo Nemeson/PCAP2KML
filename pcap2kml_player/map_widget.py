@@ -15,7 +15,7 @@ from math import cos, hypot, radians
 from pathlib import Path
 
 from PyQt6 import sip
-from PyQt6.QtCore import QObject, QThread, QTimer, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QObject, QThread, QTimer, QUrl, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QResizeEvent, QShowEvent
 from PyQt6.QtWebChannel import QWebChannel
 from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineSettings
@@ -2180,7 +2180,7 @@ class MapWidget(QWebEngineView):
             performance_mode=self.__dict__.get("_performance_mode", MAP_PERFORMANCE_NORMAL),
             station_color_map=self._station_color_map,
         )
-        self._render_worker.payload_ready.connect(self._on_worker_payload_ready)
+        self._render_worker.payload_ready.connect(self._on_worker_payload_ready, Qt.ConnectionType.QueuedConnection)
         self._render_worker.start()
 
     def _on_worker_payload_ready(self, payload_json: str, _compute_time: float) -> None:
