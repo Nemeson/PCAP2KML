@@ -866,7 +866,7 @@ class MainWindow(QMainWindow):
         self._btn_prev_issue = QPushButton(tr("Fehler zurueck"))
         self._btn_next_issue = QPushButton(tr("Naechster Fehler"))
         self._chk_problem_replay = QCheckBox(tr("Nur Problemstellen"))
-        self._btn_play.setFixedWidth(72)
+        self._btn_play.setFixedWidth(90)
         self._btn_pause.setFixedWidth(72)
         self._btn_stop.setFixedWidth(72)
         self._btn_prev_issue.setToolTip(tr("Zur vorherigen priorisierungsrelevanten Problemstelle springen"))
@@ -1296,7 +1296,7 @@ class MainWindow(QMainWindow):
         """Reduce fixed widths and button labels in compact layout."""
         if not hasattr(self, "_btn_play"):
             return
-        button_width = 58 if compact else 72
+        button_width = 58 if compact else 90
         self._btn_play.setFixedWidth(button_width)
         self._btn_pause.setFixedWidth(button_width)
         self._btn_stop.setFixedWidth(button_width)

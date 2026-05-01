@@ -2032,6 +2032,7 @@ class MapWidget(QWebEngineView):
         self._render_stall_count = 0
         self._first_stall_at: float | None = None
         self._render_worker: RenderPayloadWorker | None = None
+        self._resize_end_timer: QTimer | None = None
 
         self._bridge.message_clicked.connect(self._on_marker_clicked)
         self._bridge.map_interaction_started.connect(self._on_user_interaction_start)
@@ -2069,6 +2070,12 @@ class MapWidget(QWebEngineView):
             stall_timer.stop()
             stall_timer.deleteLater()
         self.__dict__["_stall_timer"] = None
+
+        resize_end_timer = self.__dict__.get("_resize_end_timer")
+        if resize_end_timer is not None:
+            resize_end_timer.stop()
+            resize_end_timer.deleteLater()
+        self.__dict__["_resize_end_timer"] = None
 
         worker = self.__dict__.get("_render_worker")
         if worker is not None and worker.isRunning():
@@ -2261,6 +2268,13 @@ class MapWidget(QWebEngineView):
         """Refresh Leaflet sizing after DPI/window-size changes."""
         super().resizeEvent(event)
         self._schedule_map_resize()
+        self._on_user_interaction_start()
+        if self._resize_end_timer is not None:
+            self._resize_end_timer.stop()
+        self._resize_end_timer = QTimer()
+        self._resize_end_timer.setSingleShot(True)
+        self._resize_end_timer.timeout.connect(self._on_resize_interaction_end)
+        self._resize_end_timer.start(200)
 
     def clear(self) -> None:
         """Remove all markers and trajectories from the map."""
@@ -2281,6 +2295,10 @@ class MapWidget(QWebEngineView):
         self._user_interacting = True
 
     def _on_user_interaction_end(self) -> None:
+        self._user_interacting = False
+        self.map_interaction_ended.emit()
+
+    def _on_resize_interaction_end(self) -> None:
         self._user_interacting = False
         self.map_interaction_ended.emit()
 

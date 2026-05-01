@@ -1489,3 +1489,99 @@ def test_stall_count_resets_after_60s_window():
 
     assert len(reload_calls) == 0
     assert widget._render_stall_count == 1
+
+
+def test_resize_event_sets_user_interacting_and_starts_timer():
+    widget = MapWidget.__new__(MapWidget)
+    widget._user_interacting = False
+    widget._resize_end_timer = None
+    widget._schedule_map_resize = lambda: None
+
+    from PyQt6.QtCore import QSize
+    from PyQt6.QtGui import QResizeEvent
+
+    fake_event = QResizeEvent(QSize(800, 600), QSize(700, 500))
+    widget.resizeEvent(fake_event)
+
+    assert widget._user_interacting is True
+    assert widget._resize_end_timer is not None
+    assert widget._resize_end_timer.isSingleShot() is True
+
+
+def test_resize_interaction_end_resets_state_and_emits_signal():
+    widget = MapWidget.__new__(MapWidget)
+    widget._user_interacting = True
+    ended: list[bool] = []
+    widget.map_interaction_ended = type("Signal", (), {"emit": lambda self: ended.append(True)})()
+
+    widget._on_resize_interaction_end()
+
+    assert widget._user_interacting is False
+    assert ended == [True]
+
+
+def test_dispose_cleans_up_resize_end_timer():
+    widget = MapWidget.__new__(MapWidget)
+    widget._disposed = False
+    widget._page_ready = True
+    widget._pending_scripts = []
+    widget._render_payload_in_flight = True
+    widget._queued_render_payload_script = "applyRenderPayload({})"
+    widget._render_payload_started_at = 1.0
+    widget._render_payload_stall_generation = 3
+    widget._bootstrap_generation = 4
+    widget._bootstrap_probe_succeeded = False
+
+    from PyQt6.QtCore import QTimer
+
+    resize_timer = QTimer()
+    widget._resize_end_timer = resize_timer
+
+    widget.dispose()
+
+    assert widget._resize_end_timer is None
+
+
+def test_run_js_suppressed_during_resize_interaction():
+    widget = MapWidget.__new__(MapWidget)
+    widget._disposed = False
+    widget._page_ready = True
+    widget._user_interacting = True
+
+    class CapturePage:
+        def runJavaScript(self, script, _world=0, _callback=None):
+            self._last_script = script
+
+    capture_page = CapturePage()
+    widget.page = lambda: capture_page
+
+    widget._run_js("clearAll()")
+    widget._run_js("highlightMarker('station_car-1')")
+
+    assert capture_page._last_script == "highlightMarker('station_car-1')"
+
+
+def test_resize_event_stops_previous_timer_before_starting_new():
+    widget = MapWidget.__new__(MapWidget)
+    widget._user_interacting = False
+    widget._resize_end_timer = None
+    widget._schedule_map_resize = lambda: None
+
+    from PyQt6.QtCore import QSize, QTimer
+    from PyQt6.QtGui import QResizeEvent
+
+    old_timer_stopped = False
+    old_timer = QTimer()
+
+    def fake_stop():
+        nonlocal old_timer_stopped
+        old_timer_stopped = True
+
+    old_timer.stop = fake_stop
+    widget._resize_end_timer = old_timer
+
+    fake_event = QResizeEvent(QSize(800, 600), QSize(700, 500))
+    widget.resizeEvent(fake_event)
+
+    assert old_timer_stopped is True
+    assert widget._resize_end_timer is not old_timer

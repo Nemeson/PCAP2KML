@@ -103,7 +103,9 @@ class _FakeMapWidget:
     def __init__(self):
         self.telemetry_updated = _FakeSignal()
         self.map_issue_detected = _FakeSignal()
+        self.map_interaction_ended = _FakeSignal()
         self.modes: list[str] = []
+        self._user_interacting = False
         self.render_calls: list[tuple[list[V2xMessage], int, float | None]] = []
         self.reloads = 0
         self.loaded_messages: list[list[V2xMessage]] = []
@@ -112,6 +114,10 @@ class _FakeMapWidget:
         self.parent = object()
         self.deleted = False
         self.disposed = False
+
+    @property
+    def user_interacting(self) -> bool:
+        return self._user_interacting
 
     def set_performance_mode(self, mode: str) -> None:
         self.modes.append(mode)
