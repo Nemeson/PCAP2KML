@@ -6,6 +6,7 @@ playback highlighting via JavaScript calls.
 
 from __future__ import annotations
 
+import bisect
 import json
 import logging
 import sys
@@ -1773,6 +1774,29 @@ class DiagnosticWebEnginePage(QWebEnginePage):
             self.java_script_issue.emit(f"{level_name}: {message} ({source_id}:{line_number})")
 
 
+_MESSAGE_INDEX_CACHE: dict[int, tuple[int, list[float], list[int]]] = {}
+_MESSAGE_INDEX_CACHE_MAX = 8
+
+
+def _message_index(messages: list[V2xMessage]) -> tuple[list[float], list[int]]:
+    """Return cached (timestamps_seconds, infrastructure_indices) for messages.
+
+    Keyed by id(messages) + len. Invalidates when length grows (live capture).
+    """
+    cache_key = id(messages)
+    cached = _MESSAGE_INDEX_CACHE.get(cache_key)
+    if cached is not None and cached[0] == len(messages):
+        return cached[1], cached[2]
+    timestamps = [m.timestamp.timestamp() for m in messages]
+    infra_indices = [
+        i for i, m in enumerate(messages) if m.msg_type in INFRASTRUCTURE_MESSAGE_COLORS
+    ]
+    _MESSAGE_INDEX_CACHE[cache_key] = (len(messages), timestamps, infra_indices)
+    if len(_MESSAGE_INDEX_CACHE) > _MESSAGE_INDEX_CACHE_MAX:
+        _MESSAGE_INDEX_CACHE.pop(next(iter(_MESSAGE_INDEX_CACHE)))
+    return timestamps, infra_indices
+
+
 def _compute_render_payload(
     messages: list[V2xMessage],
     *,
@@ -1790,21 +1814,18 @@ def _compute_render_payload(
     end_index = len(messages) if max_index is None else min(max_index + 1, len(messages))
     display_anchors = _display_anchor_points(messages, max_index=max_index)
 
-    for index, msg in enumerate(messages):
-        if index >= end_index:
-            break
-        msg_timestamp = msg.timestamp.timestamp()
+    timestamps, infra_indices = _message_index(messages)
+    if window_start_timestamp is not None:
+        window_start_index = bisect.bisect_left(timestamps, window_start_timestamp, hi=end_index)
+    else:
+        window_start_index = 0
+
+    def _process(index: int) -> None:
+        msg = messages[index]
         if not _has_display_position(msg) or not _is_near_display_anchors(msg, display_anchors):
-            continue
-        if (
-            window_start_timestamp is not None
-            and msg_timestamp < window_start_timestamp
-            and msg.msg_type not in INFRASTRUCTURE_MESSAGE_COLORS
-        ):
-            continue
+            return
         color = INFRASTRUCTURE_MESSAGE_COLORS.get(msg.msg_type, station_color_map.get(msg.station_id, "#3388ff"))
         marker_lat, marker_lon = _marker_position_for_message(msg)
-
         if msg.msg_type not in NON_STATION_MARKER_TYPES:
             marker_id_raw = _marker_id_for_message(msg)
             markers_by_id[marker_id_raw] = {
@@ -1822,6 +1843,14 @@ def _compute_render_payload(
                 "layerName": "markers",
             }
             station_coords.setdefault(msg.station_id, []).append([msg.latitude, msg.longitude])
+
+    for index in range(window_start_index, end_index):
+        _process(index)
+    if window_start_index > 0:
+        for index in infra_indices:
+            if index >= window_start_index:
+                break
+            _process(index)
 
     infrastructure_payload: list[dict[str, object]] = []
     for overlay in _infrastructure_overlays_for_messages(messages, max_index=max_index):

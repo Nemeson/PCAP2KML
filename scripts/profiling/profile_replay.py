@@ -77,7 +77,11 @@ def _attach_gc_logger() -> list[float]:
     return pauses
 
 
-def profile_pcap(pcap_path: Path, performance_mode: str = "normal") -> dict:
+def profile_pcap(
+    pcap_path: Path,
+    performance_mode: str = "normal",
+    window_seconds: float | None = None,
+) -> dict:
     print(f"[profile] parsing {pcap_path.name} ...", flush=True)
     parse_start = time.perf_counter()
     session = parse_pcap(str(pcap_path))
@@ -100,7 +104,7 @@ def profile_pcap(pcap_path: Path, performance_mode: str = "normal") -> dict:
     sim_time = 0.0
     msg_index = 0
     tick_index = 0
-    last_window_start = None
+    t0_epoch = t0.timestamp()
 
     while sim_time <= duration_s:
         while msg_index + 1 < len(messages):
@@ -109,12 +113,17 @@ def profile_pcap(pcap_path: Path, performance_mode: str = "normal") -> dict:
                 break
             msg_index += 1
 
+        if window_seconds is not None and window_seconds > 0:
+            window_start = t0_epoch + sim_time - window_seconds
+        else:
+            window_start = None
+
         gc_pauses.clear()
         compute_start = time.perf_counter()
         payload = _compute_render_payload(
             messages,
             max_index=msg_index,
-            window_start_timestamp=last_window_start,
+            window_start_timestamp=window_start,
             fit_view=FIT_VIEW,
             short_trails=SHORT_TRAILS,
             clear_first=False,
@@ -148,7 +157,10 @@ def profile_pcap(pcap_path: Path, performance_mode: str = "normal") -> dict:
         sim_time += tick_dt
         tick_index += 1
 
-    csv_path = OUT_DIR / f"{pcap_path.stem.replace(' ', '_')}_{performance_mode}.csv"
+    suffix = f"{performance_mode}"
+    if window_seconds is not None and window_seconds > 0:
+        suffix += f"_w{int(window_seconds)}s"
+    csv_path = OUT_DIR / f"{pcap_path.stem.replace(' ', '_')}_{suffix}.csv"
     with csv_path.open("w", newline="", encoding="utf-8") as fp:
         writer = csv.writer(fp)
         writer.writerow([
@@ -263,6 +275,8 @@ def main() -> int:
     ap.add_argument("paths", nargs="*", help="PCAP-Pfade")
     ap.add_argument("--all", action="store_true", help="alle testfiles/*.pcap")
     ap.add_argument("--mode", default="normal", help="performance_mode")
+    ap.add_argument("--window", type=float, default=None,
+                    help="Trail-Window in Sekunden (Production-Default normal=120)")
     args = ap.parse_args()
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -279,7 +293,7 @@ def main() -> int:
     summaries = []
     for path in paths:
         try:
-            summaries.append(profile_pcap(path, args.mode))
+            summaries.append(profile_pcap(path, args.mode, args.window))
         except Exception as exc:  # noqa: BLE001
             print(f"[profile] FAILED {path.name}: {exc}")
             summaries.append({"pcap": path.name, "error": str(exc)})

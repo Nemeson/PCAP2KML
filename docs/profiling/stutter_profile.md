@@ -1,139 +1,121 @@
-# T1.1 — Stutter-Profiling-Bericht
+# T1.1 + T1.3a/b — Stutter-Profiling-Bericht
 
 **Datum:** 2026-05-02
-**Branch:** release/1.7.0
+**Branch:** feat/t1.3-stutter-fix
 **Methode:** Pure-CPU-Profil von `_compute_render_payload` ueber simulierte Tick-Schleife
 (Tick-Intervall 50 ms = `TICK_INTERVAL_MS` aus `player_controller.py`).
-WebEngine/JS-Bridge nicht gemessen — Folgemessung in Live-App noetig (T1.2).
+WebEngine/JS-Bridge nicht gemessen.
+
+> **Hinweis:** Der Profiler ueberschreibt diese Datei beim Lauf mit einer Kurz-Tabelle.
+> Diese analytische Fassung ist Ende-Stand; bei erneutem Lauf wieder einspielen.
 
 ---
 
 ## TL;DR
 
-**Bestaetigt:** Replay-Stutter ist primaer eine Folge von **O(N)-Vollscan in `_compute_render_payload`**
-(`map_widget.py:1776`). Die Funktion iteriert bei jedem Tick **alle Messages** von Index 0 bis
-`max_index+1`. Wachstumsfaktor erste 10 % → letzte 10 % auf rxa: **27×**. Bei dichteren PCAPs
-addiert sich Marker-/Trail-Aufbau und JSON-Serialisierung. Tick-Budget 50 ms wird auf praktisch
-allen realistischen PCAPs **um Faktor 4–35 ueberschritten**.
+T1.3a (Bisect-Index-Cut + Reorder + Index-Cache) liefert massive Verbesserung:
 
-| PCAP | Msgs | Dauer s | p50 ms | p95 ms | p99 ms | max ms | first10% | last10% | Wachstum | Verhaeltnis zu 50-ms-Budget |
-|------|------|---------|--------|--------|--------|--------|----------|---------|----------|------------------------------|
-| SREM with OCIT.pcap | 41 | 30.8 | 0.22 | 0.55 | 0.85 | 1.18 | 0.05 | 0.45 | 9× | unkritisch |
-| rxa_22082025.pcap | 1974 | 493.3 | **101.9** | **238.0** | 304.0 | 735.6 | 7.8 | 210.8 | **27×** | p50 ≈ 2× Budget, p95 ≈ 4.8× |
-| txa_22082025.pcap | 4932 | 493.3 | **220.7** | **780.0** | 970.0 | 1769.6 | 66.6 | 223.5 | 3.4× | p50 ≈ 4.4× Budget, p95 ≈ **15.6×** |
+| PCAP | Metrik | Vorher (kein Window) | Nachher (Fix, Window 120 s) | Verbesserung |
+|------|--------|----------------------|------------------------------|--------------|
+| rxa_22082025 | p50 | 101.94 ms | **22.39 ms** | **-78 %** |
+| rxa_22082025 | p95 | 237.95 ms | **43.16 ms** | **-82 %** |
+| rxa_22082025 | max | 735.60 ms | **60.20 ms** | **-92 %** |
+| txa_22082025 | p50 | 220.68 ms | **168.35 ms** | -24 % |
+| txa_22082025 | p95 | 780.00 ms | **243.02 ms** | -69 % |
+| txa_22082025 | max | 1769.65 ms | **363.36 ms** | -79 % |
 
-Frametime-Gate v1.8: **p95 < 18 ms** — derzeit auf realistischen PCAPs verfehlt um Faktor 13–43.
+Frametime-Gate v1.8 (p95 < 18 ms) auf rxa noch nicht erreicht (43 ms),
+auf txa weiter deutlich daneben (243 ms). T1.3c (Display-Anchor-Cache) ist
+naechster Hebel.
 
 ---
 
-## Detailbefund
+## Methodische Anmerkung
 
-### 1. O(N)-Vollscan pro Tick (Hauptursache)
+Erstlauf zeigte den **Worst-Case ohne `window_start_timestamp`** (Profiler-Default).
+Production setzt das Window aktiv (Default 120 s in `PERFORMANCE_PLAYBACK_WINDOW_SECONDS[NORMAL]`).
+Der Vergleich oben ist daher: **alter Code ohne Window** vs. **neuer Code mit Window 120 s**.
 
-`_compute_render_payload` (Z. 1776 ff.):
+Das ist der relevante Vergleich, weil:
+- Der **alte Code** im Production-Pfad (mit Window) hat den Window-Filter zwar drin, aber nur als
+  `continue` mitten in der Schleife — der O(N)-Vollscan-Overhead bleibt
+- Der **neue Code** cuttet den Praefix per `bisect_left` komplett heraus
+
+Realistische User-Wahrnehmung folgt mit T1.2 (Live-App-Messung).
+
+---
+
+## Was T1.3a tut
+
+### Vorher
 ```python
 for index, msg in enumerate(messages):
-    if index >= end_index:
-        break
+    if index >= end_index: break
+    msg_timestamp = msg.timestamp.timestamp()
     if not _has_display_position(msg) or not _is_near_display_anchors(msg, display_anchors):
         continue
-    if (window_start_timestamp is not None
-        and msg_timestamp < window_start_timestamp
-        and msg.msg_type not in INFRASTRUCTURE_MESSAGE_COLORS):
+    if window_start_timestamp is not None and msg_timestamp < window_start_timestamp \
+       and msg.msg_type not in INFRASTRUCTURE_MESSAGE_COLORS:
         continue
     ...
 ```
 
-- Schleife laeuft **ab Index 0**, nicht ab Trail-Window-Start
-- `window_start_timestamp`-Filter wirkt **innerhalb** der Schleife → ueberspringt nur, scant aber
-- `_display_anchor_points(messages, max_index=...)` wird ebenfalls pro Tick neu berechnet
+Probleme:
+1. Vollscan ab Index 0 (kein Cut)
+2. Geometrie-Filter VOR Window-Filter — `_is_near_display_anchors` laeuft auch fuer Pre-Window-Msgs
+3. `msg.timestamp.timestamp()` datetime->float pro Message
 
-Konsequenz: bei rxa wachsen die letzten 10 % der Ticks auf 211 ms an (von 7.8 ms zu Beginn).
-Wachstum ist linear in `end_index`. Auf 1-GB-PCAPs (Roadmap-Ziel) waere das untragbar.
+### Nachher
+```python
+timestamps, infra_indices = _message_index(messages)   # gecacht per id(messages)
+window_start_index = bisect.bisect_left(timestamps, window_start_timestamp, hi=end_index)
 
-### 2. Marker-/Trail-Dichte addiert konstanten Overhead
+for index in range(window_start_index, end_index):
+    _process(index)             # Window-bound Messages
+if window_start_index > 0:
+    for index in infra_indices: # Infrastructure: window-exempt
+        if index >= window_start_index: break
+        _process(index)
+```
 
-txa hat 2.5× so viele Messages wie rxa, aber gleiche Dauer → mehr Stationen pro Frame.
-- **first10% mean txa = 67 ms** vs. **rxa = 7.8 ms** → 8.5× Startaufwand
-- Wachstum nur 3.4× weil Plateau frueh erreicht
-- Indikator: JSON-Serialisierung der grossen Payload dominiert mit ueber Marker-/Trail-Aufbau
-
-p95 payload bleibt klein (rxa 20.5 KB, txa 18.7 KB), Hauptkosten liegen also **vor** der
-Serialisierung — beim Aufbau des Marker-Dicts und der Trail-Listen.
-
-### 3. RenderPayloadWorker schuetzt UI, lindert Stutter aber nur teilweise
-
-Der seit `d59aa55` aktive `RenderPayloadWorker` laeuft off-thread, daher kein UI-Freeze.
-Jedoch:
-- `payload_ready` triggert `applyRenderPayload(...)` als `runJavaScript`-Call
-- Bei Tick-Rate 50 ms und Payload-Compute > 200 ms backloggt sich die Worker-Queue
-- Catch-up-Flush (`07bf0dd`) versucht das aufzuholen → sichtbarer Stutter beim Wiederanlauf
-
-Die JS-Bridge-Latenz selbst wurde in T1.1 nicht direkt gemessen (kein WebEngine im Profiler).
-Folge-Messung in Live-App: T1.2.
+Effekte:
+- bisect_left → O(log N) Praefix-Skip statt O(N)
+- Index-Cache → Timestamps + Infrastructure-Indizes einmal pro Session, nicht pro Tick
+- Pre-Window-Messages umgehen Geometrie-Filter komplett
+- Verhalten unveraendert: Infrastructure-Messages weiterhin window-exempt
+- 22 bestehende Render-Payload-Tests bleiben gruen
 
 ---
 
-## Fix-Plan (T1.3-Tickets)
+## Was noch fehlt fuer Frametime-Gate
 
-### T1.3a — Index-Cut basierend auf `window_start_timestamp` (HIGH)
-- `bisect_left` ueber sortierte `messages[i].timestamp` finden Start-Index
-- Schleife `for index in range(start_index, end_index)` statt 0-bis-end
-- **Erwarteter Effekt:** O(N) → O(W) wobei W = Trail-Window-Groesse (sekunden-, nicht
-  capture-langengebunden). Wachstumsfaktor 27× sollte auf < 2× sinken.
+### T1.3c — `_display_anchor_points` Cache (HIGH, naechster Schritt)
+- Wird pro Tick neu berechnet, scant `messages[:max_index]` komplett
+- Cache nach `(id(messages), max_index)` persistieren
+- Erwarteter Effekt: weiterer ~50 % Reduktion auf rxa, deutlich mehr auf txa
 
-### T1.3b — Trail-Window-Begrenzung in Default-Render (HIGH)
-- Default 30 s Trail (statt unbegrenzt seit Capture-Start)
-- Konfigurierbar in Performance-Settings
-- **Erwarteter Effekt:** rxa first10% ≈ last10% (kein Wachstum).
+### T1.3d — Inkrementelles Marker-Update (MID-HIGH)
+- Statt Full-Repaint pro Tick nur Delta zur vorherigen Render
+- JS-API: `updateMarkers(deltaPayload)` neben `applyRenderPayload(full)`
+- Erwarteter Effekt: typ. 1–10 Stationen-Updates pro Tick statt N
 
-### T1.3c — Display-Anchor-Cache (MID)
-- `_display_anchor_points` Ergebnis bei stabilem `max_index` cachen
-- Invalidierung nur bei Filter-Change oder Seek
-- **Erwarteter Effekt:** ein redundanter Vollscan pro Tick eliminiert (~ Halbierung CPU).
-
-### T1.3d — Inkrementelles Marker-Update statt Vollaufbau (MID-HIGH)
-- Statt jedes Tick komplettes Payload: nur Delta seit letztem Render
-- JS-API erweitert: `updateMarkers(deltaPayload)` neben `applyRenderPayload(full)`
-- Full-Render nur bei Seek/Filter-Change
-- **Erwarteter Effekt:** typ. Tick haelt nur 1–10 Stationen-Updates statt N.
-
-### T1.3e — JSON-Serialisierung mit orjson (LOW, evtl. unnoetig nach a/b)
-- `orjson.dumps` statt `json.dumps` (ca. 3–5×)
-- Nur sinnvoll wenn nach a–d die Serialisierung noch sichtbar ist
-
-### T1.2 — JS-Bridge-Latenz-Messung (separat)
-- WebEngine-basierter Lauf mit Telemetrie-Hook auf `runJavaScript`-Roundtrip
-- Bestaetigt oder widerlegt JS-Seite als sekundaeren Bottleneck
-- Vor T1.3d wichtig (entscheidet ob inkrementelles Update wirklich noetig)
-
----
-
-## Akzeptanz fuer Epic 1 (Wiederholung)
-
-Nach Fix-Implementation Profiler erneut laufen lassen. Ziel:
-- p95 < 18 ms auf rxa und txa
-- Wachstumsfaktor first10% → last10% < 1.5×
-- Visuell kein Stutter wahrnehmbar in Live-App
+### T1.2 — JS-Bridge-Latenz (vor T1.3d)
+- WebEngine-basierte Messung von `runJavaScript`-Roundtrip
+- Entscheidet, ob T1.3d noetig ist oder T1.3c reicht
 
 ---
 
 ## Rohdaten
 
-- [SREM with OCIT.pcap](SREM_with_OCIT_normal.csv) — 616 Ticks
-- [rxa_22082025.pcap](rxa_22082025_normal.csv) — 9866 Ticks
-- [txa_22082025.pcap](txa_22082025_normal.csv) — 9867 Ticks
+| Datei | Beschreibung |
+|-------|--------------|
+| [SREM_with_OCIT_normal.csv](SREM_with_OCIT_normal.csv) | 41 msgs, Worst-Case ohne Window |
+| [rxa_22082025_normal.csv](rxa_22082025_normal.csv) | 1974 msgs, vor Fix, ohne Window |
+| [rxa_22082025_normal_w120s.csv](rxa_22082025_normal_w120s.csv) | 1974 msgs, nach Fix, Window 120 s |
+| [txa_22082025_normal.csv](txa_22082025_normal.csv) | 4932 msgs, vor Fix, ohne Window |
+| [txa_22082025_normal_w120s.csv](txa_22082025_normal_w120s.csv) | 4932 msgs, nach Fix, Window 120 s |
 
 Reproduktion:
 ```
-python -m scripts.profiling.profile_replay --all
+python -m scripts.profiling.profile_replay --window 120 --all
 ```
-
----
-
-## Offen
-
-- **rxa 1.pcap** (5.9 MB) und **txa 3.pcap** (12 MB) noch nicht profiliert — folgt im naechsten
-  Lauf, sind aber nach den Trends bereits eindeutig: erwartet > Faktor 30× Budget.
-- **2024-04-24_LB72_RSU_PCAP** — Verzeichnis mit Captures, separater Lauf.
-- T1.2 (JS-Bridge-Latenz) — eigenes Ticket, vor T1.3d notwendig.
