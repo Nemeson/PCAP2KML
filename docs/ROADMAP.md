@@ -135,4 +135,74 @@
 
 ---
 
-*Letzte Aktualisierung: 2026-04-25*
+# Release-Plan v1.8 → v2.0 (beschlossen 2026-05-02)
+
+Themen sauber pro Release abgegrenzt. Live-Capture als Architektur-Vorbereitung in 1.8, Feature in 2.0.
+Detaillierter Integrationsplan v1.8: siehe [`integration_plan_v1.8.md`](integration_plan_v1.8.md).
+
+## v1.8 — Analyse-Tiefe
+
+**Theme:** Engineer kann eine V2X-Message vollständig verstehen, ohne den PCAP extern zu öffnen. Replay läuft flüssig.
+
+- **Replay-Stutter beheben** — Profiling auf jedem PCAP, Frame-Pacing-Audit, Fix-Tickets datengetrieben
+- **Message-Inspector** — ASN.1-Decode-Tree mit Hex/Raw-View, konfigurierbarer Trigger (Klick / Pause-Auto / Hotkey / Aus) inkl. MouseOver-Erklärungen
+- **Filterleiste** — Multi-Select Stations-ID × Message-Type × Zeitfenster, persistent, wirkt auf Map+Liste+Statistik
+- **IVIM-Support** — ETSI TS 103 301 v2.2.1, Map-Layer mit ISO-14823-Icons, KML-Export, synthetische Test-Fixtures
+- **Statistik-Tab (Phase 1)** — eigener Reiter, post-hoc, mit Update-Rate, Lücken-Detektor, **verwendete Standards** (C-Roads, C2C-CC, ETSI, BSI) read-only anzeigen
+- **`MessageSource`-Abstraktion** — Refactor ohne UI-Änderung als Vorbereitung für Live-Capture
+- **Code-Signing-Cert beschaffen** (Track parallel, Lieferzeit 5–10 Tage)
+
+**Coverage-Ziel:** 83 % | **Performance-Gate CI:** p95-Frametime < 18 ms auf 100/500 MB Test-PCAPs
+
+## v1.9 — Visualisierung
+
+**Theme:** Mehrere Stationen und Datendichten gleichzeitig erfassbar machen.
+
+- **Heatmap-Layer** (Density, Speed, RSSI sofern vorhanden)
+- **Track-Vergleich** RSU↔Vehicle gemischt, n Stationen synchron, Diff-View
+- **Replay-Export** als MP4/GIF
+- **Konfliktanalyse** SREM↔SPATEM, MAPEM-Geometrie-Plausibilität, CAM-Heading-Sprung-Detektor
+- **Statistik-Tab Phase 2** — Conformance-Checker mit Pass/Warn/Fail-Tabelle gegen C-Roads/C2C-CC/ETSI/BSI-Profile
+- *(Optional, Feature-Flag)* 3D-View via Cesium
+
+**Coverage-Ziel:** 86 %
+
+## v2.0 — Live-Capture & Distribution
+
+**Theme:** Aus dem Offline-Tool wird ein Live-Operationswerkzeug mit Enterprise-Distribution.
+
+- **Live-Capture** über Cohda MK6 (Raw-Socket, BTP/GeoNet) und OpenC2X (UDP-Multicast) — Ringbuffer, Pause/Record
+- **CLI-Modus** für Batch-Konvertierung (PCAP → KML/GeoJSON ohne UI)
+- **MSI-Installer + Code-Signing** (signtool.exe in CI, EV- oder OV-Cert)
+- **Auto-Update** gegen GitHub-Releases
+- **Plugin-API** für Custom-Decoder
+
+**Coverage-Ziel:** 89 %
+
+---
+
+## Release-übergreifende Continuous-Themen
+
+- Coverage +3 % pro Release (80 → 89 bei v2.0)
+- Performance-Benchmark im CI mit Regression-Gate (100 MB / 500 MB / 1 GB Capture)
+- Streaming-Parser umstellen, sobald Captures > 1 GB realistisch werden
+- Diagnostics-Bundle-Export (Logs + Sysinfo + PCAP-Header) als Menüpunkt für Bug-Reports
+
+---
+
+## Rahmenentscheidungen
+
+| Punkt | Entscheidung |
+|-------|--------------|
+| Primärnutzer | Internes Team, später externe V2X-Engineers |
+| Hauptschmerz | Replay-Stutter + Analyse-Tiefe |
+| Live-Capture | Architektur in v1.8, Feature in v2.0 |
+| Live-Capture-Targets | Cohda MK6 + OpenC2X |
+| Code-Signing | Cert muss beschafft werden (kritischer Pfad v2.0) |
+| Anonymisierung | Nicht erforderlich (interne Daten) |
+| IVIM-Testdaten | Synthetisch generiert, ETSI Plugtest-Captures als Fallback |
+| Standards-Compliance | v1.8 read-only (Profil-Anzeige), v1.9 aktiver Checker |
+
+---
+
+*Letzte Aktualisierung: 2026-05-02*
