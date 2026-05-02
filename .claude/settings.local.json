@@ -8,7 +8,9 @@
       "Bash(ls:*)",
       "Bash(rtk git:*)",
       "Bash(rtk proxy *)",
-      "Bash(rtk python *)"
+      "Bash(rtk python *)",
+      "Bash(rtk ls *)",
+      "Bash(ps -W)"
     ]
   }
 }
