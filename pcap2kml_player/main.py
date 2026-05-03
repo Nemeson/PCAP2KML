@@ -6,10 +6,12 @@ on an interactive map with synchronized playback and KML export.
 
 from __future__ import annotations
 
+import importlib.metadata
 import logging
 import os
 import sys
 import traceback
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 # Add the parent directory to Python path so pcap2kml_player is importable
@@ -24,16 +26,40 @@ configure_qt_runtime_environment()
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
+from pcap2kml_player.i18n import tr
+from pcap2kml_player.theme_manager import ThemeManager
 from pcap2kml_player.ui.main_window import MainWindow
+
+try:
+    __version__ = importlib.metadata.version("pcap2kml-player")
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "1.7.0"
 
 
 def setup_logging() -> None:
-    """Configure application-wide logging."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
+    """Configure application-wide logging with console and file output."""
+    log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+
+    # Console handler
+    console = logging.StreamHandler()
+    console.setFormatter(logging.Formatter(log_format, datefmt="%H:%M:%S"))
+    root_logger.addHandler(console)
+
+    # File handler with rotation (persists across sessions for debugging)
+    log_dir = Path(os.environ.get("PCAP2KML_LOG_DIR", Path.home() / ".pcap2kml" / "logs"))
+    log_dir.mkdir(parents=True, exist_ok=True)
+    file_handler = RotatingFileHandler(
+        log_dir / "pcap2kml.log",
+        maxBytes=5 * 1024 * 1024,
+        backupCount=3,
+        encoding="utf-8",
     )
+    file_handler.setFormatter(logging.Formatter(log_format, datefmt="%Y-%m-%d %H:%M:%S"))
+    root_logger.addHandler(file_handler)
+
     # Suppress noisy libraries
     logging.getLogger("PyQt6").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -43,8 +69,9 @@ def check_runtime_dependencies() -> list[str]:
     """Return a list of missing optional and required runtime dependencies."""
     missing: list[str] = []
     dependency_map = {
-        "scapy": "PCAP-Parsing",
-        "simplekml": "KML-Export",
+        "scapy": tr("PCAP Parsing"),
+        "pyshark": tr("PCAP Parsing (pyshark)"),
+        "simplekml": tr("KML Export"),
     }
 
     for module_name, purpose in dependency_map.items():
@@ -76,10 +103,12 @@ def install_global_exception_handler(app: QApplication) -> None:
 
             QMessageBox.critical(
                 None,
-                "Unerwarteter Fehler",
-                "Die Anwendung hat einen unbehandelten Fehler erkannt.\n"
-                "Details stehen im Log. Die aktuelle Aktion wurde abgebrochen.\n\n"
-                f"{exc_value}",
+                tr("Unexpected Error"),
+                tr(
+                    "The application encountered an unhandled error.\n"
+                    "Details are in the log. The current action was cancelled."
+                )
+                + f"\n\n{exc_value}",
                 QMessageBox.StandardButton.Ok,
             )
         except Exception:
@@ -109,72 +138,11 @@ def main() -> int:
 
     app = QApplication(sys.argv)
     app.setApplicationName("PCAP2KML Player")
-    app.setApplicationVersion("1.0.0")
+    app.setApplicationVersion(__version__)
     app.setOrganizationName("PCAP2KML")
     app.setStyle("Fusion")
-    app.setStyleSheet(
-        """
-        QMainWindow, QWidget {
-            background: #f5f7fb;
-            color: #10233f;
-            font-size: 13px;
-        }
-        QToolBar {
-            background: #ffffff;
-            border: none;
-            spacing: 8px;
-            padding: 8px;
-        }
-        QPushButton {
-            background: #ffffff;
-            border: 1px solid #d7dde8;
-            border-radius: 10px;
-            padding: 8px 14px;
-            font-weight: 600;
-        }
-        QPushButton:hover {
-            background: #fff2f3;
-            border-color: #b2192b;
-        }
-        QPushButton:disabled {
-            color: #92a0b5;
-            background: #eef1f6;
-        }
-        QPushButton:pressed {
-            background: #b2192b;
-            color: #ffffff;
-        }
-        QTableWidget, QListWidget, QComboBox {
-            background: #ffffff;
-            border: 1px solid #d7dde8;
-            border-radius: 10px;
-            padding: 4px;
-        }
-        QHeaderView::section {
-            background: #10233f;
-            color: #ffffff;
-            border: none;
-            border-bottom: 1px solid #d7dde8;
-            padding: 8px;
-            font-weight: 700;
-        }
-        QStatusBar {
-            background: #ffffff;
-            border-top: 1px solid #d7dde8;
-        }
-        QSlider::groove:horizontal {
-            height: 8px;
-            background: #dce3ee;
-            border-radius: 4px;
-        }
-        QSlider::handle:horizontal {
-            width: 16px;
-            margin: -5px 0;
-            border-radius: 8px;
-            background: #b2192b;
-        }
-        """
-    )
+    theme = ThemeManager(app)
+    theme.apply()
     QApplication.setAttribute(Qt.ApplicationAttribute.AA_DontUseNativeDialogs, False)
     install_global_exception_handler(app)
 
@@ -182,9 +150,8 @@ def main() -> int:
     if missing_dependencies:
         QMessageBox.warning(
             None,
-            "Fehlende Abhaengigkeiten",
-            "Einige Funktionen sind eventuell nicht verfuegbar:\n\n"
-            + "\n".join(f"- {entry}" for entry in missing_dependencies),
+            tr("Missing Dependencies"),
+            tr("Some features may be unavailable:") + "\n\n" + "\n".join(f"- {entry}" for entry in missing_dependencies),
         )
 
     window = MainWindow()

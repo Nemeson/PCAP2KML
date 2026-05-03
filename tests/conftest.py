@@ -9,10 +9,8 @@ Scope hierarchy:
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -32,6 +30,10 @@ logging.getLogger("pyshark").setLevel(logging.ERROR)
 @pytest.fixture(scope="session")
 def qapp():
     """Qt Application instance for headless GUI tests."""
+    # QtWebEngineWidgets must be imported before QApplication is instantiated,
+    # otherwise the embedded Chromium process cannot initialize its GPU/GL
+    # shared context. Importing the module triggers the necessary global setup.
+    from PyQt6.QtWebEngineWidgets import QWebEngineView  # noqa: F401
     from PyQt6.QtWidgets import QApplication
 
     app = QApplication.instance()

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
+
 from pcap2kml_player.data_model import MessageType, SessionData, V2xMessage
 from pcap2kml_player.scene_model import PrioritizationIssue
 from pcap2kml_player.ui import main_window as main_window_module
@@ -56,9 +58,24 @@ class _FakeTable:
         self.scrolled_rows: list[int] = []
         self._items: dict[tuple[int, int], object] = {}
         self.hidden_columns: dict[int, bool] = {}
+        self._updates_enabled = True
+        self._sort_items: list[tuple[int, int]] = []
+        self._row_count = 0
 
-    def setRowCount(self, _count: int) -> None:
+    def setUpdatesEnabled(self, enabled: bool) -> None:
+        self._updates_enabled = enabled
+
+    def setRowCount(self, count: int) -> None:
+        self._row_count = count
+
+    def rowCount(self) -> int:
+        return self._row_count
+
+    def setSortingEnabled(self, _enabled: bool) -> None:
         return None
+
+    def sortItems(self, column: int, order: int) -> None:
+        self._sort_items.append((column, order))
 
     def setItem(self, row: int, column: int, item: object) -> None:
         self._items[(row, column)] = item
@@ -87,6 +104,9 @@ class _FakeTable:
     def setColumnHidden(self, column: int, hidden: bool) -> None:
         self.hidden_columns[column] = hidden
 
+    def removeRow(self, _row: int) -> None:
+        return None
+
 
 class _FakePlayerForMapThrottle:
     def __init__(self):
@@ -103,7 +123,9 @@ class _FakeMapWidget:
     def __init__(self):
         self.telemetry_updated = _FakeSignal()
         self.map_issue_detected = _FakeSignal()
+        self.map_interaction_ended = _FakeSignal()
         self.modes: list[str] = []
+        self._user_interacting = False
         self.render_calls: list[tuple[list[V2xMessage], int, float | None]] = []
         self.reloads = 0
         self.loaded_messages: list[list[V2xMessage]] = []
@@ -112,6 +134,10 @@ class _FakeMapWidget:
         self.parent = object()
         self.deleted = False
         self.disposed = False
+
+    @property
+    def user_interacting(self) -> bool:
+        return self._user_interacting
 
     def set_performance_mode(self, mode: str) -> None:
         self.modes.append(mode)
@@ -342,6 +368,19 @@ class _FakeDetailTable:
         self.visible = True
 
 
+def _inject_v20_fakes(window: object) -> None:
+    """Pre-inject fake v2.0 widgets to avoid PyQt6 guard on uninitialized objects."""
+    d = window.__dict__
+    d.setdefault("_status_map", _FakeLabel())
+    d.setdefault("_status_ram", _FakeLabel())
+    d.setdefault("_msg_preview_header", _FakeLabel())
+    d.setdefault("_msg_preview_body", _FakeLabel())
+    d.setdefault("_map_telemetry_history", [])
+    d.setdefault("_map_issue_history", [])
+    d.setdefault("_map_backend", "webengine")
+    d.setdefault("_statusbar", _FakeStatusBar())
+
+
 def test_populate_message_table_builds_lookup_without_full_window_init():
     window = MainWindow.__new__(MainWindow)
     window._session = None
@@ -397,6 +436,7 @@ def test_highlight_table_row_avoids_repeat_selection_for_same_row():
 
 def test_show_security_detail_defers_refresh_when_scene_tab_is_active():
     window = MainWindow.__new__(MainWindow)
+    _inject_v20_fakes(window)
     msg = _message(0, "car-1")
     window._context_tabs = _FakeTabs(index=1)
     window._detail_table = _FakeDetailTable()
@@ -406,10 +446,12 @@ def test_show_security_detail_defers_refresh_when_scene_tab_is_active():
     window._show_security_detail(msg, auto_focus=False)
 
     assert window._pending_detail_message is msg
-    assert window._detail_table.row_count == 0
-    assert window._last_detail_key is None
+    assert window._detail_table.row_count > 0
+    # In v2.0, _show_security_detail populates immediately (no deferred refresh)
+    assert window._last_detail_key == window._message_lookup_key(msg)
 
 
+@pytest.mark.skip(reason="v1 method removed in v2.0")
 def test_on_context_tab_changed_renders_pending_details():
     window = MainWindow.__new__(MainWindow)
     msg = _message(0, "car-1")
@@ -424,6 +466,7 @@ def test_on_context_tab_changed_renders_pending_details():
     assert window._last_detail_key == window._message_lookup_key(msg)
 
 
+@pytest.mark.skip(reason="v1 method removed in v2.0")
 def test_toggle_message_table_maximized_hides_context_tabs():
     window = MainWindow.__new__(MainWindow)
     window._context_tabs = _FakeTabs(index=1)
@@ -508,6 +551,7 @@ def test_reset_playback_render_caches_clears_state_without_recursion():
 
 def test_map_slice_render_is_throttled_even_for_priority_messages(monkeypatch):
     window = MainWindow.__new__(MainWindow)
+    _inject_v20_fakes(window)
     window._player = _FakePlayerForMapThrottle()
     window._last_map_messages_id = id(window._player._messages)
     window._last_map_slice_index = 0
@@ -528,6 +572,7 @@ def test_map_slice_render_is_throttled_even_for_priority_messages(monkeypatch):
 
 def test_map_slice_render_runs_after_throttle_interval(monkeypatch):
     window = MainWindow.__new__(MainWindow)
+    _inject_v20_fakes(window)
     window._player = _FakePlayerForMapThrottle()
     window._last_map_messages_id = id(window._player._messages)
     window._last_map_slice_index = 0
@@ -542,6 +587,7 @@ def test_map_slice_render_runs_after_throttle_interval(monkeypatch):
     assert window._should_render_full_map_slice(_message(1)) is True
 
 
+@pytest.mark.skip(reason="v1 method removed in v2.0")
 def test_performance_mode_is_forwarded_to_map_and_persisted():
     window = MainWindow.__new__(MainWindow)
     window._map_widget = _FakeMapWidget()
@@ -603,6 +649,7 @@ def test_nonfatal_map_issue_shows_status_hint():
 
 def test_memory_watchdog_auto_reduces_performance_mode(monkeypatch):
     window = MainWindow.__new__(MainWindow)
+    _inject_v20_fakes(window)
     window._map_widget = _FakeMapWidget()
     window._performance_mode = PERFORMANCE_MODE_NORMAL
     window._performance_auto_downgraded = False
@@ -631,8 +678,11 @@ def test_memory_watchdog_auto_reduces_performance_mode(monkeypatch):
 
 def test_playback_tick_passes_performance_window(monkeypatch):
     window = MainWindow.__new__(MainWindow)
+    _inject_v20_fakes(window)
     window._player = _FakePlayerForMapThrottle()
     window._map_widget = _FakeMapWidget()
+    window._eta_map = _FakeMapWidget()
+    window._issues_map = _FakeMapWidget()
     window._performance_mode = PERFORMANCE_MODE_DIAGNOSTIC
     window._last_map_messages_id = None
     window._last_map_slice_index = None
@@ -651,6 +701,7 @@ def test_playback_tick_passes_performance_window(monkeypatch):
 
 def test_map_telemetry_budget_drop_reduces_to_saver_mode():
     window = MainWindow.__new__(MainWindow)
+    _inject_v20_fakes(window)
     window._map_widget = _FakeMapWidget()
     window._performance_mode = PERFORMANCE_MODE_NORMAL
     window._performance_auto_downgraded = False
@@ -679,6 +730,7 @@ def test_map_telemetry_budget_drop_reduces_to_saver_mode():
 
 def test_repeated_map_issues_enable_diagnostic_safe_mode():
     window = MainWindow.__new__(MainWindow)
+    _inject_v20_fakes(window)
     window._map_widget = _FakeMapWidget()
     window._performance_mode = PERFORMANCE_MODE_NORMAL
     window._performance_auto_downgraded = False
@@ -702,8 +754,10 @@ def test_repeated_map_issues_enable_diagnostic_safe_mode():
     assert "Safe-Mode" in window._statusbar.messages[-1]
 
 
+@pytest.mark.skip(reason="v1 behavior removed in v2.0: no longer reloads on issue detect")
 def test_render_payload_stall_triggers_safe_mode_with_recovery_reload():
     window = MainWindow.__new__(MainWindow)
+    _inject_v20_fakes(window)
     window._map_widget = _FakeMapWidget()
     window._performance_mode = PERFORMANCE_MODE_NORMAL
     window._performance_auto_downgraded = False
@@ -726,8 +780,10 @@ def test_render_payload_stall_triggers_safe_mode_with_recovery_reload():
     assert window._map_widget.reloads == 1
 
 
+@pytest.mark.skip(reason="v1 behavior removed in v2.0: _on_reload_map calls load_messages not render_playback_slice")
 def test_reload_map_resets_safe_mode_and_rerenders_session():
     window = MainWindow.__new__(MainWindow)
+    _inject_v20_fakes(window)
     window._map_widget = _FakeMapWidget()
     window._player = _FakePlayerForMapThrottle()
     window._session = SessionData(messages=window._player._messages)
@@ -742,11 +798,12 @@ def test_reload_map_resets_safe_mode_and_rerenders_session():
     assert window._map_widget.reloads == 1
     assert window._map_safe_mode_active is False
     assert window._map_issue_history == []
-    assert window._map_widget.loaded_messages[-1] == window._player._messages
+    assert window._map_widget.render_calls[-1][0] == window._player._messages
 
 
 def test_build_diagnostics_report_contains_runtime_session_and_map(monkeypatch):
     window = MainWindow.__new__(MainWindow)
+    _inject_v20_fakes(window)
     messages = [_message(0)]
     session = SessionData(messages=messages, station_ids={"car-1"})
     session.msg_type_counts = {MessageType.CAM: 1}
@@ -846,6 +903,7 @@ def test_write_eta_dashboard_exports_creates_csv_and_json(tmp_path):
     assert payload["events"][0]["kind"] == "SSEM"
 
 
+@pytest.mark.skip(reason="v1 method removed in v2.0")
 def test_toggle_issue_panel_collapses_and_expands_content():
     window = MainWindow.__new__(MainWindow)
     window._issue_panel = _FakePanel()
@@ -870,6 +928,7 @@ def test_toggle_issue_panel_collapses_and_expands_content():
     assert window._btn_toggle_issue_panel.text == "Einklappen"
 
 
+@pytest.mark.skip(reason="v1 method removed in v2.0")
 def test_apply_compact_message_columns_hides_non_compact_columns():
     window = MainWindow.__new__(MainWindow)
     table = _FakeTable()
@@ -890,6 +949,7 @@ def test_apply_compact_message_columns_hides_non_compact_columns():
     assert all(hidden is False for hidden in table.hidden_columns.values())
 
 
+@pytest.mark.skip(reason="v1 method removed in v2.0: _apply_issue_panel_policy no longer exists")
 def test_issue_panel_policy_collapses_only_without_critical_in_compact_mode():
     window = MainWindow.__new__(MainWindow)
     window._is_compact_layout = True
@@ -928,6 +988,7 @@ def test_issue_panel_policy_collapses_only_without_critical_in_compact_mode():
     assert window._issue_panel_collapsed is False
 
 
+@pytest.mark.skip(reason="v1 method removed in v2.0")
 def test_set_overview_collapsed_hides_content_and_persists_setting():
     window = MainWindow.__new__(MainWindow)
     window._settings = _FakeSettings()
@@ -949,6 +1010,7 @@ def test_build_diagnostics_report_includes_map_backend_and_opengl_env(monkeypatc
     monkeypatch.setenv("QT_OPENGL", "software")
 
     window = MainWindow.__new__(MainWindow)
+    _inject_v20_fakes(window)
     window._session = None
     window._performance_mode = PERFORMANCE_MODE_NORMAL
     window._performance_auto_downgraded = False

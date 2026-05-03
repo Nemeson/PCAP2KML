@@ -349,7 +349,7 @@
 <aside class="sidebar">
   <div class="sidebar-logo">
     PCAP2KML Player
-    <span>Benutzerhandbuch v1.0</span>
+    <span>Benutzerhandbuch v1.7</span>
   </div>
   <nav>
     <div class="sidebar-section">Einstieg</div>
@@ -367,6 +367,8 @@
     <a href="#context-tabs">Kontext-Tabs</a>
     <a href="#issue-panel">Priorisierungs­fehler-Panel</a>
     <a href="#wiedergabe">Wiedergabe­steuerung</a>
+    <a href="#performance">Performance-Modi</a>
+    <a href="#map-stabilitaet">Map-Stabilität</a>
 
     <div class="sidebar-section">Arbeitsabläufe</div>
     <a href="#pcap-laden">PCAP-Datei laden</a>
@@ -398,10 +400,11 @@
     <h1>PCAP2KML Player</h1>
     <p>Datenorientierte V2X-Analyse: PCAP-Dateien laden, Nachrichten auf einer interaktiven Karte visualisieren, Priorisierungsfehler diagnostizieren und Ergebnisse als KML oder CSV exportieren.</p>
     <div class="hero-meta">
-      <div class="hero-meta-item"><strong>Version</strong>1.0.0</div>
+      <div class="hero-meta-item"><strong>Version</strong>1.7.0</div>
       <div class="hero-meta-item"><strong>Plattform</strong>Windows 10/11 · macOS · Linux</div>
-      <div class="hero-meta-item"><strong>Sprache</strong>Python · PyQt6</div>
+      <div class="hero-meta-item"><strong>Stack</strong>Python 3.10+ · PyQt6 · WebEngine/Leaflet</div>
       <div class="hero-meta-item"><strong>Formate</strong>.pcap · .pcapng · .cap</div>
+      <div class="hero-meta-item"><strong>Stand</strong>2026-05-02</div>
     </div>
   </div>
 
@@ -569,6 +572,7 @@
         <tr><td><strong>Fehler exportieren</strong></td><td>Exportiert Priorisierungsfehler als CSV, Maschinen-CSV, JSON und Textreport</td></tr>
         <tr><td><strong>ASN.1-Schemas aktualisieren</strong></td><td>Lädt aktuelle ASN.1-Schemadateien aus dem Git-Repository</td></tr>
         <tr><td><strong>Layout-Auswahl</strong></td><td>Wechselt zwischen <em>Auto</em>, <em>Desktop</em> und <em>Kompakt</em>-Layout</td></tr>
+        <tr><td><strong>Performance-Modus</strong></td><td>Combo-Auswahl <em>Normal</em> · <em>Schonend</em> · <em>Diagnose</em>. Steuert Render-Budget, Trail-Window und Aktualisierungsintervall der Karte. Siehe Sektion <a href="#performance">Performance-Modi</a>.</td></tr>
       </table>
       <div class="callout info">
         <strong>Hinweis</strong>
@@ -943,6 +947,109 @@
   </section>
 
   <!-- ─────────────────────────────────────────────── -->
+  <section id="performance" class="content">
+    <div class="section">
+      <h2>Performance-Modi</h2>
+      <p>
+        Der Performance-Modus regelt, wie viele Marker, Trail-Punkte und Sekunden Verlauf
+        die Karte gleichzeitig zeichnet. Er ist über die Werkzeugleiste umschaltbar
+        und beeinflusst Speicher- und CPU-Bedarf während der Wiedergabe.
+      </p>
+
+      <table>
+        <tr><th>Modus</th><th>Trail-Fenster</th><th>Anwendungsfall</th></tr>
+        <tr><td><strong>Normal</strong></td><td>120 s</td><td>Standard für übliche Captures bis ca. 5000 Nachrichten</td></tr>
+        <tr><td><strong>Schonend</strong></td><td>45 s</td><td>Längere Captures oder schwächere Hardware</td></tr>
+        <tr><td><strong>Diagnose</strong></td><td>20 s</td><td>Sehr dichte Captures, Live-Analyse einzelner Kreuzungen</td></tr>
+      </table>
+
+      <h3>Render-Budgets</h3>
+      <p>
+        Pro Modus existiert ein internes Budget für maximale Marker-Anzahl,
+        Infrastruktur-Overlays, Trajektorien und Trail-Punkte. Wird das Budget überschritten,
+        zeigt die Karte die jeweils aktuellsten Einträge — ältere werden ausgedünnt.
+      </p>
+
+      <h3>Automatischer Wechsel bei Speicherdruck</h3>
+      <p>
+        Ein interner Memory-Watcher beobachtet den Prozessverbrauch. Überschreitet er
+        <strong>1.2 GB</strong>, wechselt die Anwendung automatisch in den
+        <strong>Schonend</strong>-Modus. Bei <strong>1.8 GB</strong> wird auf
+        <strong>Diagnose</strong> geschaltet. Eine entsprechende Statusmeldung
+        erscheint in der unteren Statusleiste.
+      </p>
+
+      <div class="callout info">
+        <strong>Hinweis</strong>
+        Der gewählte Modus wird sitzungsübergreifend gespeichert
+        (<code>QSettings</code>-Schlüssel <code>ui/performance_mode</code>) und
+        bleibt nach Programm-Neustart erhalten.
+      </div>
+
+      <div class="callout tip">
+        <strong>Empfehlung</strong>
+        Bei spürbarem Stuttering der Wiedergabe zuerst auf <em>Schonend</em> wechseln.
+        Die T1.3a-Optimierung (ab v1.7) reduziert den Render-Aufwand bereits um
+        ca. 80 % gegenüber älteren Versionen, dichte Captures profitieren aber weiterhin
+        von kürzeren Trail-Fenstern.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="map-stabilitaet" class="content">
+    <div class="section">
+      <h2>Map-Stabilität</h2>
+      <p>
+        Die Kartenanzeige basiert auf <strong>Leaflet.js</strong> innerhalb eines
+        eingebetteten <strong>QWebEngineView</strong>. Mehrere Schutzmechanismen
+        verhindern Aussetzer und Freeze-Zustände während längerer Sitzungen:
+      </p>
+
+      <table>
+        <tr><th>Mechanismus</th><th>Wirkung</th></tr>
+        <tr><td><strong>Interaction-Pausierung</strong></td>
+            <td>Während Pan, Zoom oder Fenster-Resize werden Karten-JavaScript-Aufrufe
+                automatisch zurückgehalten. Nach Interaktions-Ende erfolgt ein
+                <em>Catch-up-Flush</em> mit dem aktuellen Render-Zustand.</td></tr>
+        <tr><td><strong>Off-Thread-Render-Worker</strong></td>
+            <td>Die Berechnung der Render-Payload läuft im Hintergrund-Thread
+                (<code>RenderPayloadWorker</code>), das UI bleibt reaktiv.</td></tr>
+        <tr><td><strong>Stall-Detection</strong></td>
+            <td>Antwortet die Map-Engine länger als 5 s nicht, wird der Render-Aufruf
+                als Stall markiert. Drei Stalls innerhalb 60 s lösen einen
+                automatischen Reload der Map aus.</td></tr>
+        <tr><td><strong>Auto-Recovery</strong></td>
+            <td>Bei Crash der WebEngine-Render-Pipeline lädt die Map-Komponente
+                automatisch ihre HTML-Grundlage neu und stellt den letzten
+                Render-Zustand wieder her.</td></tr>
+        <tr><td><strong>Resize-Gate</strong></td>
+            <td>Beim Maximieren oder Bildschirm-Wechsel wird ein Resize-Timer
+                aktiviert, der unmittelbare Render-Aufrufe puffert und Freeze
+                durch Layout-Stürme verhindert.</td></tr>
+      </table>
+
+      <div class="callout info">
+        <strong>Diagnose</strong>
+        Auffällige Stalls werden im Log mit Präfix <code>[map.stall]</code> protokolliert.
+        Ein Auto-Reload erscheint als <code>[map.reload]</code>-Eintrag mitsamt
+        Trigger-Begründung.
+      </div>
+
+      <div class="callout warn">
+        <strong>Manuelles Eingreifen</strong>
+        Sollte die Map dennoch dauerhaft leer bleiben, hilft folgender Ablauf:
+        <ol class="steps" style="margin-top:8px;">
+          <li>Auf <strong>Schonend</strong>-Performance-Modus wechseln.</li>
+          <li>Wiedergabe stoppen und 5 s warten.</li>
+          <li>Anwendung neu starten — die zuletzt geladene Sitzung ist über
+              <em>„Letzte Sitzung"</em> wiederherstellbar.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
   <section id="pcap-laden" class="content">
     <div class="section">
       <h2>Arbeitsablauf: PCAP-Datei laden</h2>
@@ -1168,9 +1275,25 @@
       <ol class="steps">
         <li>Internetverbindung sicherstellen.</li>
         <li>Schaltfläche <strong>„ASN.1-Schemas aktualisieren"</strong> klicken.</li>
-        <li>Die Anwendung lädt aktualisierte Schemadateien aus dem Git-Repository.</li>
+        <li>Die Anwendung lädt aktualisierte Schemadateien aus den
+            offiziellen <strong>ETSI Forge GitLab</strong>-Repositorien.</li>
         <li>Nach dem Update sollte die Sitzung neu geladen werden, damit neue Felder dekodiert werden.</li>
       </ol>
+
+      <h3>Quellen</h3>
+      <table>
+        <tr><th>Modul</th><th>Repository</th></tr>
+        <tr><td>CAM, DENM, ITS-Container</td><td><code>forge.etsi.org/gitlab/ITS</code></td></tr>
+        <tr><td>SREM, SSEM, MAPEM, SPATEM, IVIM</td><td>ETSI TS 103 301 v2.2.1</td></tr>
+        <tr><td>Security-Header</td><td>ETSI TS 103 097 v2.1.1</td></tr>
+      </table>
+
+      <div class="callout info">
+        <strong>Integritätsprüfung</strong>
+        Heruntergeladene Schemas werden über einen Hash-Vergleich verifiziert.
+        Schlägt die Prüfung fehl, fällt die Anwendung auf die mit ausgelieferte
+        Lokalkopie zurück (siehe Statusleiste).
+      </div>
 
       <div class="callout warn">
         <strong>Hinweis</strong>
@@ -1353,6 +1476,28 @@
           <td>Sehr große PCAP-Datei (&gt; 500 MB)</td>
           <td>Datei aufteilen oder Ladevorgang auf Hintergrundbetrieb warten</td>
         </tr>
+        <tr>
+          <td>Wiedergabe stockt / ruckelt</td>
+          <td>Hohe Nachrichtendichte oder schwächere Hardware</td>
+          <td>Performance-Modus auf <em>Schonend</em> oder <em>Diagnose</em> setzen
+              (siehe <a href="#performance">Performance-Modi</a>)</td>
+        </tr>
+        <tr>
+          <td>Karte friert kurzzeitig ein</td>
+          <td>Pan/Zoom oder Resize während laufender Wiedergabe</td>
+          <td>Kurz warten — Catch-up-Flush spielt nach Interaktions-Ende automatisch nach</td>
+        </tr>
+        <tr>
+          <td>Hinweis <code>[map.reload]</code> in der Statusleiste</td>
+          <td>Drei Stalls innerhalb 60 s erkannt</td>
+          <td>Auto-Recovery hat die Map neu geladen — kein Eingreifen nötig</td>
+        </tr>
+        <tr>
+          <td>Map dauerhaft leer trotz Reload</td>
+          <td>Render-Pipeline-Crash oder fehlende GPU-Beschleunigung</td>
+          <td>Anwendung neu starten; bei Wiederholung mit Software-OpenGL starten
+              (Umgebungsvariable <code>QT_OPENGL=software</code>)</td>
+        </tr>
       </table>
 
       <div class="callout danger">
@@ -1372,7 +1517,7 @@
 
   <!-- Footer -->
   <div style="background:var(--navy);color:#6a829c;padding:24px 56px;font-size:12px;margin-left:0;">
-    PCAP2KML Player · Benutzerhandbuch v1.0 · SWARCO ITS ·
+    PCAP2KML Player · Benutzerhandbuch v1.7 · Stand 2026-05-02 · SWARCO ITS ·
     Erstellt mit Claude Code ·
     <span style="color:#4a6280;">Technische Fragen: nemeson@gmail.com</span>
   </div>

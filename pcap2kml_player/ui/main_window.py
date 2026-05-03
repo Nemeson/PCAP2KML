@@ -1,4 +1,4 @@
-"""PyQt6 main window for PCAP2KML Player."""
+"""PyQt6 main window for PCAP2KML Player — v2.0 redesigned workspace layout."""
 
 from __future__ import annotations
 
@@ -18,20 +18,32 @@ from pathlib import Path
 from PyQt6.QtCore import (
     PYQT_VERSION_STR,
     QT_VERSION_STR,
+    QRect,
     QSettings,
     Qt,
     QThread,
     QTimer,
+    pyqtSignal,
 )
-from PyQt6.QtGui import QCloseEvent, QDragEnterEvent, QDropEvent, QResizeEvent
+from PyQt6.QtGui import (
+    QBrush,
+    QCloseEvent,
+    QColor,
+    QDragEnterEvent,
+    QDropEvent,
+    QPainter,
+    QPainterPath,
+)
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDialog,
     QFileDialog,
     QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
@@ -41,10 +53,12 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QSlider,
     QSplitter,
+    QStackedWidget,
     QStatusBar,
+    QStyle,
+    QStyleOptionButton,
     QTableWidget,
     QTableWidgetItem,
-    QTabWidget,
     QToolBar,
     QVBoxLayout,
     QWidget,
@@ -63,15 +77,11 @@ from ..parsing_worker import ParsingWorker
 from ..player_controller import SPEED_OPTIONS, PlayerController
 from ..prioritization_exporter import export_prioritization_issues
 from ..scene_model import (
-    ActiveRequest,
     PrioritizationIssue,
     SceneSnapshot,
     build_prioritization_issues,
     build_scene_snapshot,
     collect_prioritization_issue_occurrences,
-    find_overdue_requests,
-    get_clock_skew_warnings,
-    get_eta_accuracy_seconds,
 )
 from .dashboard_dialog import StatisticsDashboard
 from .eta_graph_widget import (
@@ -109,7 +119,6 @@ SCENE_INTERSECTION_HEADERS = [
 ]
 SCENE_REQUEST_HEADERS = ["Request", "Station", "Prio", "Status", "Lanes"]
 FORECAST_TIMELINE_BUCKETS = 15
-COMPACT_LAYOUT_WIDTH = 1320
 MAP_PLAYBACK_RENDER_INTERVAL_SECONDS = 1.25
 PERFORMANCE_MODE_NORMAL = MAP_PERFORMANCE_NORMAL
 PERFORMANCE_MODE_SAVER = MAP_PERFORMANCE_SAVER
@@ -134,10 +143,160 @@ MEMORY_SAVER_THRESHOLD_MB = 1200.0
 MEMORY_DIAGNOSTIC_THRESHOLD_MB = 1800.0
 MAP_SAFE_MODE_ISSUE_THRESHOLD = 3
 MAP_TELEMETRY_HISTORY_LIMIT = 120
-LAYOUT_MODE_AUTO = "auto"
-LAYOUT_MODE_DESKTOP = "desktop"
-LAYOUT_MODE_COMPACT = "compact"
-COMPACT_MESSAGE_COLUMNS = {COL_TIMESTAMP, COL_STATION, COL_MSGTYPE, COL_SPEED_HEADING}
+
+# ── Style constants ──────────────────────────────────────────────
+STYLE_BG_APP = "#f4f6f9"
+STYLE_BG_SURFACE = "#ffffff"
+STYLE_BG_TOOLBAR = "#1a2332"
+STYLE_BG_STATUS = "#eef1f5"
+STYLE_BG_PANEL = "#fafbfc"
+STYLE_ACCENT = "#cc3333"
+STYLE_ACCENT_HOVER = "#a82828"
+STYLE_TEXT_PRIMARY = "#0d1b2a"
+STYLE_TEXT_SECONDARY = "#5a6b81"
+STYLE_TEXT_MUTED = "#8b97a8"
+STYLE_BORDER = "#dde1e7"
+
+TOOLBAR_STYLE = f"""
+    QToolBar {{
+        background: {STYLE_BG_TOOLBAR};
+        border: none;
+        padding: 0 8px;
+        spacing: 8px;
+    }}
+"""
+TOOLBAR_BTN_STYLE = """
+    QPushButton {
+        background: transparent;
+        color: #e0e4ea;
+        border: none;
+        border-radius: 5px;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 400;
+    }
+    QPushButton:hover { background: rgba(255,255,255,0.08); }
+    QPushButton:pressed { background: rgba(255,255,255,0.14); }
+"""
+TOOLBAR_BTN_PRIMARY = f"""
+    QPushButton {{
+        background: {STYLE_ACCENT};
+        color: #ffffff;
+        border: none;
+        border-radius: 5px;
+        padding: 4px 12px;
+        font-size: 12px;
+        font-weight: 600;
+    }}
+    QPushButton:hover {{ background: {STYLE_ACCENT_HOVER}; }}
+"""
+
+WS_TAB_STYLE = f"""
+    QPushButton {{
+        background: transparent;
+        color: {STYLE_TEXT_SECONDARY};
+        border: none;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        padding: 7px 16px;
+        font-size: 13px;
+        font-weight: 500;
+    }}
+    QPushButton:hover {{
+        color: {STYLE_TEXT_PRIMARY};
+        background: #e8ecf1;
+    }}
+    QPushButton:checked {{
+        color: {STYLE_ACCENT};
+        border-bottom-color: {STYLE_ACCENT};
+        font-weight: 600;
+    }}
+"""
+
+TABLE_STYLE = f"""
+    QTableWidget {{
+        background: {STYLE_BG_SURFACE};
+        alternate-background-color: #eaf5ff;
+        color: {STYLE_TEXT_PRIMARY};
+        gridline-color: {STYLE_BORDER};
+        selection-background-color: #cfe8ff;
+        selection-color: #000000;
+    }}
+    QHeaderView::section {{
+        background: #f5f7fb;
+        color: {STYLE_TEXT_PRIMARY};
+        border: 1px solid {STYLE_BORDER};
+        padding: 4px;
+        font-weight: 700;
+    }}
+"""
+
+PANEL_CARD_STYLE = f"""
+    QFrame#panelCard {{
+        background: {STYLE_BG_SURFACE};
+        border: 1px solid {STYLE_BORDER};
+        border-radius: 10px;
+    }}
+"""
+
+STATUS_BAR_STYLE = f"""
+    QStatusBar {{
+        background: {STYLE_BG_STATUS};
+        border-top: 1px solid {STYLE_BORDER};
+        color: {STYLE_TEXT_SECONDARY};
+        font-size: 12px;
+    }}
+"""
+
+PLAYBACK_BAR_STYLE = f"""
+    QFrame#playbackBar {{
+        background: rgba(255,255,255,0.95);
+        border: 1px solid {STYLE_BORDER};
+        border-radius: 14px;
+    }}
+"""
+
+CMD_PALETTE_STYLE = f"""
+    QDialog#cmdPalette {{
+        background: transparent;
+    }}
+    QFrame#cmdPaletteInner {{
+        background: {STYLE_BG_SURFACE};
+        border-radius: 14px;
+        border: 1px solid {STYLE_BORDER};
+    }}
+    QLineEdit {{
+        border: none;
+        border-bottom: 1px solid {STYLE_BORDER};
+        padding: 14px 20px;
+        font-size: 16px;
+        background: transparent;
+        color: {STYLE_TEXT_PRIMARY};
+    }}
+    QListWidget {{
+        background: transparent;
+        border: none;
+        outline: none;
+        font-size: 13px;
+        color: {STYLE_TEXT_PRIMARY};
+    }}
+    QListWidget::item {{
+        padding: 8px 20px;
+    }}
+    QListWidget::item:selected {{
+        background: #eff6ff;
+        color: {STYLE_TEXT_PRIMARY};
+    }}
+"""
+
+SIDEBAR_HEADER_STYLE = f"""
+    font-weight: 600;
+    font-size: 13px;
+    color: {STYLE_TEXT_PRIMARY};
+    padding: 10px 14px;
+    border-bottom: 1px solid {STYLE_BORDER};
+    background: {STYLE_BG_PANEL};
+"""
 
 
 def _current_process_memory_mb() -> float | None:
@@ -175,37 +334,227 @@ def _current_process_memory_mb() -> float | None:
         return None
 
 
+class CommandPalette(QDialog):
+    """Fuzzy-search command palette (Ctrl+K)."""
+
+    command_triggered = pyqtSignal(str, object)  # action_id, data
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setObjectName("cmdPalette")
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.resize(560, 420)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        inner = QFrame()
+        inner.setObjectName("cmdPaletteInner")
+        inner_layout = QVBoxLayout(inner)
+        inner_layout.setContentsMargins(0, 0, 0, 0)
+        inner_layout.setSpacing(0)
+
+        self._search = QLineEdit()
+        self._search.setPlaceholderText("Befehl eingeben... (z.B. 'KML exportieren', 'Szene anzeigen')")
+        self._search.textChanged.connect(self._filter)
+        self._search.returnPressed.connect(self._execute_current)
+        inner_layout.addWidget(self._search)
+
+        self._results = QListWidget()
+        self._results.itemActivated.connect(self._execute)
+        inner_layout.addWidget(self._results)
+
+        layout.addWidget(inner)
+
+    def populate(self, entries: list[dict[str, object]]) -> None:
+        """Populate with {section, label, action_id, data, shortcut} dicts."""
+        self._entries = entries
+        self._rebuild_all()
+
+    def _rebuild_all(self) -> None:
+        self._results.clear()
+        current_section = None
+        for entry in self._entries:
+            section = str(entry.get("section", ""))
+            if section != current_section:
+                current_section = section
+                header = QListWidgetItem(section.upper())
+                header.setFlags(Qt.ItemFlag.NoItemFlags)
+                header.setForeground(Qt.GlobalColor.gray)
+                font = header.font()
+                font.setBold(True)
+                font.setPointSize(8)
+                header.setFont(font)
+                self._results.addItem(header)
+            label = str(entry.get("label", ""))
+            shortcut = str(entry.get("shortcut", ""))
+            text = f"   {label}"
+            if shortcut:
+                text += f"   ──   {shortcut}"
+            item = QListWidgetItem(text)
+            item.setData(Qt.ItemDataRole.UserRole, entry)
+            self._results.addItem(item)
+
+    def _filter(self, text: str) -> None:
+        query = text.strip().lower()
+        if not query:
+            self._rebuild_all()
+            return
+        self._results.clear()
+        current_section = None
+        for entry in self._entries:
+            label = str(entry.get("label", "")).lower()
+            section = str(entry.get("section", ""))
+            hint = str(entry.get("shortcut", "")).lower()
+            if query in label or query in section.lower() or query in hint:
+                if section != current_section:
+                    current_section = section
+                    header = QListWidgetItem(section.upper())
+                    header.setFlags(Qt.ItemFlag.NoItemFlags)
+                    header.setForeground(Qt.GlobalColor.gray)
+                    font = header.font()
+                    font.setBold(True)
+                    font.setPointSize(8)
+                    header.setFont(font)
+                    self._results.addItem(header)
+                shortcut = str(entry.get("shortcut", ""))
+                text = f"   {str(entry.get('label', ''))}"
+                if shortcut:
+                    text += f"   ──   {shortcut}"
+                item = QListWidgetItem(text)
+                item.setData(Qt.ItemDataRole.UserRole, entry)
+                self._results.addItem(item)
+        if self._results.count() > 0:
+            self._results.setCurrentRow(0)
+
+    def _execute(self, item: QListWidgetItem) -> None:
+        data = item.data(Qt.ItemDataRole.UserRole)
+        if isinstance(data, dict):
+            self.command_triggered.emit(str(data.get("action_id", "")), data.get("data"))
+        self.accept()
+
+    def _execute_current(self) -> None:
+        item = self._results.currentItem()
+        if item and item.data(Qt.ItemDataRole.UserRole):
+            self._execute(item)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._search.setFocus()
+        self._search.clear()
+        self._rebuild_all()
+
+
+class IconButton(QPushButton):
+    """Custom button that draws vector icons via QPainter.
+
+    Replaces text-based symbols which fail to render in small circular
+    buttons on certain Qt stylesheets / DPI configurations.
+    """
+
+    def __init__(self, icon_name: str, size: int = 28, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._icon_name = icon_name
+        self.setFixedSize(size, size)
+        self.setText("")  # ensure no text layout interferes
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # inherit stylesheet background via style()->drawPrimitive
+        opt = QStyleOptionButton()
+        self.initStyleOption(opt)
+        self.style().drawPrimitive(
+            QStyle.PrimitiveElement.PE_PanelButtonCommand,
+            opt,
+            painter,
+            self,
+        )
+
+        # determine effective foreground colour
+        fg = self.palette().buttonText().color()
+        if not self.isEnabled():
+            fg = QColor("#c4cad4")
+
+        rect = self.rect().adjusted(4, 4, -4, -4)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(fg))
+
+        if self._icon_name == "play":
+            # right-pointing triangle
+            path = QPainterPath()
+            path.moveTo(rect.left(), rect.top())
+            path.lineTo(rect.right(), rect.center().y())
+            path.lineTo(rect.left(), rect.bottom())
+            path.closeSubpath()
+            painter.drawPath(path)
+
+        elif self._icon_name == "pause":
+            bar_w = max(2, rect.width() // 5)
+            gap = max(1, rect.width() // 8)
+            left = QRect(
+                rect.center().x() - bar_w - gap // 2,
+                rect.top(),
+                bar_w,
+                rect.height(),
+            )
+            right = QRect(
+                rect.center().x() + gap // 2,
+                rect.top(),
+                bar_w,
+                rect.height(),
+            )
+            painter.drawRect(left)
+            painter.drawRect(right)
+
+        elif self._icon_name == "stop":
+            painter.drawRect(rect)
+
+        elif self._icon_name == "prev":
+            # left-pointing triangle
+            path = QPainterPath()
+            path.moveTo(rect.right(), rect.top())
+            path.lineTo(rect.left(), rect.center().y())
+            path.lineTo(rect.right(), rect.bottom())
+            path.closeSubpath()
+            painter.drawPath(path)
+
+        elif self._icon_name == "next":
+            # right-pointing triangle (same as play)
+            path = QPainterPath()
+            path.moveTo(rect.left(), rect.top())
+            path.lineTo(rect.right(), rect.center().y())
+            path.lineTo(rect.left(), rect.bottom())
+            path.closeSubpath()
+            painter.drawPath(path)
+
+        painter.end()
+
+
 class MainWindow(QMainWindow):
-    """Main application window for PCAP2KML Player."""
+    """Main application window for PCAP2KML Player — v2.0 workspace design."""
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle("PCAP2KML Player")
-        self.setMinimumSize(1200, 700)
-        self.resize(1400, 800)
+        self.setMinimumSize(1280, 720)
+        self.resize(1440, 880)
         self.setAcceptDrops(True)
 
         self._memory = AppMemory.load()
         self._settings = QSettings("PCAP2KML", "Player")
-        self._layout_preference = str(self._settings.value("ui/layout_mode", LAYOUT_MODE_AUTO))
-        if self._layout_preference not in {
-            LAYOUT_MODE_AUTO,
-            LAYOUT_MODE_DESKTOP,
-            LAYOUT_MODE_COMPACT,
-        }:
-            self._layout_preference = LAYOUT_MODE_AUTO
         self._performance_mode = str(self._settings.value("ui/performance_mode", PERFORMANCE_MODE_NORMAL))
         if self._performance_mode not in PERFORMANCE_MODE_LABELS:
             self._performance_mode = PERFORMANCE_MODE_NORMAL
         self._performance_auto_downgraded = False
         self._last_memory_warning_level = ""
-        self._is_compact_layout = False
-        self._overview_collapsed = self._settings.value(
-            "ui/header_collapsed",
-            False,
-            type=bool,
-        )
+        self._map_backend = str(self._settings.value("ui/map_backend", "webengine"))
+        if self._map_backend not in {"webengine", "native"}:
+            self._map_backend = "webengine"
 
+        # Session state
         self._session: SessionData | None = None
         self._active_types: set[MessageType] = set(MessageType)
         self._active_stations: set[str] = set()
@@ -220,7 +569,6 @@ class MainWindow(QMainWindow):
         self._current_prioritization_issues: list[PrioritizationIssue] = []
         self._issue_filter_mode = "all"
         self._issue_filter_intersection = "all"
-        self._issue_panel_collapsed = False
         self._problem_replay_indices: list[int] = []
         self._message_table_maximized = False
         self._last_scene_update_monotonic = 0.0
@@ -239,404 +587,648 @@ class MainWindow(QMainWindow):
         self._restore_window_state()
         self._refresh_memory_banner()
         self._update_controls_enabled(False)
-        self._apply_responsive_layout(force=True)
         self._setup_memory_watchdog()
 
+    # ── UI Setup ──────────────────────────────────────────────────
+
     def _setup_ui(self) -> None:
-        """Build the complete UI layout."""
+        """Build the complete v2.0 UI layout."""
         self._setup_toolbar()
+        self._setup_workspace_tabs()
 
         central = QWidget()
         self.setCentralWidget(central)
         main_layout = QVBoxLayout(central)
-        main_layout.setContentsMargins(8, 8, 8, 8)
-        main_layout.setSpacing(8)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        self._setup_overview_panel(main_layout)
-        self._setup_filter_row(main_layout)
+        self._workspace_stack = QStackedWidget()
+        self._workspace_stack.addWidget(self._setup_map_workspace())   # index 0
+        self._workspace_stack.addWidget(self._setup_eta_workspace())   # index 1
+        self._workspace_stack.addWidget(self._setup_issues_workspace())  # index 2
+        self._workspace_stack.addWidget(self._setup_raw_workspace())   # index 3
+        main_layout.addWidget(self._workspace_stack, stretch=1)
 
-        self._splitter = QSplitter(Qt.Orientation.Horizontal)
-        self._map_widget = MapWidget()
-        self._splitter.addWidget(self._setup_map_area())
-        self._splitter.addWidget(self._setup_message_list())
-        self._splitter.setStretchFactor(0, 7)
-        self._splitter.setStretchFactor(1, 3)
-        main_layout.addWidget(self._splitter, stretch=1)
-
-        self._setup_playback_controls(main_layout)
-
-        self._statusbar = QStatusBar()
-        self.setStatusBar(self._statusbar)
-        self._status_metrics = QLabel("Noch keine Sitzung geladen")
-        self._progress = QProgressBar()
-        self._progress.setVisible(False)
-        self._progress.setFixedWidth(180)
-        self._statusbar.addPermanentWidget(self._status_metrics)
-        self._statusbar.addPermanentWidget(self._progress)
-        self._statusbar.showMessage("Bereit - PCAP-Datei laden oder per Drag & Drop ablegen")
-
-    def _setup_map_area(self) -> QWidget:
-        """Create the map with a compact prioritization issue side panel."""
-        container = QWidget()
-        layout = QHBoxLayout(container)
-        self._map_area_layout = layout
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
-        layout.addWidget(self._map_widget, stretch=1)
-
-        issue_panel = QFrame()
-        self._issue_panel = issue_panel
-        issue_panel.setObjectName("PrioritizationIssuePanel")
-        issue_panel.setMinimumWidth(260)
-        issue_panel.setMaximumWidth(320)
-        issue_panel.setStyleSheet(
-            "QFrame#PrioritizationIssuePanel {background: #f8fbff; border: 1px solid #d7dde8; border-radius: 10px;}"
-        )
-        issue_layout = QVBoxLayout(issue_panel)
-        issue_layout.setContentsMargins(10, 10, 10, 10)
-        issue_layout.setSpacing(6)
-
-        header_row = QHBoxLayout()
-        header_row.setContentsMargins(0, 0, 0, 0)
-        header_row.setSpacing(6)
-        self._issue_panel_title = QLabel("Priorisierungsfehler")
-        self._issue_panel_title.setStyleSheet("font-weight: 700; color: #10233f;")
-        self._btn_toggle_issue_panel = QPushButton("Einklappen")
-        self._btn_toggle_issue_panel.setCheckable(True)
-        self._btn_toggle_issue_panel.setToolTip("Priorisierungsfehler-Panel ein- oder ausklappen")
-        self._btn_toggle_issue_panel.toggled.connect(self._toggle_issue_panel_collapsed)
-        header_row.addWidget(self._issue_panel_title, stretch=1)
-        header_row.addWidget(self._btn_toggle_issue_panel)
-        issue_layout.addLayout(header_row)
-
-        self._issue_content = QWidget()
-        issue_content_layout = QVBoxLayout(self._issue_content)
-        issue_content_layout.setContentsMargins(0, 0, 0, 0)
-        issue_content_layout.setSpacing(6)
-
-        self._issue_summary = QLabel("Keine Fehler.")
-        self._issue_summary.setWordWrap(True)
-        self._issue_summary.setStyleSheet("color: #42546b; font-size: 11px;")
-        issue_content_layout.addWidget(self._issue_summary)
-
-        filter_row = QHBoxLayout()
-        filter_row.setContentsMargins(0, 0, 0, 0)
-        filter_row.setSpacing(6)
-        self._issue_filter_combo = QComboBox()
-        self._issue_filter_combo.addItem("Alle", "all")
-        self._issue_filter_combo.addItem("Nur kritisch", "critical")
-        self._issue_filter_combo.addItem("Aktuelle Kreuzung", "intersection")
-        self._issue_filter_combo.setToolTip("Priorisierungsfehler nach Schwere oder Kreuzung filtern")
-        self._issue_filter_combo.currentIndexChanged.connect(self._on_issue_filter_changed)
-        self._issue_intersection_combo = QComboBox()
-        self._issue_intersection_combo.addItem("Alle Kreuzungen", "all")
-        self._issue_intersection_combo.setToolTip("Fehler auf eine Kreuzung eingrenzen")
-        self._issue_intersection_combo.currentIndexChanged.connect(self._on_issue_filter_changed)
-        filter_row.addWidget(self._issue_filter_combo, stretch=1)
-        filter_row.addWidget(self._issue_intersection_combo, stretch=1)
-        issue_content_layout.addLayout(filter_row)
-
-        self._issue_list = QListWidget()
-        self._issue_list.setAlternatingRowColors(True)
-        self._issue_list.setStyleSheet(
-            "QListWidget {"
-            " background: #ffffff;"
-            " alternate-background-color: #eaf5ff;"
-            " color: #10233f;"
-            " border: 1px solid #d7dde8;"
-            " border-radius: 10px;"
-            " selection-background-color: #cfe8ff;"
-            " selection-color: #000000;"
-            "}"
-            "QListWidget::item { padding: 7px; border: none; color: #10233f; }"
-            "QListWidget::item:alternate { background: #eaf5ff; color: #10233f; }"
-            "QListWidget::item:selected { background: #cfe8ff; color: #000000; }"
-        )
-        self._issue_list.itemClicked.connect(self._on_prioritization_issue_clicked)
-        issue_content_layout.addWidget(self._issue_list, stretch=1)
-        issue_layout.addWidget(self._issue_content, stretch=1)
-
-        layout.addWidget(issue_panel)
-        return container
+        self._setup_statusbar()
 
     def _setup_toolbar(self) -> None:
-        """Create the toolbar with file operations."""
+        """Dark toolbar with grouped buttons."""
         toolbar = QToolBar("Hauptwerkzeugleiste")
         toolbar.setMovable(False)
+        toolbar.setStyleSheet(TOOLBAR_STYLE)
         self.addToolBar(toolbar)
 
+        # Brand
+        brand = QLabel("  PCAP2KML Player")
+        brand.setStyleSheet("color: #fff; font-weight: 700; font-size: 14px; padding: 0 8px;")
+        toolbar.addWidget(brand)
+
+        # Group 1: Load
         self._btn_load = QPushButton("PCAP laden")
-        self._btn_load.setToolTip("Eine oder mehrere PCAP-Dateien oeffnen")
+        self._btn_load.setStyleSheet(TOOLBAR_BTN_PRIMARY)
         toolbar.addWidget(self._btn_load)
 
         self._btn_reload_last = QPushButton("Letzte Sitzung")
-        self._btn_reload_last.setToolTip("Zuletzt geoeffnete Dateien erneut laden")
+        self._btn_reload_last.setStyleSheet(TOOLBAR_BTN_STYLE)
         toolbar.addWidget(self._btn_reload_last)
 
-        self._btn_cancel_load = QPushButton("Laden abbrechen")
-        self._btn_cancel_load.setToolTip("Aktuellen Parse-Vorgang abbrechen")
+        self._btn_cancel_load = QPushButton("Abbrechen")
+        self._btn_cancel_load.setStyleSheet(TOOLBAR_BTN_STYLE)
         self._btn_cancel_load.setEnabled(False)
         toolbar.addWidget(self._btn_cancel_load)
 
-        toolbar.addSeparator()
+        self._add_toolbar_sep(toolbar)
 
+        # Group 2: Export
         self._btn_export_kml = QPushButton("KML exportieren")
-        self._btn_export_kml.setToolTip("KML-Dateien fuer alle gefilterten Entitaeten exportieren")
+        self._btn_export_kml.setStyleSheet(TOOLBAR_BTN_STYLE)
         toolbar.addWidget(self._btn_export_kml)
 
         self._btn_export_issues = QPushButton("Fehler exportieren")
-        self._btn_export_issues.setToolTip(
-            "Priorisierungsfehler als lesbare CSV, Maschinen-CSV, JSON und Report exportieren"
-        )
+        self._btn_export_issues.setStyleSheet(TOOLBAR_BTN_STYLE)
         toolbar.addWidget(self._btn_export_issues)
 
         self._btn_export_diagnostics = QPushButton("Diagnose exportieren")
-        self._btn_export_diagnostics.setToolTip(
-            "Technischen Diagnosebericht mit RAM-, Karten- und Paketinformationen schreiben"
-        )
+        self._btn_export_diagnostics.setStyleSheet(TOOLBAR_BTN_STYLE)
         toolbar.addWidget(self._btn_export_diagnostics)
 
+        self._add_toolbar_sep(toolbar)
+
+        # Group 3: Tools
         self._btn_reload_map = QPushButton("Karte neu laden")
-        self._btn_reload_map.setToolTip("WebEngine-Karte neu initialisieren und aktuelle Sitzung erneut rendern")
+        self._btn_reload_map.setStyleSheet(TOOLBAR_BTN_STYLE)
         toolbar.addWidget(self._btn_reload_map)
 
-        toolbar.addSeparator()
-
-        self._btn_update_schemas = QPushButton("ASN.1-Schemas aktualisieren")
-        self._btn_update_schemas.setToolTip("ASN.1-Schemadateien aus dem Git-Repo aktualisieren")
+        self._btn_update_schemas = QPushButton("ASN.1-Schemas")
+        self._btn_update_schemas.setStyleSheet(TOOLBAR_BTN_STYLE)
         toolbar.addWidget(self._btn_update_schemas)
 
         self._btn_dashboard = QPushButton("Dashboard")
-        self._btn_dashboard.setToolTip("Statistik-Dashboard anzeigen")
+        self._btn_dashboard.setStyleSheet(TOOLBAR_BTN_STYLE)
         toolbar.addWidget(self._btn_dashboard)
 
-        toolbar.addSeparator()
-        toolbar.addWidget(QLabel("Layout:"))
-        self._layout_mode_combo = QComboBox()
-        self._layout_mode_combo.addItem("Auto", LAYOUT_MODE_AUTO)
-        self._layout_mode_combo.addItem("Desktop", LAYOUT_MODE_DESKTOP)
-        self._layout_mode_combo.addItem("Kompakt", LAYOUT_MODE_COMPACT)
-        self._layout_mode_combo.setToolTip("Layoutmodus automatisch oder manuell waehlen")
-        self._layout_mode_combo.setFixedWidth(110)
-        for index in range(self._layout_mode_combo.count()):
-            if self._layout_mode_combo.itemData(index) == self._layout_preference:
-                self._layout_mode_combo.setCurrentIndex(index)
-                break
-        toolbar.addWidget(self._layout_mode_combo)
+        self._add_toolbar_sep(toolbar)
 
-        toolbar.addSeparator()
-        toolbar.addWidget(QLabel("Leistung:"))
-        self._performance_mode_combo = QComboBox()
-        self._performance_mode_combo.addItem("Normal", PERFORMANCE_MODE_NORMAL)
-        self._performance_mode_combo.addItem("Schonend", PERFORMANCE_MODE_SAVER)
-        self._performance_mode_combo.addItem("Diagnose", PERFORMANCE_MODE_DIAGNOSTIC)
-        self._performance_mode_combo.setToolTip(
-            "Kartenrendering fuer starke Rechner, schwache Notebooks oder Diagnose reduzieren"
-        )
-        self._performance_mode_combo.setFixedWidth(120)
-        for index in range(self._performance_mode_combo.count()):
-            if self._performance_mode_combo.itemData(index) == self._performance_mode:
-                self._performance_mode_combo.setCurrentIndex(index)
-                break
-        toolbar.addWidget(self._performance_mode_combo)
+        # Spacer
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        toolbar.addWidget(spacer)
 
-        self._memory_watch_label = QLabel("RAM: -")
-        self._memory_watch_label.setToolTip("Arbeitsspeicher des App-Prozesses")
-        toolbar.addWidget(self._memory_watch_label)
+        # Command palette trigger
+        self._btn_cmd_palette = QPushButton("  Schnellbefehl suchen...    Ctrl+K")
+        self._btn_cmd_palette.setStyleSheet("""
+            QPushButton {
+                background: rgba(255,255,255,0.06);
+                color: #8b97a8;
+                border: 1px solid rgba(255,255,255,0.10);
+                border-radius: 5px;
+                padding: 4px 12px;
+                font-size: 12px;
+                min-width: 240px;
+            }
+            QPushButton:hover {
+                background: rgba(255,255,255,0.10);
+                border-color: rgba(255,255,255,0.18);
+            }
+        """)
+        toolbar.addWidget(self._btn_cmd_palette)
 
-    def _setup_overview_panel(self, parent_layout: QVBoxLayout) -> None:
-        """Create the SWARCO-inspired overview header."""
-        panel = QFrame()
-        self._overview_panel = panel
-        panel.setStyleSheet("QFrame { background: #ffffff; border: 1px solid #d7dde8; border-radius: 16px; }")
-        outer_layout = QVBoxLayout(panel)
-        outer_layout.setContentsMargins(12, 10, 12, 10)
-        outer_layout.setSpacing(8)
+    @staticmethod
+    def _add_toolbar_sep(toolbar: QToolBar) -> None:
+        sep = QWidget()
+        sep.setFixedWidth(1)
+        sep.setStyleSheet("background: rgba(255,255,255,0.12); margin: 2px 2px;")
+        toolbar.addWidget(sep)
 
-        header_row = QHBoxLayout()
-        header_row.setContentsMargins(0, 0, 0, 0)
-        header_row.setSpacing(8)
-        self._overview_compact_label = QLabel("PCAP2KML Player")
-        self._overview_compact_label.setStyleSheet("font-weight: 700; color: #10233f;")
-        self._btn_toggle_overview = QPushButton("Header einklappen")
-        self._btn_toggle_overview.setCheckable(True)
-        self._btn_toggle_overview.setToolTip("Kopfbereich ein- oder ausklappen")
-        self._btn_toggle_overview.toggled.connect(self._set_overview_collapsed)
-        header_row.addWidget(self._overview_compact_label, stretch=1)
-        header_row.addWidget(self._btn_toggle_overview)
-        outer_layout.addLayout(header_row)
+    def _setup_workspace_tabs(self) -> None:
+        """Row of workspace tab buttons above the content area."""
+        container = QWidget()
+        container.setStyleSheet(f"background: {STYLE_BG_SURFACE}; border-bottom: 1px solid {STYLE_BORDER};")
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(8, 0, 8, 0)
+        layout.setSpacing(2)
 
-        self._overview_content = QWidget()
-        layout = QHBoxLayout(self._overview_content)
+        self._ws_tabs: dict[str, QPushButton] = {}
+        self._ws_badge_labels: dict[str, QLabel] = {}
+
+        tabs = [
+            ("map", "Karte  "),
+            ("eta", "ETA Analyse  "),
+            ("issues", "Priorisierung  "),
+            ("raw", "Rohdaten  "),
+        ]
+        for ws_id, ws_label in tabs:
+            btn = QPushButton(ws_label)
+            btn.setCheckable(True)
+            btn.setStyleSheet(WS_TAB_STYLE)
+            btn.clicked.connect(lambda checked, wid=ws_id: self._switch_workspace(wid))
+            layout.addWidget(btn)
+            self._ws_tabs[ws_id] = btn
+
+            if ws_id == "issues":
+                badge = QLabel("")
+                badge.setStyleSheet(
+                    "font-size: 10px; font-weight: 700; color: #fff;"
+                    "background: #dc2626; border-radius: 8px;"
+                    "padding: 1px 6px; margin-left: -4px;"
+                )
+                badge.hide()
+                layout.addWidget(badge)
+                self._ws_badge_labels[ws_id] = badge
+
+        layout.addStretch()
+        self.addToolBarBreak()  # toolbar above, tabs below
+        self._ws_tab_widget = container
+
+        # Add tab widget as a toolbar widget
+        tab_toolbar = QToolBar("WorkspaceTabs")
+        tab_toolbar.setMovable(False)
+        tab_toolbar.setStyleSheet(f"QToolBar {{ background: {STYLE_BG_SURFACE}; border: none; padding: 0; spacing: 0; }}")
+        tab_toolbar.addWidget(container)
+        self.addToolBar(tab_toolbar)
+
+        self._ws_tabs["map"].setChecked(True)
+
+    def _switch_workspace(self, ws_id: str) -> None:
+        indices = {"map": 0, "eta": 1, "issues": 2, "raw": 3}
+        self._workspace_stack.setCurrentIndex(indices[ws_id])
+        for tid, btn in self._ws_tabs.items():
+            btn.setChecked(tid == ws_id)
+        # Sync view state across all map instances so they share the same center+zoom
+        if ws_id in ("eta", "issues") and hasattr(self._map_widget, "save_view_state"):
+            state = self._map_widget.save_view_state()
+            if state is not None:
+                target_map = self._eta_map if ws_id == "eta" else self._issues_map
+                if hasattr(target_map, "restore_view_state"):
+                    target_map.restore_view_state(state)
+
+    # ── Workspace 1: Map ──────────────────────────────────────────
+
+    def _setup_map_workspace(self) -> QWidget:
+        container = QWidget()
+        layout = QHBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        text_layout = QVBoxLayout()
-        text_layout.setSpacing(3)
+        # Map area with floating playback bar
+        map_area = QWidget()
+        map_area.setStyleSheet(f"background: {STYLE_BG_APP};")
+        map_layout = QVBoxLayout(map_area)
+        map_layout.setContentsMargins(0, 0, 0, 0)
 
-        self._lbl_title = QLabel("PCAP2KML Player")
-        self._lbl_title.setStyleSheet("font-size: 20px; font-weight: 700; color: #10233f;")
-        self._lbl_subtitle = QLabel("Datenorientierte V2X-Analyse in einer klaren, operativen SWARCO-ITS-Anmutung.")
-        self._lbl_subtitle.setStyleSheet("color: #5a6b81;")
-        self._lbl_memory = QLabel("")
-        self._lbl_memory.setStyleSheet("color: #b2192b; font-weight: 700;")
+        self._map_widget = MapWidget()
+        map_layout.addWidget(self._map_widget, stretch=1)
 
-        text_layout.addWidget(self._lbl_title)
-        text_layout.addWidget(self._lbl_subtitle)
-        text_layout.addWidget(self._lbl_memory)
+        # Floating playback bar
+        self._setup_floating_playback(map_layout)
 
-        stats_layout = QHBoxLayout()
-        stats_layout.setSpacing(10)
-        self._stat_files = self._create_stat_card("Dateien", "0")
-        self._stat_messages = self._create_stat_card("Nachrichten", "0")
-        self._stat_stations = self._create_stat_card("Stationen", "0")
-        stats_layout.addWidget(self._stat_files)
-        stats_layout.addWidget(self._stat_messages)
-        stats_layout.addWidget(self._stat_stations)
+        layout.addWidget(map_area, stretch=1)
 
-        layout.addLayout(text_layout, stretch=1)
-        layout.addLayout(stats_layout)
-        outer_layout.addWidget(self._overview_content)
-        parent_layout.addWidget(panel)
-        self._set_overview_collapsed(self._overview_collapsed)
+        # Right sidebar: current message preview
+        self._setup_message_sidebar(layout)
 
-    def _create_stat_card(self, title: str, value: str) -> QFrame:
-        """Create a compact summary card."""
+        return container
+
+    def _setup_floating_playback(self, parent_layout: QVBoxLayout) -> None:
+        """Floating playback bar positioned at bottom of map area."""
+        playback = QWidget()
+        playback.setObjectName("playbackBar")
+        playback.setStyleSheet(PLAYBACK_BAR_STYLE)
+        playback.setMaximumWidth(780)
+
+        row = QHBoxLayout(playback)
+        row.setContentsMargins(10, 6, 10, 6)
+        row.setSpacing(6)
+
+        self._chk_problem_replay = QCheckBox("Nur Fehler")
+        self._chk_problem_replay.setStyleSheet(f"font-size: 11px; color: {STYLE_TEXT_SECONDARY};")
+
+        self._btn_prev_issue = IconButton("prev", 28)
+        self._btn_prev_issue.setStyleSheet(self._pb_btn_style())
+        self._btn_prev_issue.setEnabled(False)
+
+        self._btn_play = IconButton("play", 38)
+        self._btn_play.setStyleSheet(
+            f"QPushButton {{ background: {STYLE_ACCENT}; color: #fff; border: none; border-radius: 19px; }}"
+            f"QPushButton:hover {{ background: {STYLE_ACCENT_HOVER}; }}"
+            f"QPushButton:disabled {{ background: #cbd5e1; }}"
+        )
+
+        self._btn_pause = IconButton("pause", 28)
+        self._btn_pause.setStyleSheet(self._pb_btn_style())
+        self._btn_pause.setEnabled(False)
+
+        self._btn_stop = IconButton("stop", 28)
+        self._btn_stop.setStyleSheet(self._pb_btn_style())
+
+        self._btn_next_issue = IconButton("next", 28)
+        self._btn_next_issue.setStyleSheet(self._pb_btn_style())
+        self._btn_next_issue.setEnabled(False)
+
+        self._lbl_time = QLabel("00:00.0 / 00:00.0")
+        self._lbl_time.setStyleSheet(
+            f"font-family: 'Cascadia Code', Consolas, monospace; font-size: 13px; font-weight: 600; "
+            f"color: {STYLE_TEXT_PRIMARY}; min-width: 130px;"
+        )
+        self._lbl_time.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self._slider = QSlider(Qt.Orientation.Horizontal)
+        self._slider.setRange(0, 1000)
+        self._slider.setStyleSheet(
+            f"QSlider::groove:horizontal {{ height: 5px; background: {STYLE_BORDER}; border-radius: 2px; }}"
+            f"QSlider::handle:horizontal {{ width: 12px; height: 12px; margin: -4px 0; "
+            f"background: {STYLE_ACCENT}; border-radius: 6px; border: 2px solid #fff; }}"
+        )
+
+        self._speed_combo = QComboBox()
+        for speed in SPEED_OPTIONS:
+            self._speed_combo.addItem(f"{speed}x")
+        self._speed_combo.setCurrentIndex(2)
+        self._speed_combo.setFixedWidth(60)
+        self._speed_combo.setStyleSheet(f"font-size: 11px; color: {STYLE_TEXT_PRIMARY};")
+
+        row.addWidget(self._chk_problem_replay)
+        row.addWidget(self._btn_prev_issue)
+        row.addWidget(self._btn_play)
+        row.addWidget(self._btn_pause)
+        row.addWidget(self._btn_stop)
+        row.addWidget(self._btn_next_issue)
+        row.addWidget(self._lbl_time)
+        row.addWidget(self._slider)
+        row.addWidget(self._speed_combo)
+
+        # Center the playback bar
+        wrapper = QHBoxLayout()
+        wrapper.addStretch()
+        wrapper.addWidget(playback)
+        wrapper.addStretch()
+        parent_layout.addLayout(wrapper)
+
+    @staticmethod
+    def _pb_btn_style() -> str:
+        return (
+            "QPushButton { background: #e8ecf1; border: none; border-radius: 14px; font-size: 11px; color: #0d1b2a; }"
+            "QPushButton:hover { background: #d4dbe6; }"
+            "QPushButton:disabled { background: #f1f3f6; color: #c4cad4; }"
+        )
+
+    def _setup_message_sidebar(self, parent_layout: QHBoxLayout) -> None:
+        """Right sidebar showing current message preview."""
+        sidebar = QWidget()
+        sidebar.setStyleSheet(f"background: {STYLE_BG_SURFACE}; border-left: 1px solid {STYLE_BORDER};")
+        sidebar.setFixedWidth(320)
+        sb_layout = QVBoxLayout(sidebar)
+        sb_layout.setContentsMargins(0, 0, 0, 0)
+        sb_layout.setSpacing(0)
+
+        header = QLabel("Aktuelle Nachricht")
+        header.setStyleSheet(SIDEBAR_HEADER_STYLE)
+        sb_layout.addWidget(header)
+
+        body = QWidget()
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(10, 10, 10, 10)
+        body_layout.setSpacing(8)
+
+        self._msg_preview_card = QFrame()
+        self._msg_preview_card.setObjectName("panelCard")
+        self._msg_preview_card.setStyleSheet(PANEL_CARD_STYLE)
+        card_layout = QVBoxLayout(self._msg_preview_card)
+        card_layout.setContentsMargins(12, 10, 12, 10)
+        self._msg_preview_header = QLabel("Keine Nachricht ausgewählt")
+        self._msg_preview_header.setStyleSheet(f"font-weight: 600; color: {STYLE_TEXT_SECONDARY}; font-size: 12px;")
+        card_layout.addWidget(self._msg_preview_header)
+        self._msg_preview_body = QLabel("")
+        self._msg_preview_body.setWordWrap(True)
+        self._msg_preview_body.setStyleSheet(f"color: {STYLE_TEXT_PRIMARY}; font-size: 12px;")
+        card_layout.addWidget(self._msg_preview_body)
+        body_layout.addWidget(self._msg_preview_card)
+
+        body_layout.addStretch()
+        sb_layout.addWidget(body)
+        parent_layout.addWidget(sidebar)
+
+    # ── Workspace 2: ETA Analysis ─────────────────────────────────
+
+    def _setup_eta_workspace(self) -> QWidget:
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # Top: map + request details sidebar
+        top_splitter = QSplitter(Qt.Orientation.Horizontal)
+        top_splitter.setChildrenCollapsible(False)
+
+        # Small map for ETA context
+        self._eta_map = MapWidget()
+        self._eta_map.setMinimumWidth(280)
+        top_splitter.addWidget(self._eta_map)
+        top_splitter.setStretchFactor(0, 3)
+
+        # Request details sidebar
+        eta_sidebar = QWidget()
+        eta_sidebar.setStyleSheet(f"background: {STYLE_BG_SURFACE}; border-left: 1px solid {STYLE_BORDER};")
+        eta_sidebar.setMinimumWidth(220)
+        esb_layout = QVBoxLayout(eta_sidebar)
+        esb_layout.setContentsMargins(0, 0, 0, 0)
+        esb_layout.setSpacing(0)
+
+        header = QLabel("Request-Details")
+        header.setStyleSheet(SIDEBAR_HEADER_STYLE)
+        esb_layout.addWidget(header)
+
+        body = QWidget()
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(10, 10, 10, 10)
+        body_layout.setSpacing(8)
+
+        # Vehicle/request selector
+        self._eta_station_combo = QComboBox()
+        self._eta_station_combo.setMinimumWidth(180)
+        self._eta_station_combo.setStyleSheet("font-size: 12px; padding: 4px;")
+        body_layout.addWidget(QLabel("Fahrzeug/Request:"))
+        body_layout.addWidget(self._eta_station_combo)
+
+        # Metrics cards
+        metrics_row = QHBoxLayout()
+        self._eta_metric_1 = self._make_metric_card("Letzte ETA", "-")
+        self._eta_metric_2 = self._make_metric_card("Granted Latenz", "-")
+        self._eta_metric_3 = self._make_metric_card("SSEM Updates", "-")
+        metrics_row.addWidget(self._eta_metric_1)
+        metrics_row.addWidget(self._eta_metric_2)
+        metrics_row.addWidget(self._eta_metric_3)
+        body_layout.addLayout(metrics_row)
+
+        # Status timeline
+        status_card = QFrame()
+        status_card.setObjectName("panelCard")
+        status_card.setStyleSheet(PANEL_CARD_STYLE)
+        sc_layout = QVBoxLayout(status_card)
+        sc_layout.setContentsMargins(12, 10, 12, 10)
+        sc_header = QLabel("Status-Verlauf")
+        sc_header.setStyleSheet(f"font-weight: 600; color: {STYLE_TEXT_SECONDARY}; font-size: 12px;")
+        sc_layout.addWidget(sc_header)
+        self._eta_status_timeline = QLabel("Keine Sitzung geladen.")
+        self._eta_status_timeline.setWordWrap(True)
+        self._eta_status_timeline.setStyleSheet(f"color: {STYLE_TEXT_PRIMARY}; font-size: 11px;")
+        sc_layout.addWidget(self._eta_status_timeline)
+        body_layout.addWidget(status_card)
+
+        self._eta_summary = QLabel("Keine PCAP-Sitzung geladen.")
+        self._eta_summary.setWordWrap(True)
+        self._eta_summary.setStyleSheet(f"color: {STYLE_TEXT_SECONDARY}; font-size: 11px;")
+        body_layout.addWidget(self._eta_summary)
+
+        body_layout.addStretch()
+        esb_layout.addWidget(body)
+        top_splitter.addWidget(eta_sidebar)
+        top_splitter.setSizes([800, 340])
+
+        # Bottom: ETA graph + dashboard
+        bottom = QWidget()
+        bottom.setStyleSheet(f"background: {STYLE_BG_SURFACE}; border-top: 1px solid {STYLE_BORDER};")
+        bottom.setMinimumHeight(200)
+        bottom_layout = QVBoxLayout(bottom)
+        bottom_layout.setContentsMargins(10, 10, 10, 10)
+        bottom_layout.setSpacing(6)
+
+        graph_label = QLabel("ETA-Verlauf & Geschwindigkeit")
+        graph_label.setStyleSheet(f"font-weight: 600; font-size: 13px; color: {STYLE_TEXT_PRIMARY};")
+        bottom_layout.addWidget(graph_label)
+
+        self._eta_graph = EtaGraphWidget()
+        bottom_layout.addWidget(self._eta_graph, stretch=1)
+
+        # Metrics and events tables
+        tables_splitter = QSplitter(Qt.Orientation.Horizontal)
+        tables_splitter.setChildrenCollapsible(False)
+        self._eta_metric_table = QTableWidget(0, 2)
+        self._eta_metric_table.setHorizontalHeaderLabels(["Kennzahl", "Wert"])
+        self._apply_table_style(self._eta_metric_table)
+        tables_splitter.addWidget(self._eta_metric_table)
+
+        self._eta_event_table = QTableWidget(0, 4)
+        self._eta_event_table.setHorizontalHeaderLabels(["Zeit", "Typ", "Inhalt", "Details"])
+        self._apply_table_style(self._eta_event_table)
+        tables_splitter.addWidget(self._eta_event_table)
+        tables_splitter.setSizes([260, 500])
+        bottom_layout.addWidget(tables_splitter, stretch=2)
+
+        self._btn_export_eta_dashboard = QPushButton("ETA exportieren (CSV/JSON)")
+        self._btn_export_eta_dashboard.setStyleSheet(
+            f"QPushButton {{ background: {STYLE_BG_PANEL}; border: 1px solid {STYLE_BORDER}; "
+            f"border-radius: 6px; padding: 5px 12px; font-size: 11px; color: {STYLE_TEXT_PRIMARY}; }}"
+            f"QPushButton:hover {{ background: #e8ecf1; }}"
+        )
+        bottom_layout.addWidget(self._btn_export_eta_dashboard)
+
+        # Use a vertical splitter so top (map+sidebar) and bottom (graph+tables) are resizable
+        main_splitter = QSplitter(Qt.Orientation.Vertical)
+        main_splitter.setChildrenCollapsible(False)
+        main_splitter.addWidget(top_splitter)
+        main_splitter.setStretchFactor(0, 1)
+        main_splitter.addWidget(bottom)
+        main_splitter.setStretchFactor(1, 1)
+        main_splitter.setSizes([500, 400])
+        layout.addWidget(main_splitter)
+        return container
+
+    @staticmethod
+    def _make_metric_card(title: str, value: str) -> QFrame:
         card = QFrame()
-        card.setMinimumWidth(130)
-        card.setStyleSheet("QFrame { background: #f5f7fb; border: 1px solid #d7dde8; border-radius: 14px; }")
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(12, 10, 12, 10)
-        label_title = QLabel(title)
-        label_title.setStyleSheet("color: #667891; font-size: 12px; font-weight: 600;")
-        label_value = QLabel(value)
-        label_value.setObjectName("value")
-        label_value.setStyleSheet("color: #10233f; font-size: 22px; font-weight: 700;")
-        layout.addWidget(label_title)
-        layout.addWidget(label_value)
+        card.setStyleSheet(
+            f"QFrame {{ background: {STYLE_BG_PANEL}; border: 1px solid {STYLE_BORDER}; border-radius: 8px; }}"
+        )
+        cl = QVBoxLayout(card)
+        cl.setContentsMargins(10, 8, 10, 8)
+        cl.setSpacing(2)
+        vl = QLabel(value)
+        vl.setStyleSheet(
+            f"font-family: 'Cascadia Code', Consolas, monospace; font-size: 18px; font-weight: 700; color: {STYLE_TEXT_PRIMARY};"
+        )
+        vl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        tl = QLabel(title)
+        tl.setStyleSheet(f"font-size: 10px; color: {STYLE_TEXT_MUTED};")
+        tl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        cl.addWidget(vl)
+        cl.addWidget(tl)
         return card
 
-    def _set_stat_card_value(self, card: QFrame, value: str) -> None:
-        """Update the numeric value of a stat card."""
-        label = card.findChild(QLabel, "value")
-        if label:
-            label.setText(value)
-        self._update_compact_overview_text()
+    # ── Workspace 3: Prioritization Issues ────────────────────────
 
-    def _set_overview_collapsed(self, collapsed: bool) -> None:
-        """Collapse or expand the overview header."""
-        self._overview_collapsed = collapsed
-        self._settings.setValue("ui/header_collapsed", collapsed)
-        if hasattr(self, "_overview_content"):
-            self._overview_content.setVisible(not collapsed)
-        if hasattr(self, "_btn_toggle_overview"):
-            self._btn_toggle_overview.setText("Header anzeigen" if collapsed else "Header einklappen")
-            self._btn_toggle_overview.setChecked(collapsed)
-        self._update_compact_overview_text()
-
-    def _update_compact_overview_text(self) -> None:
-        """Render a compact one-line session summary for small screens."""
-        if not hasattr(self, "_overview_compact_label"):
-            return
-        if self._session is not None:
-            text = (
-                "PCAP2KML | "
-                f"{len(self._session.sources) or 1} Datei(en) | "
-                f"{len(self._session.messages)} Nachrichten | "
-                f"{len(self._session.station_ids)} Stationen"
-            )
-        else:
-            text = "PCAP2KML Player | Bereit zum Laden einer PCAP-Sitzung"
-        self._overview_compact_label.setText(text)
-
-    def _setup_filter_row(self, parent_layout: QVBoxLayout) -> None:
-        """Create the filter row with type and station filters."""
-        filter_widget = QWidget()
-        filter_layout = QHBoxLayout(filter_widget)
-        filter_layout.setContentsMargins(0, 0, 0, 0)
-
-        filter_layout.addWidget(QLabel("Nachrichtentyp:"))
-        self._type_checkboxes: dict[MessageType, QCheckBox] = {}
-        for msg_type in MessageType:
-            checkbox = QCheckBox(msg_type.value)
-            checkbox.setChecked(True)
-            checkbox.stateChanged.connect(self._on_filter_changed)
-            self._type_checkboxes[msg_type] = checkbox
-            filter_layout.addWidget(checkbox)
-
-        filter_layout.addSpacing(16)
-        filter_layout.addWidget(QLabel("Stationen:"))
-
-        self._station_list = QListWidget()
-        self._station_list.setMaximumHeight(92)
-        self._station_list.setMinimumWidth(260)
-        self._station_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
-        filter_layout.addWidget(self._station_list)
-
-        self._lbl_filter_hint = QLabel("Alle Typen und Stationen aktiv")
-        self._lbl_filter_hint.setStyleSheet("color: #667891;")
-        filter_layout.addWidget(self._lbl_filter_hint)
-        self._merge_view_checkbox = QCheckBox("Gemergte Sicht")
-        self._merge_view_checkbox.setToolTip("TXA/RXA-Mehrfachbeobachtungen nur einmal kanonisch anzeigen")
-        self._merge_view_checkbox.stateChanged.connect(self._on_merge_view_changed)
-        filter_layout.addWidget(self._merge_view_checkbox)
-        filter_layout.addStretch()
-        parent_layout.addWidget(filter_widget)
-
-    def _setup_message_list(self) -> QWidget:
-        """Create the message table plus a tabbed context area."""
-        panel = QWidget()
-        layout = QVBoxLayout(panel)
+    def _setup_issues_workspace(self) -> QWidget:
+        container = QWidget()
+        layout = QHBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(0)
 
-        header_row = QHBoxLayout()
-        header_row.setContentsMargins(0, 0, 0, 0)
-        header_row.setSpacing(8)
-        header_label = QLabel("Nachrichten")
-        header_label.setStyleSheet("font-weight: 700; color: #10233f;")
-        self._btn_toggle_message_table = QPushButton("Tabelle maximieren")
-        self._btn_toggle_message_table.setCheckable(True)
-        self._btn_toggle_message_table.setToolTip(
-            "Die Nachrichtentabelle auf kleinen Bildschirmen voruebergehend vergroessern"
+        # Use a splitter so map and sidebar sizes are variable
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setChildrenCollapsible(False)
+
+        # Map
+        self._issues_map = MapWidget()
+        self._issues_map.setMinimumWidth(280)
+        splitter.addWidget(self._issues_map)
+        splitter.setStretchFactor(0, 1)
+
+        # Issue list sidebar
+        sidebar = QWidget()
+        sidebar.setStyleSheet(f"background: {STYLE_BG_SURFACE}; border-left: 1px solid {STYLE_BORDER};")
+        sidebar.setMinimumWidth(280)
+        sb_layout = QVBoxLayout(sidebar)
+        sb_layout.setContentsMargins(0, 0, 0, 0)
+        sb_layout.setSpacing(0)
+
+        # Header with filters
+        header_row = QWidget()
+        header_row.setStyleSheet(SIDEBAR_HEADER_STYLE)
+        hr_layout = QHBoxLayout(header_row)
+        hr_layout.setContentsMargins(10, 8, 10, 8)
+        hr_layout.setSpacing(8)
+        hr_layout.addWidget(QLabel("Priorisierungsfehler"))
+        self._issue_filter_combo = QComboBox()
+        self._issue_filter_combo.addItem("Alle", "all")
+        self._issue_filter_combo.addItem("Nur kritisch", "critical")
+        self._issue_filter_combo.setStyleSheet("font-size: 11px;")
+        hr_layout.addWidget(self._issue_filter_combo)
+        self._issue_intersection_combo = QComboBox()
+        self._issue_intersection_combo.addItem("Alle Kreuzungen", "all")
+        self._issue_intersection_combo.setStyleSheet("font-size: 11px;")
+        hr_layout.addWidget(self._issue_intersection_combo)
+        self._issue_badge = QLabel("0")
+        self._issue_badge.setStyleSheet(
+            "font-size: 10px; font-weight: 700; color: #fff; background: #dc2626; "
+            "border-radius: 9px; padding: 1px 6px;"
         )
-        header_row.addWidget(header_label)
-        header_row.addStretch()
-        header_row.addWidget(self._btn_toggle_message_table)
-        layout.addLayout(header_row)
+        hr_layout.addWidget(self._issue_badge)
+        sb_layout.addWidget(header_row)
 
-        table_container = QWidget()
-        table_layout = QVBoxLayout(table_container)
-        table_layout.setContentsMargins(0, 0, 0, 0)
-        table_layout.setSpacing(0)
+        # Issue summary
+        self._issue_summary = QLabel("Keine Fehler.")
+        self._issue_summary.setWordWrap(True)
+        self._issue_summary.setStyleSheet(f"color: {STYLE_TEXT_SECONDARY}; font-size: 11px; padding: 6px 12px;")
+        sb_layout.addWidget(self._issue_summary)
 
+        # Issue list
+        self._issue_list = QListWidget()
+        self._issue_list.setAlternatingRowColors(True)
+        self._issue_list.setStyleSheet(
+            "QListWidget { background: #ffffff; alternate-background-color: #eaf5ff;"
+            " color: #0d1b2a; border: none; }"
+            "QListWidget::item { padding: 8px 12px; border-bottom: 1px solid #eef1f5; }"
+            "QListWidget::item:selected { background: #cfe8ff; color: #000; }"
+        )
+
+        sb_layout.addWidget(self._issue_list)
+        splitter.addWidget(sidebar)
+        layout.addWidget(splitter)
+        return container
+
+    # ── Workspace 4: Raw Data ─────────────────────────────────────
+
+    def _setup_raw_workspace(self) -> QWidget:
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # Left: message table + filter row
+        left = QWidget()
+        left_layout = QVBoxLayout(left)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(0)
+
+        self._setup_filter_row(left_layout)
+
+        # Message table
         self._msg_table = QTableWidget(0, NUM_COLUMNS)
         self._msg_table.setHorizontalHeaderLabels(TABLE_HEADERS)
         self._msg_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._msg_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._msg_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._msg_table.setAlternatingRowColors(True)
-        self._apply_table_readability_style(self._msg_table)
         self._msg_table.verticalHeader().setVisible(False)
-        table_layout.addWidget(self._msg_table)
+        self._apply_table_style(self._msg_table)
+        left_layout.addWidget(self._msg_table, stretch=1)
 
-        self._context_tabs = QTabWidget()
-        self._context_tabs.setDocumentMode(True)
-        self._context_tabs.setTabPosition(QTabWidget.TabPosition.North)
-        self._context_tabs.setStyleSheet(
-            "QTabWidget::pane { border: 1px solid #d7dde8; border-radius: 10px; background: #ffffff; }"
-            "QTabBar::tab { padding: 8px 12px; color: #42546b; }"
-            "QTabBar::tab:selected { color: #10233f; font-weight: 700; }"
-        )
+        layout.addWidget(left, stretch=6)
 
-        details_tab = QWidget()
-        details_layout = QVBoxLayout(details_tab)
-        details_layout.setContentsMargins(10, 10, 10, 10)
-        details_layout.setSpacing(6)
+        # Right: detail inspector (in QDockWidget for docking)
+        self._setup_detail_inspector(layout)
 
-        detail_label = QLabel("Nachrichten- und PKI-Details")
-        detail_label.setStyleSheet("font-weight: 700; color: #10233f;")
-        details_layout.addWidget(detail_label)
+        return container
 
+    def _setup_filter_row(self, parent_layout: QVBoxLayout) -> None:
+        """Filter row for message types and stations."""
+        filter_widget = QWidget()
+        filter_widget.setStyleSheet(f"background: {STYLE_BG_SURFACE}; border-bottom: 1px solid {STYLE_BORDER};")
+        filter_layout = QHBoxLayout(filter_widget)
+        filter_layout.setContentsMargins(8, 6, 8, 6)
+        filter_layout.setSpacing(10)
+
+        filter_layout.addWidget(QLabel("Nachrichtentyp:"))
+        self._type_checkboxes: dict[MessageType, QCheckBox] = {}
+        for msg_type in MessageType:
+            checkbox = QCheckBox(msg_type.value)
+            checkbox.setChecked(True)
+            checkbox.setStyleSheet("font-size: 11px;")
+            checkbox.stateChanged.connect(self._on_filter_changed)
+            self._type_checkboxes[msg_type] = checkbox
+            filter_layout.addWidget(checkbox)
+
+        filter_layout.addWidget(QLabel("Stationen:"))
+        self._station_list = QListWidget()
+        self._station_list.setMaximumHeight(80)
+        self._station_list.setMinimumWidth(220)
+        self._station_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
+        self._station_list.setStyleSheet("font-size: 11px;")
+        filter_layout.addWidget(self._station_list)
+
+        self._lbl_filter_hint = QLabel("Alle Typen und Stationen aktiv")
+        self._lbl_filter_hint.setStyleSheet(f"color: {STYLE_TEXT_SECONDARY}; font-size: 11px;")
+        filter_layout.addWidget(self._lbl_filter_hint)
+
+        self._merge_view_checkbox = QCheckBox("Gemergte Sicht")
+        self._merge_view_checkbox.setStyleSheet("font-size: 11px;")
+        self._merge_view_checkbox.stateChanged.connect(self._on_merge_view_changed)
+        filter_layout.addWidget(self._merge_view_checkbox)
+        filter_layout.addStretch()
+        parent_layout.addWidget(filter_widget)
+
+    def _setup_detail_inspector(self, parent_layout: QHBoxLayout) -> None:
+        """Detail inspector panel (dockable)."""
+        inspector = QWidget()
+        inspector.setStyleSheet(f"background: {STYLE_BG_SURFACE}; border-left: 1px solid {STYLE_BORDER};")
+        inspector.setFixedWidth(360)
+        ins_layout = QVBoxLayout(inspector)
+        ins_layout.setContentsMargins(0, 0, 0, 0)
+        ins_layout.setSpacing(0)
+
+        header = QLabel("Detail-Inspektor")
+        header.setStyleSheet(SIDEBAR_HEADER_STYLE)
+        ins_layout.addWidget(header)
+
+        scroll = QWidget()
+        scroll_layout = QVBoxLayout(scroll)
+        scroll_layout.setContentsMargins(10, 10, 10, 10)
+        scroll_layout.setSpacing(8)
+
+        # Basic data card
+        basic_card = QFrame()
+        basic_card.setObjectName("panelCard")
+        basic_card.setStyleSheet(PANEL_CARD_STYLE)
+        bc_layout = QVBoxLayout(basic_card)
+        bc_layout.setContentsMargins(12, 10, 12, 10)
+        bc_layout.addWidget(QLabel("Basisdaten"))
+        bc_layout.addWidget(self._make_detail_row("Typ:", "-"))
+        bc_layout.addWidget(self._make_detail_row("Station:", "-"))
+        bc_layout.addWidget(self._make_detail_row("Zeit:", "-"))
+        bc_layout.addWidget(self._make_detail_row("Position:", "-"))
+        scroll_layout.addWidget(basic_card)
+
+        # Detail table (same as old _detail_table)
         self._detail_table = QTableWidget(0, 2)
         self._detail_table.setHorizontalHeaderLabels(["Feld", "Wert"])
         self._detail_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
@@ -645,262 +1237,137 @@ class MainWindow(QMainWindow):
         self._detail_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._detail_table.verticalHeader().setVisible(False)
         self._detail_table.setAlternatingRowColors(True)
-        self._apply_table_readability_style(self._detail_table)
-        self._detail_table.hide()
-        details_layout.addWidget(self._detail_table, stretch=1)
+        self._apply_table_style(self._detail_table)
+        scroll_layout.addWidget(self._detail_table)
 
+        # Security/PKI
+        sec_card = QFrame()
+        sec_card.setObjectName("panelCard")
+        sec_card.setStyleSheet(PANEL_CARD_STYLE)
+        sc_layout = QVBoxLayout(sec_card)
+        sc_layout.setContentsMargins(12, 10, 12, 10)
+        sc_layout.addWidget(QLabel("Security / PKI"))
+        self._security_label = QLabel("Keine Signaturdaten")
+        self._security_label.setStyleSheet(f"font-size: 11px; color: {STYLE_TEXT_MUTED};")
+        sc_layout.addWidget(self._security_label)
+        scroll_layout.addWidget(sec_card)
+
+        # ECDSA verify button
         self._btn_verify_signature = QPushButton("Signatur prüfen")
-        self._btn_verify_signature.setToolTip("ECDSA-Signaturverifikation (noch nicht implementiert)")
         self._btn_verify_signature.setEnabled(False)
         self._btn_verify_signature.clicked.connect(self._on_verify_signature)
         self._btn_verify_signature.hide()
-        details_layout.addWidget(self._btn_verify_signature)
+        scroll_layout.addWidget(self._btn_verify_signature)
 
-        self._context_tabs.addTab(details_tab, "Details")
+        scroll_layout.addStretch()
+        ins_layout.addWidget(scroll, stretch=1)
+        parent_layout.addWidget(inspector)
 
-        scene_tab = QWidget()
-        scene_layout = QVBoxLayout(scene_tab)
-        scene_layout.setContentsMargins(10, 10, 10, 10)
-        scene_layout.setSpacing(6)
-        self._setup_scene_panel(scene_layout)
-        self._context_tabs.addTab(scene_tab, "Szene")
+    def _make_detail_row(self, label: str, value: str) -> QLabel:
+        return QLabel(f"<b>{label}</b> {value}")
 
-        eta_tab = QWidget()
-        eta_layout = QVBoxLayout(eta_tab)
-        eta_layout.setContentsMargins(10, 10, 10, 10)
-        eta_layout.setSpacing(8)
-        self._setup_eta_panel(eta_layout)
-        self._context_tabs.addTab(eta_tab, "ETA Analyse")
+    # ── Status Bar ─────────────────────────────────────────────────
 
-        self._right_splitter = QSplitter(Qt.Orientation.Vertical)
-        self._right_splitter.addWidget(table_container)
-        self._right_splitter.addWidget(self._context_tabs)
-        self._right_splitter.setChildrenCollapsible(False)
-        self._right_splitter.setStretchFactor(0, 3)
-        self._right_splitter.setStretchFactor(1, 2)
-        self._right_splitter.setSizes([460, 280])
-        layout.addWidget(self._right_splitter, stretch=1)
+    def _setup_statusbar(self) -> None:
+        self._statusbar = QStatusBar()
+        self._statusbar.setStyleSheet(STATUS_BAR_STYLE)
+        self.setStatusBar(self._statusbar)
 
-        return panel
+        self._status_metrics = QLabel("Noch keine Sitzung geladen")
+        self._status_metrics.setStyleSheet(f"color: {STYLE_TEXT_PRIMARY}; font-weight: 600;")
 
-    def _apply_table_readability_style(self, table: QTableWidget) -> None:
-        """Use readable light-blue alternating rows and black selected text."""
-        table.setStyleSheet(
-            "QTableWidget {"
-            " background: #ffffff;"
-            " alternate-background-color: #eaf5ff;"
-            " color: #10233f;"
-            " gridline-color: #d7dde8;"
-            " selection-background-color: #cfe8ff;"
-            " selection-color: #000000;"
-            "}"
-            "QHeaderView::section {"
-            " background: #f5f7fb;"
-            " color: #10233f;"
-            " border: 1px solid #d7dde8;"
-            " padding: 4px;"
-            " font-weight: 700;"
-            "}"
+        self._progress = QProgressBar()
+        self._progress.setVisible(False)
+        self._progress.setFixedWidth(180)
+
+        # Map mode indicator
+        self._status_map = QLabel("Karte: Leaflet  |  Leistung: Normal")
+        self._status_map.setStyleSheet(f"color: {STYLE_TEXT_SECONDARY}; font-size: 11px;")
+
+        self._status_ram = QLabel("RAM: -")
+        self._status_ram.setStyleSheet(
+            f"font-family: 'Cascadia Code', Consolas, monospace; font-size: 11px;"
+            f"color: {STYLE_TEXT_MUTED}; margin-left: 8px;"
         )
 
-    def _setup_scene_panel(self, parent_layout: QVBoxLayout) -> None:
-        """Create the scene aggregation panel for phase forecasts and requests."""
-        scene_label = QLabel("Szenenlage & Phasenprognose")
-        scene_label.setStyleSheet("font-weight: 700; color: #10233f; padding-top: 4px;")
-        parent_layout.addWidget(scene_label)
+        self._statusbar.addPermanentWidget(self._status_metrics)
+        self._statusbar.addPermanentWidget(self._progress)
+        self._statusbar.addPermanentWidget(self._status_map)
+        self._statusbar.addPermanentWidget(self._status_ram)
+        self._statusbar.showMessage("Bereit - PCAP-Datei laden oder per Drag & Drop ablegen")
 
-        self._scene_panel = QFrame()
-        self._scene_panel.setStyleSheet(
-            "QFrame { background: #f8fafc; border: 1px solid #d7dde8; border-radius: 12px; }"
-        )
-        scene_layout = QVBoxLayout(self._scene_panel)
-        scene_layout.setContentsMargins(10, 10, 10, 10)
-        scene_layout.setSpacing(8)
+    # ── Command Palette ────────────────────────────────────────────
 
-        self._scene_summary = QLabel("Keine Szene verfuegbar. Lade eine PCAP-Datei und starte die Wiedergabe.")
-        self._scene_summary.setWordWrap(True)
-        self._scene_summary.setStyleSheet("color: #42546b;")
-        scene_layout.addWidget(self._scene_summary)
+    def _setup_command_palette(self) -> None:
+        self._cmd_palette = CommandPalette(self)
+        self._cmd_palette.command_triggered.connect(self._on_cmd_palette_action)
+        self._cmd_palette.populate(self._cmd_palette_entries())
 
-        self._scene_warning_label = QLabel("")
-        self._scene_warning_label.setWordWrap(True)
-        self._scene_warning_label.setStyleSheet("color: #b2192b; font-weight: 600;")
-        self._scene_warning_label.hide()
-        scene_layout.addWidget(self._scene_warning_label)
+    def _show_command_palette(self) -> None:
+        if not hasattr(self, "_cmd_palette"):
+            self._setup_command_palette()
+        self._cmd_palette.populate(self._cmd_palette_entries())
+        self._cmd_palette.show()
+        pt = self.rect().center()
+        self._cmd_palette.move(pt.x() - 280, pt.y() - 210)
 
-        self._scene_metrics = QLabel("")
-        self._scene_metrics.setWordWrap(True)
-        self._scene_metrics.setStyleSheet("color: #5a6b81;")
-        scene_layout.addWidget(self._scene_metrics)
+    @staticmethod
+    def _cmd_palette_entries() -> list[dict[str, object]]:
+        return [
+            {"section": "Workspaces", "label": "Karte (Map)", "action_id": "ws_map", "shortcut": "Ctrl+1"},
+            {"section": "Workspaces", "label": "ETA Analyse", "action_id": "ws_eta", "shortcut": "Ctrl+2"},
+            {"section": "Workspaces", "label": "Priorisierungsfehler", "action_id": "ws_issues", "shortcut": "Ctrl+3"},
+            {"section": "Workspaces", "label": "Rohdaten", "action_id": "ws_raw", "shortcut": "Ctrl+4"},
+            {"section": "Aktionen", "label": "KML exportieren", "action_id": "export_kml"},
+            {"section": "Aktionen", "label": "Fehler exportieren", "action_id": "export_issues"},
+            {"section": "Aktionen", "label": "Diagnose exportieren", "action_id": "export_diagnostics"},
+            {"section": "Aktionen", "label": "ASN.1-Schemas aktualisieren", "action_id": "update_schemas"},
+            {"section": "Aktionen", "label": "Statistik-Dashboard öffnen", "action_id": "open_dashboard"},
+            {"section": "Aktionen", "label": "Karte neu laden", "action_id": "reload_map"},
+            {"section": "Navigation", "label": "Zum nächsten Fehler springen", "action_id": "next_issue"},
+            {"section": "Navigation", "label": "Zum vorherigen Fehler", "action_id": "prev_issue"},
+            {"section": "Navigation", "label": "Playback starten", "action_id": "play"},
+            {"section": "Navigation", "label": "Playback pausieren", "action_id": "pause"},
+            {"section": "Navigation", "label": "Playback stoppen", "action_id": "stop"},
+        ]
 
-        self._scene_legend = QLabel(
-            "Timeline-Legende: G=Freigabe, R=Halt, C=Clearance, P=Vorlauf, !=Konflikt, ? unbekannt"
-        )
-        self._scene_legend.setWordWrap(True)
-        self._scene_legend.setStyleSheet("color: #667891; font-size: 11px;")
-        scene_layout.addWidget(self._scene_legend)
+    def _on_cmd_palette_action(self, action_id: str, _data: object | None = None) -> None:
+        handlers = {
+            "ws_map": lambda: self._switch_workspace("map"),
+            "ws_eta": lambda: self._switch_workspace("eta"),
+            "ws_issues": lambda: self._switch_workspace("issues"),
+            "ws_raw": lambda: self._switch_workspace("raw"),
+            "export_kml": self._on_export_kml,
+            "export_issues": self._on_export_prioritization_issues,
+            "export_diagnostics": self._on_export_diagnostics,
+            "update_schemas": self._on_update_schemas,
+            "open_dashboard": self._on_show_dashboard,
+            "reload_map": self._on_reload_map,
+            "next_issue": self._player.seek_to_next_focus,
+            "prev_issue": self._player.seek_to_previous_focus,
+            "play": self._player.play,
+            "pause": self._player.pause,
+            "stop": self._player.stop,
+        }
+        handler = handlers.get(action_id)
+        if handler:
+            handler()
 
-        self._scene_request_legend = QLabel(
-            "Request-Legende: pending=blau, acknowledged=gelb, granted=gruen, "
-            "rejected=rot, timeout=dunkelrot | dominante Anfrage = kraeftig, weitere = gestrichelt"
-        )
-        self._scene_request_legend.setWordWrap(True)
-        self._scene_request_legend.setStyleSheet("color: #667891; font-size: 11px;")
-        scene_layout.addWidget(self._scene_request_legend)
+    # ── Helper: table styling ──────────────────────────────────────
 
-        self._scene_intersection_table = QTableWidget(0, len(SCENE_INTERSECTION_HEADERS))
-        self._scene_intersection_table.setHorizontalHeaderLabels(SCENE_INTERSECTION_HEADERS)
-        self._scene_intersection_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._scene_intersection_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self._scene_intersection_table.verticalHeader().setVisible(False)
-        self._scene_intersection_table.setAlternatingRowColors(True)
-        self._apply_table_readability_style(self._scene_intersection_table)
-        self._scene_intersection_table.setMaximumHeight(170)
-        self._scene_intersection_table.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Fixed,
-        )
-        self._scene_intersection_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        scene_layout.addWidget(self._scene_intersection_table)
+    def _apply_table_style(self, table: QTableWidget) -> None:
+        table.setStyleSheet(TABLE_STYLE)
 
-        self._scene_requests_table = QTableWidget(0, len(SCENE_REQUEST_HEADERS))
-        self._scene_requests_table.setHorizontalHeaderLabels(SCENE_REQUEST_HEADERS)
-        self._scene_requests_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._scene_requests_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self._scene_requests_table.verticalHeader().setVisible(False)
-        self._scene_requests_table.setAlternatingRowColors(True)
-        self._apply_table_readability_style(self._scene_requests_table)
-        self._scene_requests_table.setMaximumHeight(150)
-        self._scene_requests_table.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Fixed,
-        )
-        self._scene_requests_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        scene_layout.addWidget(self._scene_requests_table)
-
-        parent_layout.addWidget(self._scene_panel, stretch=2)
-
-    def _setup_eta_panel(self, parent_layout: QVBoxLayout) -> None:
-        """Create the ETA analysis graph tab."""
-        header = QLabel("ETA-Verlauf, Fahrzeuggeschwindigkeit und SRM/SSEM-Updates")
-        header.setStyleSheet("font-weight: 700; color: #10233f;")
-        parent_layout.addWidget(header)
-
-        controls = QHBoxLayout()
-        controls.setContentsMargins(0, 0, 0, 0)
-        controls.addWidget(QLabel("Request/Merge-Spur:"))
-        self._eta_station_combo = QComboBox()
-        self._eta_station_combo.setMinimumWidth(180)
-        controls.addWidget(self._eta_station_combo)
-        self._btn_export_eta_dashboard = QPushButton("ETA exportieren")
-        self._btn_export_eta_dashboard.setToolTip(
-            "Aktuelle ETA-Kennzahlen und SREM/SSEM-Ereignisse als CSV und JSON exportieren"
-        )
-        controls.addWidget(self._btn_export_eta_dashboard)
-        controls.addStretch()
-        parent_layout.addLayout(controls)
-
-        self._eta_summary = QLabel("Keine PCAP-Sitzung geladen.")
-        self._eta_summary.setWordWrap(True)
-        self._eta_summary.setStyleSheet("color: #42546b;")
-        parent_layout.addWidget(self._eta_summary)
-
-        self._eta_graph = EtaGraphWidget()
-        parent_layout.addWidget(self._eta_graph, stretch=1)
-
-        dashboard_splitter = QSplitter(Qt.Orientation.Horizontal)
-        self._eta_metric_table = QTableWidget(0, 2)
-        self._eta_metric_table.setHorizontalHeaderLabels(["Kennzahl", "Wert"])
-        self._eta_metric_table.horizontalHeader().setSectionResizeMode(
-            0,
-            QHeaderView.ResizeMode.ResizeToContents,
-        )
-        self._eta_metric_table.horizontalHeader().setSectionResizeMode(
-            1,
-            QHeaderView.ResizeMode.Stretch,
-        )
-        self._eta_metric_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._eta_metric_table.verticalHeader().setVisible(False)
-        self._eta_metric_table.setAlternatingRowColors(True)
-        self._apply_table_readability_style(self._eta_metric_table)
-        dashboard_splitter.addWidget(self._eta_metric_table)
-
-        self._eta_event_table = QTableWidget(0, 4)
-        self._eta_event_table.setHorizontalHeaderLabels(["Zeit", "Typ", "Inhalt", "Details"])
-        self._eta_event_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self._eta_event_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._eta_event_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self._eta_event_table.verticalHeader().setVisible(False)
-        self._eta_event_table.setAlternatingRowColors(True)
-        self._apply_table_readability_style(self._eta_event_table)
-        dashboard_splitter.addWidget(self._eta_event_table)
-        dashboard_splitter.setStretchFactor(0, 1)
-        dashboard_splitter.setStretchFactor(1, 2)
-        dashboard_splitter.setSizes([240, 460])
-        parent_layout.addWidget(dashboard_splitter, stretch=1)
-
-        suggestions = QLabel(
-            "ETA-Diagnose: Restzeit bis MAP-Stopline als blaue Kurve, geglaettete "
-            "Geschwindigkeit als gruene Kurve, SREM als vertikale Ereignislinien und "
-            "SSEM als farbige Statusbaender. Diagnosemarker zeigen ETA-Spruenge, "
-            "fehlende SSEM, spaetes/fehlendes granted und Stopline-Passage ohne granted."
-        )
-        suggestions.setWordWrap(True)
-        suggestions.setStyleSheet("color: #667891; font-size: 11px;")
-        parent_layout.addWidget(suggestions)
-
-    def _setup_playback_controls(self, parent_layout: QVBoxLayout) -> None:
-        """Create the playback control bar."""
-        controls = QWidget()
-        layout = QHBoxLayout(controls)
-        layout.setContentsMargins(4, 2, 4, 2)
-
-        self._btn_play = QPushButton("Play")
-        self._btn_pause = QPushButton("Pause")
-        self._btn_stop = QPushButton("Stop")
-        self._btn_prev_issue = QPushButton("Fehler zurueck")
-        self._btn_next_issue = QPushButton("Naechster Fehler")
-        self._chk_problem_replay = QCheckBox("Nur Problemstellen")
-        self._btn_play.setFixedWidth(72)
-        self._btn_pause.setFixedWidth(72)
-        self._btn_stop.setFixedWidth(72)
-        self._btn_prev_issue.setToolTip("Zur vorherigen priorisierungsrelevanten Problemstelle springen")
-        self._btn_next_issue.setToolTip("Zur naechsten priorisierungsrelevanten Problemstelle springen")
-        self._chk_problem_replay.setToolTip(
-            "Playback emittiert nur Nachrichten an Zeitpunkten mit Priorisierungsfehlern"
-        )
-
-        layout.addWidget(self._btn_play)
-        layout.addWidget(self._btn_pause)
-        layout.addWidget(self._btn_stop)
-        layout.addWidget(self._chk_problem_replay)
-        layout.addWidget(self._btn_prev_issue)
-        layout.addWidget(self._btn_next_issue)
-
-        self._slider = QSlider(Qt.Orientation.Horizontal)
-        self._slider.setRange(0, 1000)
-        layout.addWidget(self._slider, stretch=1)
-
-        layout.addWidget(QLabel("Geschw.:"))
-        self._speed_combo = QComboBox()
-        for speed in SPEED_OPTIONS:
-            self._speed_combo.addItem(f"{speed}x")
-        self._speed_combo.setCurrentIndex(2)
-        self._speed_combo.setFixedWidth(84)
-        layout.addWidget(self._speed_combo)
-
-        self._lbl_time = QLabel("00:00.0 / 00:00.0")
-        self._lbl_time.setFixedWidth(140)
-        layout.addWidget(self._lbl_time)
-
-        parent_layout.addWidget(controls)
+    # ── Player Setup ───────────────────────────────────────────────
 
     def _setup_player(self) -> None:
-        """Initialize the playback controller."""
         self._player = PlayerController(self)
+
+    # ── Signal Connections ─────────────────────────────────────────
 
     def _connect_signals(self) -> None:
         """Connect UI controls to their handlers."""
+        # Toolbar
         self._btn_load.clicked.connect(self._on_load_pcap)
         self._btn_reload_last.clicked.connect(self._on_reload_last_session)
         self._btn_cancel_load.clicked.connect(self._on_cancel_load)
@@ -910,12 +1377,18 @@ class MainWindow(QMainWindow):
         self._btn_reload_map.clicked.connect(self._on_reload_map)
         self._btn_update_schemas.clicked.connect(self._on_update_schemas)
         self._btn_dashboard.clicked.connect(self._on_show_dashboard)
-        self._layout_mode_combo.currentIndexChanged.connect(self._on_layout_mode_changed)
-        self._performance_mode_combo.currentIndexChanged.connect(self._on_performance_mode_changed)
-        self._connect_map_widget_signals()
+        self._btn_cmd_palette.clicked.connect(self._show_command_palette)
+
+        # ETA
         self._btn_export_eta_dashboard.clicked.connect(self._on_export_eta_dashboard)
         self._eta_event_table.itemClicked.connect(self._on_eta_event_clicked)
+        self._eta_station_combo.currentTextChanged.connect(self._on_eta_station_changed)
 
+        # Issue filters
+        self._issue_filter_combo.currentIndexChanged.connect(self._on_issue_filter_changed)
+        self._issue_intersection_combo.currentIndexChanged.connect(self._on_issue_filter_changed)
+
+        # Playback
         self._btn_play.clicked.connect(self._player.play)
         self._btn_pause.clicked.connect(self._player.pause)
         self._btn_stop.clicked.connect(self._player.stop)
@@ -924,58 +1397,35 @@ class MainWindow(QMainWindow):
         self._chk_problem_replay.toggled.connect(self._on_problem_replay_toggled)
         self._speed_combo.currentIndexChanged.connect(self._on_speed_changed)
         self._slider.sliderMoved.connect(self._on_slider_moved)
+
+        # Message table + filters
         self._station_list.itemSelectionChanged.connect(self._on_station_filter_changed)
         self._msg_table.cellClicked.connect(self._on_table_row_clicked)
-        self._btn_toggle_message_table.toggled.connect(self._toggle_message_table_maximized)
-        self._context_tabs.currentChanged.connect(self._on_context_tab_changed)
-        self._eta_station_combo.currentTextChanged.connect(self._on_eta_station_changed)
+        self._issue_list.itemClicked.connect(self._on_prioritization_issue_clicked)
 
+        # Map telemetry
+        self._map_widget.telemetry_updated.connect(self._on_map_telemetry_updated)
+        self._map_widget.map_issue_detected.connect(self._on_map_issue_detected)
+
+        # Player signals
         self._player.tick.connect(self._on_playback_tick)
         self._player.state_changed.connect(self._on_player_state_changed)
         self._player.position_changed.connect(self._on_player_position_changed)
         self._player.time_updated.connect(self._on_player_time_updated)
         self._player.duration_changed.connect(self._on_duration_changed)
 
-    def _connect_map_widget_signals(self) -> None:
-        """Connect the current map widget implementation to diagnostics."""
-        self._map_widget.telemetry_updated.connect(self._on_map_telemetry_updated)
-        self._map_widget.map_issue_detected.connect(self._on_map_issue_detected)
-
-    def _on_layout_mode_changed(self, *_args) -> None:
-        """Persist and apply the selected responsive layout mode."""
-        self._layout_preference = str(self._layout_mode_combo.currentData() or LAYOUT_MODE_AUTO)
-        self._settings.setValue("ui/layout_mode", self._layout_preference)
-        self._apply_responsive_layout(force=True)
-
-    def _on_performance_mode_changed(self, *_args) -> None:
-        """Persist and apply the selected map performance mode."""
-        self._performance_mode = str(self._performance_mode_combo.currentData() or PERFORMANCE_MODE_NORMAL)
-        if self._performance_mode not in PERFORMANCE_MODE_LABELS:
-            self._performance_mode = PERFORMANCE_MODE_NORMAL
-        self._performance_auto_downgraded = False
-        self._settings.setValue("ui/performance_mode", self._performance_mode)
-        self._apply_performance_mode()
-
-    def _apply_performance_mode(self) -> None:
-        """Forward the current performance mode to the map and status UI."""
-        if hasattr(self, "_map_widget"):
-            self._map_widget.set_performance_mode(self._performance_mode)
-        if hasattr(self, "_memory_watch_label"):
-            self._update_memory_watch_label(_current_process_memory_mb())
+    # ── Performance Mode ───────────────────────────────────────────
 
     def _setup_memory_watchdog(self) -> None:
-        """Start a lightweight watchdog that can reduce map detail under memory pressure."""
         self._memory_watch_timer = QTimer(self)
         self._memory_watch_timer.setInterval(MEMORY_WATCH_INTERVAL_MS)
         self._memory_watch_timer.timeout.connect(self._on_memory_watch_tick)
         self._memory_watch_timer.start()
-        self._apply_performance_mode()
         self._on_memory_watch_tick()
 
     def _on_memory_watch_tick(self) -> None:
-        """Update RAM display and automatically lower map detail if needed."""
         memory_mb = _current_process_memory_mb()
-        self._update_memory_watch_label(memory_mb)
+        self._update_memory_display(memory_mb)
         if memory_mb is None:
             return
         target_mode = None
@@ -995,328 +1445,114 @@ class MainWindow(QMainWindow):
             )
 
     def _set_performance_mode(self, mode: str, *, auto: bool) -> None:
-        """Set performance mode without recursively triggering UI handlers."""
         if mode not in PERFORMANCE_MODE_LABELS:
             mode = PERFORMANCE_MODE_NORMAL
         self._performance_mode = mode
         self._performance_auto_downgraded = auto
         if not auto:
             self._settings.setValue("ui/performance_mode", mode)
-        if hasattr(self, "_performance_mode_combo"):
-            index = self._performance_mode_combo.findData(mode)
-            if index >= 0:
-                self._performance_mode_combo.blockSignals(True)
-                self._performance_mode_combo.setCurrentIndex(index)
-                self._performance_mode_combo.blockSignals(False)
         self._apply_performance_mode()
 
-    def _update_memory_watch_label(self, memory_mb: float | None) -> None:
-        """Render the current memory and performance mode in the toolbar."""
-        if not hasattr(self, "_memory_watch_label"):
-            return
+    def _apply_performance_mode(self) -> None:
+        if hasattr(self, "_map_widget"):
+            self._map_widget.set_performance_mode(self._performance_mode)
+        self._update_status_map_label()
+
+    def _update_memory_display(self, memory_mb: float | None) -> None:
         mode = self.__dict__.get("_performance_mode", PERFORMANCE_MODE_NORMAL)
         mode_label = PERFORMANCE_MODE_LABELS.get(mode, "Normal")
         suffix = " auto" if self.__dict__.get("_performance_auto_downgraded", False) else ""
         if memory_mb is None:
-            self._memory_watch_label.setText(f"RAM: - | {mode_label}{suffix}")
+            self._status_ram.setText(f"RAM: - | {mode_label}{suffix}")
             return
         color = "#1f7a3a"
         if memory_mb >= MEMORY_DIAGNOSTIC_THRESHOLD_MB:
             color = "#b91c1c"
         elif memory_mb >= MEMORY_SAVER_THRESHOLD_MB:
             color = "#a16207"
-        self._memory_watch_label.setText(f"RAM: {memory_mb:.0f} MB | {mode_label}{suffix}")
-        self._memory_watch_label.setStyleSheet(f"color: {color}; font-weight: 700;")
+        self._status_ram.setText(f"RAM: {memory_mb:.0f} MB | {mode_label}{suffix}")
+        self._status_ram.setStyleSheet(
+            f"font-family: 'Cascadia Code', Consolas, monospace; font-size: 11px; color: {color}; "
+            f"font-weight: 700; margin-left: 8px;"
+        )
+
+    def _update_status_map_label(self) -> None:
+        backend = "Leaflet"
+        mode = self.__dict__.get("_performance_mode", PERFORMANCE_MODE_NORMAL)
+        mode_label = PERFORMANCE_MODE_LABELS.get(mode, "Normal")
+        self._status_map.setText(f"Karte: {backend}  |  Leistung: {mode_label}")
 
     def _map_render_interval_seconds(self) -> float:
-        """Return current full-slice render throttle for map playback."""
         return PERFORMANCE_RENDER_INTERVAL_SECONDS.get(
             self.__dict__.get("_performance_mode", PERFORMANCE_MODE_NORMAL),
             PERFORMANCE_RENDER_INTERVAL_SECONDS[PERFORMANCE_MODE_NORMAL],
         )
 
     def _map_playback_window_seconds(self) -> float | None:
-        """Return the playback time window rendered on the map."""
         return PERFORMANCE_PLAYBACK_WINDOW_SECONDS.get(
             self.__dict__.get("_performance_mode", PERFORMANCE_MODE_NORMAL),
             PERFORMANCE_PLAYBACK_WINDOW_SECONDS[PERFORMANCE_MODE_NORMAL],
         )
 
-    def _on_map_telemetry_updated(self, telemetry: dict[str, object]) -> None:
-        """Keep a bounded history of map render diagnostics."""
-        history = self.__dict__.setdefault("_map_telemetry_history", [])
-        history.append(dict(telemetry))
-        del history[:-MAP_TELEMETRY_HISTORY_LIMIT]
+    # ── Map Backend Switching ──────────────────────────────────────
 
-        dropped_total = sum(
-            int(telemetry.get(key, 0) or 0)
-            for key in (
-                "budget_dropped_markers",
-                "budget_dropped_infrastructure",
-                "budget_dropped_trajectories",
-                "budget_dropped_trajectory_points",
-            )
-        )
-        if dropped_total and self.__dict__.get("_performance_mode") == PERFORMANCE_MODE_NORMAL:
-            self._set_performance_mode(PERFORMANCE_MODE_SAVER, auto=True)
-            self._statusbar.showMessage(
-                "Karten-Payload war zu gross - Leistung automatisch auf Schonend reduziert",
-                5000,
-            )
-
-    def _on_map_issue_detected(self, message: str) -> None:
-        """Handle WebEngine/JavaScript problems with auto-recovery reload."""
-        logger.info("Map issue detected: %s", message)
-        issues = self.__dict__.setdefault("_map_issue_history", [])
-        issues.append(message)
-        del issues[:-20]
-
-        if self.__dict__.get("_map_safe_mode_active", False):
-            return
-        if len(issues) < MAP_SAFE_MODE_ISSUE_THRESHOLD:
-            self._statusbar.showMessage(f"Kartenhinweis: {message}", 5000)
-            return
-
-        self._map_safe_mode_active = True
-        self._set_performance_mode(PERFORMANCE_MODE_DIAGNOSTIC, auto=True)
-        self._statusbar.showMessage(
-            "Karten-Safe-Mode aktiv: wiederholte WebEngine/JavaScript-Probleme erkannt",
-            8000,
-        )
-
-        # Auto-recovery: reload map page, max 3 attempts within 60s
-        crash_counter = self.__dict__.setdefault("_map_crash_counter", 0)
-        now = time.monotonic()
-        first_crash = self.__dict__.setdefault("_map_first_crash_at", now)
-        if now - first_crash > 60.0:
-            crash_counter = 0
-            self._map_first_crash_at = now
-        crash_counter += 1
-        self._map_crash_counter = crash_counter
-
-        if crash_counter <= 3:
-            logger.info("Auto-recovery reload attempt %d/3", crash_counter)
-            if hasattr(self._map_widget, "reload_map_page"):
-                self._map_widget.reload_map_page()
-            self._map_issue_history.clear()
-            self._apply_performance_mode()
-            if self._session:
-                self._map_widget.load_messages(self._player._messages)
-            self._statusbar.showMessage("Karte wurde neu geladen (Safe-Mode)", 4000)
-            return
-
-        logger.error("Map recovery failed after %d attempts", crash_counter)
-        QMessageBox.warning(
-            self,
-            "Kartenfehler",
-            "Die Karte konnte nach mehreren Versuchen nicht wiederhergestellt werden.\n\n"
-            "Bitte starte die Anwendung neu oder exportiere die Diagnose "
-            "(Menü → Diagnose exportieren).",
-        )
-
-    def _on_reload_map(self) -> None:
-        """Reload the WebEngine map and re-render the current session."""
-        if hasattr(self._map_widget, "reload_map_page"):
-            self._map_widget.reload_map_page()
+    def _replace_map_widget(self, backend: str, *, persist: bool = False) -> None:
+        logger.info("Replacing map widget: backend=%s persist=%s", backend, persist)
+        old_widget = self._map_widget
+        self._map_backend = backend
+        if persist:
+            self._settings.setValue("ui/map_backend", backend)
+        self._map_widget = MapWidget()
+        # Reconnect signals
+        self._map_widget.telemetry_updated.connect(self._on_map_telemetry_updated)
+        self._map_widget.map_issue_detected.connect(self._on_map_issue_detected)
+        # Replace in layout (find parent container)
+        parent = old_widget.parent()
+        if parent and parent.layout():
+            parent_layout = parent.layout()
+            parent_layout.replaceWidget(old_widget, self._map_widget)
+        if hasattr(old_widget, "dispose"):
+            old_widget.dispose()
+        old_widget.setParent(None)
+        old_widget.deleteLater()
         self._map_safe_mode_active = False
         self._map_issue_history.clear()
         self._apply_performance_mode()
         if self._session:
             self._map_widget.load_messages(self._player._messages)
-        self._statusbar.showMessage("Karte wurde neu geladen", 4000)
+            self._eta_map.load_messages(self._player._messages)
+            self._issues_map.load_messages(self._player._messages)
+        self._statusbar.showMessage("Karte neu geladen", 5000)
 
-    def _on_export_diagnostics(self) -> None:
-        """Write a technical diagnostics report for support and regression analysis."""
-        start_dir = self._memory.last_export_directory or self._memory.last_directory or str(Path.cwd())
-        dir_path = QFileDialog.getExistingDirectory(
-            self,
-            "Diagnose-Exportverzeichnis waehlen",
-            start_dir,
-        )
-        if not dir_path:
-            return
-        report_path = Path(dir_path) / "pcap2kml_diagnostics.json"
-        try:
-            report_path.write_text(
-                json.dumps(self._build_diagnostics_report(), indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
-        except Exception as exc:  # pragma: no cover
-            QMessageBox.critical(self, "Diagnose-Export fehlgeschlagen", str(exc))
-            return
+    def _should_fallback_to_native_map(self, message: str) -> bool:
+        return False
 
-        self._memory.remember_export_directory(dir_path)
-        self._memory.save()
-        self._statusbar.showMessage(f"Diagnosebericht exportiert nach {report_path}", 5000)
-        QMessageBox.information(
-            self,
-            "Diagnose exportiert",
-            f"Der Diagnosebericht wurde geschrieben:\n{report_path}",
-        )
-
-    def _build_diagnostics_report(self) -> dict[str, object]:
-        """Build a support-friendly diagnostics snapshot."""
-        memory_mb = _current_process_memory_mb()
-        package_names = [
-            "PyQt6",
-            "PyQt6-WebEngine",
-            "scapy",
-            "pyshark",
-            "asn1tools",
-            "simplekml",
-        ]
-        packages: dict[str, str] = {}
-        for package_name in package_names:
-            try:
-                packages[package_name] = importlib.metadata.version(package_name)
-            except importlib.metadata.PackageNotFoundError:
-                packages[package_name] = "not installed"
-
-        session_summary: dict[str, object] = {"loaded": False}
-        if self._session:
-            session_summary = {
-                "loaded": True,
-                "sources": [str(source.path) for source in self._session.sources],
-                "messages": len(self._session.messages),
-                "stations": len(self._session.station_ids),
-                "message_types": {
-                    msg_type.value: count
-                    for msg_type, count in sorted(
-                        self._session.msg_type_counts.items(),
-                        key=lambda item: item[0].value,
-                    )
-                },
-            }
-
-        return {
-            "created_at": datetime.now(UTC).isoformat(),
-            "application": {
-                "performance_mode": self.__dict__.get("_performance_mode", PERFORMANCE_MODE_NORMAL),
-                "performance_auto_downgraded": self.__dict__.get(
-                    "_performance_auto_downgraded",
-                    False,
-                ),
-                "map_safe_mode_active": self.__dict__.get("_map_safe_mode_active", False),
-                "map_backend": "webengine",
-                "memory_mb": memory_mb,
-            },
-            "runtime": {
-                "python": sys.version,
-                "platform": platform.platform(),
-                "qt": QT_VERSION_STR,
-                "pyqt": PYQT_VERSION_STR,
-                "packages": packages,
-                "qtwebengine_flags": os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", ""),
-                "qt_opengl": os.environ.get("QT_OPENGL", ""),
-                "qt_opengl_dll": os.environ.get("QT_OPENGL_DLL", ""),
-                "qsg_rhi_prefer_software_renderer": os.environ.get(
-                    "QSG_RHI_PREFER_SOFTWARE_RENDERER",
-                    "",
-                ),
-                "pcap2kml_map_backend": os.environ.get("PCAP2KML_MAP_BACKEND", ""),
-                "pcap2kml_disable_gpu": os.environ.get("PCAP2KML_DISABLE_GPU", ""),
-            },
-            "session": session_summary,
-            "map": {
-                "latest_telemetry": self._map_telemetry_history[-1] if self._map_telemetry_history else None,
-                "telemetry_history": self._map_telemetry_history,
-                "issue_history": self._map_issue_history,
-            },
-        }
-
-    def _effective_layout_mode(self) -> str:
-        """Return the concrete layout mode for the current window size."""
-        if self._layout_preference == LAYOUT_MODE_COMPACT:
-            return LAYOUT_MODE_COMPACT
-        if self._layout_preference == LAYOUT_MODE_DESKTOP:
-            return LAYOUT_MODE_DESKTOP
-        return LAYOUT_MODE_COMPACT if self.width() < COMPACT_LAYOUT_WIDTH else LAYOUT_MODE_DESKTOP
-
-    def _apply_responsive_layout(self, *, force: bool = False) -> None:
-        """Apply compact/desktop presentation tweaks without reparenting widgets."""
-        compact = self._effective_layout_mode() == LAYOUT_MODE_COMPACT
-        if not force and compact == self._is_compact_layout:
-            return
-        self._is_compact_layout = compact
-        self._apply_compact_message_columns(compact)
-        self._apply_compact_control_sizes(compact)
-        self._apply_issue_panel_policy(getattr(self, "_current_prioritization_issues", []))
-        if compact and hasattr(self, "_right_splitter"):
-            self._right_splitter.setSizes([360, 220])
-        elif hasattr(self, "_right_splitter") and not self._message_table_maximized:
-            self._right_splitter.setSizes([460, 280])
-
-    def _apply_compact_message_columns(self, compact: bool) -> None:
-        """Show only the chosen compact message columns on small screens."""
-        if not hasattr(self, "_msg_table"):
-            return
-        for column in range(NUM_COLUMNS):
-            self._msg_table.setColumnHidden(
-                column,
-                compact and column not in COMPACT_MESSAGE_COLUMNS,
-            )
-
-    def _apply_compact_control_sizes(self, compact: bool) -> None:
-        """Reduce fixed widths and button labels in compact layout."""
-        if not hasattr(self, "_btn_play"):
-            return
-        button_width = 58 if compact else 72
-        self._btn_play.setFixedWidth(button_width)
-        self._btn_pause.setFixedWidth(button_width)
-        self._btn_stop.setFixedWidth(button_width)
-        self._speed_combo.setFixedWidth(74 if compact else 84)
-        self._lbl_time.setFixedWidth(118 if compact else 140)
-        self._btn_prev_issue.setText("Fehler <" if compact else "Fehler zurueck")
-        self._btn_next_issue.setText("Fehler >" if compact else "Naechster Fehler")
-        self._btn_export_kml.setText("KML" if compact else "KML exportieren")
-        self._btn_export_issues.setText("Fehler Export" if compact else "Fehler exportieren")
-        self._btn_export_diagnostics.setText("Diagnose" if compact else "Diagnose exportieren")
-        self._btn_reload_map.setText("Karte neu" if compact else "Karte neu laden")
-        self._btn_update_schemas.setText("Schemas" if compact else "ASN.1-Schemas aktualisieren")
-
-    def resizeEvent(self, event: QResizeEvent) -> None:
-        """Switch Auto layout when the window crosses compact width."""
-        super().resizeEvent(event)
-        if getattr(self, "_layout_preference", LAYOUT_MODE_AUTO) == LAYOUT_MODE_AUTO:
-            self._apply_responsive_layout()
+    # ── Load PCAP ──────────────────────────────────────────────────
 
     def _on_load_pcap(self) -> None:
-        """Open a file dialog and load selected PCAP files."""
         start_dir = self._memory.last_directory or str(Path.cwd())
         paths, _ = QFileDialog.getOpenFileNames(
-            self,
-            "PCAP-Dateien oeffnen",
-            start_dir,
+            self, "PCAP-Dateien oeffnen", start_dir,
             "PCAP-Dateien (*.pcap *.pcapng *.cap);;Alle Dateien (*)",
         )
         if paths:
             self._load_paths(paths)
 
     def _on_reload_last_session(self) -> None:
-        """Reload the last successful session from persistent memory."""
         paths = self._memory.existing_last_session_files()
         if not paths:
-            QMessageBox.information(
-                self,
-                "Keine Sitzung vorhanden",
-                "Es wurden keine gueltigen Dateien aus der letzten Sitzung gefunden.",
-            )
+            QMessageBox.information(self, "Keine Sitzung vorhanden",
+                "Es wurden keine gueltigen Dateien aus der letzten Sitzung gefunden.")
             return
         self._load_paths(paths)
 
     def _load_paths(self, paths: list[str]) -> None:
-        """Parse the provided PCAP paths in the background."""
         if self._loader_thread is not None:
-            QMessageBox.information(
-                self,
-                "Ladevorgang aktiv",
-                "Es laeuft bereits ein Parse-Vorgang. Bitte warte oder brich ihn ab.",
-            )
+            QMessageBox.information(self, "Ladevorgang aktiv",
+                "Es laeuft bereits ein Parse-Vorgang. Bitte warte oder brich ihn ab.")
             return
-
         normalized = [str(Path(path).resolve()) for path in paths]
         self._set_loading_state(True, 0, 100, "PCAP-Dateien werden im Hintergrund geladen...")
-
         self._loader_thread = QThread(self)
         self._loader_worker = ParsingWorker(normalized)
         self._loader_worker.moveToThread(self._loader_thread)
@@ -1329,20 +1565,16 @@ class MainWindow(QMainWindow):
         self._loader_thread.start()
 
     def _on_cancel_load(self) -> None:
-        """Request cancellation of the current load process."""
         if self._loader_worker is not None:
             self._loader_worker.cancel()
             self._statusbar.showMessage("Abbruch angefordert...")
 
     def _on_load_progress(self, percent: int, filename: str) -> None:
-        """Update the progress UI while the worker is parsing."""
         self._progress.setValue(percent)
         self._statusbar.showMessage(f"Lade {filename}... {percent}%")
 
     def _on_load_finished(self, session: SessionData, paths: list[str], errors: list[str]) -> None:
-        """Finalize a successful background parse."""
         self._set_loading_state(False)
-
         if not session.messages:
             self._session = None
             self._clear_session_views()
@@ -1351,21 +1583,18 @@ class MainWindow(QMainWindow):
             if errors:
                 QMessageBox.warning(self, "Laden fehlgeschlagen", "\n".join(errors))
             else:
-                QMessageBox.information(
-                    self,
-                    "Keine Daten gefunden",
-                    "In den geladenen PCAP-Dateien wurden keine verarbeitbaren Nachrichten erkannt.",
-                )
+                QMessageBox.information(self, "Keine Daten gefunden",
+                    "In den geladenen PCAP-Dateien wurden keine verarbeitbaren Nachrichten erkannt.")
             return
-
         self._session = session
         self._all_station_ids = set(session.station_ids)
         self._active_stations = set(session.station_ids)
         self._active_types = set(MessageType)
-
         self._populate_station_list()
         self._populate_message_table(session.messages)
         self._map_widget.load_messages(session.messages)
+        self._eta_map.load_messages(session.messages)
+        self._issues_map.load_messages(session.messages)
         self._reset_playback_render_caches()
         self._player.set_session(session)
         self._refresh_problem_replay_indices(session.messages)
@@ -1374,8 +1603,6 @@ class MainWindow(QMainWindow):
         self._update_scene_for_message(session.messages[0], force=True)
         self._update_controls_enabled(True)
         self._update_overview_for_session(paths, session)
-        self._apply_responsive_layout(force=True)
-
         self._memory.remember_files(paths)
         self._memory.remember_session_summary(
             message_count=len(session.messages),
@@ -1384,26 +1611,20 @@ class MainWindow(QMainWindow):
             msg_type_counts={key.value: value for key, value in session.msg_type_counts.items()},
         )
         self._memory.save()
-
         self._statusbar.showMessage(
             f"{len(session.messages)} Nachrichten geladen - "
             f"{len(session.station_ids)} Stationen - "
             f"Dauer: {self._player.format_time(session.duration_seconds)}"
         )
         if errors:
-            QMessageBox.warning(
-                self,
-                "Teilweise geladen",
-                "Einige Dateien konnten nicht vollstaendig verarbeitet werden:\n\n" + "\n".join(errors),
-            )
+            QMessageBox.warning(self, "Teilweise geladen",
+                "Einige Dateien konnten nicht vollstaendig verarbeitet werden:\n\n" + "\n".join(errors))
 
     def _on_load_cancelled(self) -> None:
-        """Restore the UI after a cancelled load."""
         self._set_loading_state(False)
         self._statusbar.showMessage("Ladevorgang abgebrochen")
 
     def _cleanup_loader(self, *args) -> None:
-        """Dispose the worker thread after completion or cancellation."""
         if self._loader_worker is not None:
             try:
                 self._loader_worker.finished.disconnect(self._on_load_finished)
@@ -1424,8 +1645,6 @@ class MainWindow(QMainWindow):
         if self._loader_thread is not None:
             self._loader_thread.quit()
             self._loader_thread.wait()
-            # Disconnect thread.started before deleting worker, since the slot
-            # references self._loader_worker which is about to be set to None.
             try:
                 self._loader_thread.started.disconnect()
             except (RuntimeError, TypeError):
@@ -1433,127 +1652,173 @@ class MainWindow(QMainWindow):
             self._loader_thread.deleteLater()
             self._loader_thread = None
 
+    # ── Export Handlers ────────────────────────────────────────────
+
     def _on_export_kml(self) -> None:
-        """Export KML files for all filtered entities."""
         if not self._session:
             return
-
         start_dir = self._memory.last_export_directory or self._memory.last_directory or str(Path.cwd())
-        dir_path = QFileDialog.getExistingDirectory(
-            self,
-            "KML-Exportverzeichnis waehlen",
-            start_dir,
-        )
+        dir_path = QFileDialog.getExistingDirectory(self, "KML-Exportverzeichnis waehlen", start_dir)
         if not dir_path:
             return
-
         try:
             created = export_kml(
-                self._session,
-                Path(dir_path),
+                self._session, Path(dir_path),
                 active_types=self._active_types if self._active_types != set(MessageType) else None,
                 active_stations=(self._active_stations if self._active_stations != self._all_station_ids else None),
                 canonical=self._show_canonical_messages,
             )
-        except (OSError, PermissionError, ValueError) as exc:  # pragma: no cover
+        except (OSError, PermissionError, ValueError) as exc:
             QMessageBox.critical(self, "Export-Fehler", str(exc))
             return
-
         self._memory.remember_export_directory(dir_path)
         self._memory.save()
         self._statusbar.showMessage(f"{len(created)} KML-Dateien exportiert nach {dir_path}")
-        QMessageBox.information(
-            self,
-            "Export erfolgreich",
-            f"{len(created)} KML-Dateien wurden exportiert nach:\n{dir_path}",
-        )
+        QMessageBox.information(self, "Export erfolgreich",
+            f"{len(created)} KML-Dateien wurden exportiert nach:\n{dir_path}")
 
     def _on_export_prioritization_issues(self) -> None:
-        """Export prioritization issue diagnostics as CSV and JSON."""
         if not self._session:
             return
-
         start_dir = self._memory.last_export_directory or self._memory.last_directory or str(Path.cwd())
-        dir_path = QFileDialog.getExistingDirectory(
-            self,
-            "Fehleranalyse-Exportverzeichnis waehlen",
-            start_dir,
-        )
+        dir_path = QFileDialog.getExistingDirectory(self, "Fehleranalyse-Exportverzeichnis waehlen", start_dir)
         if not dir_path:
             return
-
         try:
             created = export_prioritization_issues(self._player._messages, Path(dir_path))
-        except Exception as exc:  # pragma: no cover
+        except Exception as exc:
             QMessageBox.critical(self, "Export-Fehler", str(exc))
             return
-
         self._memory.remember_export_directory(dir_path)
         self._memory.save()
         self._statusbar.showMessage(f"Priorisierungsfehler exportiert nach {dir_path}")
-        QMessageBox.information(
-            self,
-            "Export erfolgreich",
-            "Priorisierungsfehler wurden exportiert:\n" + "\n".join(str(path) for path in created),
-        )
+        QMessageBox.information(self, "Export erfolgreich",
+            "Priorisierungsfehler wurden exportiert:\n" + "\n".join(str(path) for path in created))
+
+    def _on_export_diagnostics(self) -> None:
+        start_dir = self._memory.last_export_directory or self._memory.last_directory or str(Path.cwd())
+        dir_path = QFileDialog.getExistingDirectory(self, "Diagnose-Exportverzeichnis waehlen", start_dir)
+        if not dir_path:
+            return
+        report_path = Path(dir_path) / "pcap2kml_diagnostics.json"
+        try:
+            report_path.write_text(
+                json.dumps(self._build_diagnostics_report(), indent=2, ensure_ascii=False), encoding="utf-8")
+        except Exception as exc:
+            QMessageBox.critical(self, "Diagnose-Export fehlgeschlagen", str(exc))
+            return
+        self._memory.remember_export_directory(dir_path)
+        self._memory.save()
+        self._statusbar.showMessage(f"Diagnosebericht exportiert nach {report_path}", 5000)
+        QMessageBox.information(self, "Diagnose exportiert",
+            f"Der Diagnosebericht wurde geschrieben:\n{report_path}")
+
+    def _build_diagnostics_report(self) -> dict[str, object]:
+        memory_mb = _current_process_memory_mb()
+        package_names = ["PyQt6", "PyQt6-WebEngine", "scapy", "pyshark", "asn1tools", "simplekml"]
+        packages: dict[str, str] = {}
+        for package_name in package_names:
+            try:
+                packages[package_name] = importlib.metadata.version(package_name)
+            except importlib.metadata.PackageNotFoundError:
+                packages[package_name] = "not installed"
+        session_summary: dict[str, object] = {"loaded": False}
+        if self._session:
+            session_summary = {
+                "loaded": True,
+                "sources": [str(source.path) for source in self._session.sources],
+                "messages": len(self._session.messages),
+                "stations": len(self._session.station_ids),
+                "message_types": {
+                    msg_type.value: count
+                    for msg_type, count in sorted(self._session.msg_type_counts.items(), key=lambda item: item[0].value)
+                },
+            }
+        return {
+            "created_at": datetime.now(UTC).isoformat(),
+            "application": {
+                "performance_mode": self.__dict__.get("_performance_mode", PERFORMANCE_MODE_NORMAL),
+                "performance_auto_downgraded": self.__dict__.get("_performance_auto_downgraded", False),
+                "map_safe_mode_active": self.__dict__.get("_map_safe_mode_active", False),
+                "map_backend": self.__dict__.get("_map_backend", "webengine"),
+                "memory_mb": memory_mb,
+            },
+            "runtime": {
+                "python": sys.version, "platform": platform.platform(),
+                "qt": QT_VERSION_STR, "pyqt": PYQT_VERSION_STR, "packages": packages,
+                "qtwebengine_flags": os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", ""),
+                "qt_opengl": os.environ.get("QT_OPENGL", ""),
+                "qt_opengl_dll": os.environ.get("QT_OPENGL_DLL", ""),
+                "qsg_rhi_prefer_software_renderer": os.environ.get("QSG_RHI_PREFER_SOFTWARE_RENDERER", ""),
+                "pcap2kml_map_backend": os.environ.get("PCAP2KML_MAP_BACKEND", ""),
+                "pcap2kml_disable_gpu": os.environ.get("PCAP2KML_DISABLE_GPU", ""),
+            },
+            "session": session_summary,
+            "map": {
+                "latest_telemetry": self._map_telemetry_history[-1] if self._map_telemetry_history else None,
+                "telemetry_history": self._map_telemetry_history,
+                "issue_history": self._map_issue_history,
+            },
+        }
+
+    def _on_reload_map(self) -> None:
+        if hasattr(self._map_widget, "reload_map_page"):
+            self._map_widget.reload_map_page()
+        self._map_safe_mode_active = False
+        self._map_issue_history.clear()
+        self._apply_performance_mode()
+        if self._session:
+            self._map_widget.load_messages(self._player._messages)
+            self._eta_map.load_messages(self._player._messages)
+            self._issues_map.load_messages(self._player._messages)
+        self._statusbar.showMessage("Karte wurde neu geladen", 4000)
 
     def _on_update_schemas(self) -> None:
-        """Update ASN.1 schemas from the Git repository."""
         try:
             from ..asn1_schemas import update_from_git
         except ImportError:
             QMessageBox.warning(self, "Hinweis", "asn1tools ist nicht installiert.")
             return
-
         if update_from_git():
             self._statusbar.showMessage("ASN.1-Schemas erfolgreich aktualisiert")
             QMessageBox.information(self, "Erfolg", "ASN.1-Schemas wurden aktualisiert.")
             return
-
         self._statusbar.showMessage("ASN.1-Schema-Update fehlgeschlagen")
-        QMessageBox.warning(
-            self,
-            "Fehler",
-            "ASN.1-Schemas konnten nicht aktualisiert werden.\nPruefen Sie Internetverbindung und Git-Installation.",
-        )
+        QMessageBox.warning(self, "Fehler",
+            "ASN.1-Schemas konnten nicht aktualisiert werden.\nPruefen Sie Internetverbindung und Git-Installation.")
 
     def _on_show_dashboard(self) -> None:
-        """Open the statistics dashboard for the current session."""
         if self._session is None:
             QMessageBox.information(self, "Dashboard", "Keine Sitzung geladen.")
             return
         dialog = StatisticsDashboard(self._session, self)
         dialog.exec()
 
+    # ── Filter Logic ───────────────────────────────────────────────
+
     def _on_filter_changed(self) -> None:
-        """Handle message type filter changes."""
         self._active_types = {msg_type for msg_type, checkbox in self._type_checkboxes.items() if checkbox.isChecked()}
         self._apply_filters()
 
     def _on_merge_view_changed(self, *_args) -> None:
-        """Switch between raw observations and canonical merged messages."""
         self._show_canonical_messages = self._merge_view_checkbox.isChecked()
         self._apply_filters()
 
     def _on_station_filter_changed(self) -> None:
-        """Handle station filter changes."""
         self._active_stations = {item.text() for item in self._station_list.selectedItems()}
         if not self._active_stations:
             self._active_stations = set(self._all_station_ids)
         self._apply_filters()
 
     def _apply_filters(self) -> None:
-        """Apply the active type and station filters to the UI."""
         if not self._session:
             return
-
         filtered = self._session.filter_messages(
-            self._active_types,
-            self._active_stations,
-            canonical=self._show_canonical_messages,
-        )
+            self._active_types, self._active_stations, canonical=self._show_canonical_messages)
         self._populate_message_table(filtered)
         self._map_widget.load_messages(filtered)
+        self._eta_map.load_messages(filtered)
+        self._issues_map.load_messages(filtered)
         self._reset_playback_render_caches()
         self._player.set_filtered_messages(filtered)
         self._refresh_problem_replay_indices(filtered)
@@ -1563,7 +1828,6 @@ class MainWindow(QMainWindow):
         self._update_status_metrics(len(filtered))
 
     def _populate_station_list(self) -> None:
-        """Populate the station filter list and select all entries."""
         self._station_list.blockSignals(True)
         self._station_list.clear()
         for station_id in sorted(self._all_station_ids):
@@ -1573,17 +1837,15 @@ class MainWindow(QMainWindow):
         self._station_list.blockSignals(False)
 
     def _populate_message_table(self, messages: list[V2xMessage] | None = None) -> None:
-        """Fill the message table with session data."""
         if messages is None and self._session:
             messages = self._session.messages
         elif messages is None:
             messages = []
-
         self._message_row_lookup = {}
         self._last_highlighted_row = None
         self._last_detail_key = None
         self._pending_detail_message = None
-        self._set_table_updates_enabled(self._msg_table, False)
+        self._msg_table.setUpdatesEnabled(False)
         try:
             self._msg_table.setRowCount(len(messages))
             for row, msg in enumerate(messages):
@@ -1592,18 +1854,12 @@ class MainWindow(QMainWindow):
                 self._msg_table.setItem(row, COL_TIMESTAMP, QTableWidgetItem(timestamp_text))
                 self._msg_table.setItem(row, COL_STATION, QTableWidgetItem(msg.station_id))
                 self._msg_table.setItem(row, COL_MSGTYPE, QTableWidgetItem(msg.msg_type.value))
-                self._msg_table.setItem(
-                    row,
-                    COL_LATLON,
-                    QTableWidgetItem(f"{msg.latitude:.6f}, {msg.longitude:.6f}"),
-                )
+                self._msg_table.setItem(row, COL_LATLON,
+                    QTableWidgetItem(f"{msg.latitude:.6f}, {msg.longitude:.6f}"))
                 speed_str = f"{msg.speed:.1f} m/s" if msg.speed is not None else "-"
                 heading_str = f"{msg.heading:.0f} deg" if msg.heading is not None else "-"
-                self._msg_table.setItem(
-                    row,
-                    COL_SPEED_HEADING,
-                    QTableWidgetItem(f"{speed_str} / {heading_str}"),
-                )
+                self._msg_table.setItem(row, COL_SPEED_HEADING,
+                    QTableWidgetItem(f"{speed_str} / {heading_str}"))
                 source_text = msg.source.display_name() if msg.source is not None else "-"
                 merge_text = "-"
                 if msg.merge_group_id:
@@ -1613,34 +1869,43 @@ class MainWindow(QMainWindow):
                 self._msg_table.setItem(row, COL_SOURCE, QTableWidgetItem(source_text))
                 self._msg_table.setItem(row, COL_MERGE, QTableWidgetItem(merge_text))
         finally:
-            self._set_table_updates_enabled(self._msg_table, True)
+            self._msg_table.setUpdatesEnabled(True)
 
-    def _set_table_updates_enabled(self, table: QTableWidget, enabled: bool) -> None:
-        """Toggle expensive table repaint/sort work if the backing widget supports it."""
-        if hasattr(table, "setUpdatesEnabled"):
-            table.setUpdatesEnabled(enabled)
-        if hasattr(table, "setSortingEnabled"):
-            table.setSortingEnabled(False)
+    # ── Playback Handlers ──────────────────────────────────────────
 
     def _on_playback_tick(self, msg: V2xMessage | None) -> None:
-        """Update map and details when the visible playback message changes."""
         if msg is None:
             return
-
         if self._should_render_full_map_slice(msg):
             self._map_widget.render_playback_slice(
-                self._player._messages,
-                self._player.current_index,
-                window_seconds=self._map_playback_window_seconds(),
-            )
+                self._player._messages, self._player.current_index,
+                window_seconds=self._map_playback_window_seconds())
         self._map_widget.update_playback_position(msg)
+        self._eta_map.update_playback_position(msg)
+        self._issues_map.update_playback_position(msg)
+        self._update_message_preview(msg)
         self._highlight_table_row(msg)
         self._show_security_detail(msg, auto_focus=False)
         self._update_scene_for_message(msg)
         self._eta_graph.set_current_time(msg.timestamp)
 
+    def _update_message_preview(self, msg: V2xMessage) -> None:
+        """Update the right sidebar message preview card."""
+        self._msg_preview_header.setText(f"{msg.msg_type.value} · {msg.station_id}  "
+            f"<span style='font-size:10px;color:{STYLE_TEXT_MUTED};font-weight:400'>"
+            f"{msg.timestamp.strftime('%H:%M:%S.%f')[:-3]}</span>")
+        lines = [
+            f"<b>Position</b> {msg.latitude:.6f}, {msg.longitude:.6f}",
+        ]
+        if msg.speed is not None:
+            lines.append(f"<b>Speed</b> {msg.speed:.1f} m/s")
+        if msg.heading is not None:
+            lines.append(f"<b>Heading</b> {msg.heading:.0f} deg")
+        if msg.altitude is not None:
+            lines.append(f"<b>Altitude</b> {msg.altitude:.1f} m")
+        self._msg_preview_body.setText("<br>".join(lines))
+
     def _should_render_full_map_slice(self, msg: V2xMessage) -> bool:
-        """Throttle expensive map layer sync to avoid overloading QtWebEngine."""
         messages_id = id(self._player._messages)
         index = self._player.current_index
         now = time.perf_counter()
@@ -1653,7 +1918,6 @@ class MainWindow(QMainWindow):
             should_render = True
         else:
             should_render = False
-
         if should_render:
             self._last_map_messages_id = messages_id
             self._last_map_slice_index = index
@@ -1661,7 +1925,6 @@ class MainWindow(QMainWindow):
         return should_render
 
     def _reset_playback_render_caches(self) -> None:
-        """Reset throttling/caches after loading, filtering, or clearing a session."""
         self._last_scene_update_monotonic = 0.0
         self._last_scene_cache_key = None
         self._last_scene_cache_snapshot = None
@@ -1670,38 +1933,29 @@ class MainWindow(QMainWindow):
         self._last_map_messages_id = None
 
     def _highlight_table_row(self, msg: V2xMessage) -> None:
-        """Select the matching row and only scroll when it leaves the viewport."""
         row = self._message_row_lookup.get(self._message_lookup_key(msg))
         if row is None or row == self._last_highlighted_row:
             return
-
         self._msg_table.selectRow(row)
         item = self._msg_table.item(row, COL_TIMESTAMP)
         if item is not None and not self._is_table_item_visible(item):
-            self._msg_table.scrollToItem(
-                item,
-                QTableWidget.ScrollHint.PositionAtCenter,
-            )
+            self._msg_table.scrollToItem(item, QTableWidget.ScrollHint.PositionAtCenter)
         self._last_highlighted_row = row
 
     def _message_lookup_key(self, msg: V2xMessage) -> tuple[str, str]:
-        """Return the table lookup key for a playback message."""
         return (msg.timestamp.strftime("%H:%M:%S.%f")[:-3], msg.station_id)
 
     def _is_table_item_visible(self, item: QTableWidgetItem) -> bool:
-        """Return whether the table item is already inside the visible viewport."""
         rect = self._msg_table.visualItemRect(item)
         if not rect.isValid():
             return False
         return self._msg_table.viewport().rect().intersects(rect)
 
     def _on_player_state_changed(self, state: str) -> None:
-        """Update button states based on the player state."""
         self._btn_play.setEnabled(state != "playing" and self._session is not None)
         self._btn_pause.setEnabled(state == "playing")
 
     def _on_player_position_changed(self, index: int) -> None:
-        """Update the position slider from the player index."""
         total = self._player.total_messages
         if total > 0:
             self._slider.blockSignals(True)
@@ -1709,233 +1963,46 @@ class MainWindow(QMainWindow):
             self._slider.blockSignals(False)
 
     def _on_duration_changed(self, seconds: float) -> None:
-        """Refresh the duration label."""
         self._lbl_time.setText(f"00:00.0 / {self._player.format_time(seconds)}")
 
     def _on_player_time_updated(self, seconds: float) -> None:
-        """Refresh the time label without forcing a full map rerender."""
         total_time = self._session.duration_seconds if self._session else 0.0
-        self._lbl_time.setText(f"{self._player.format_time(seconds)} / {self._player.format_time(total_time)}")
-
-    def _on_context_tab_changed(self, index: int) -> None:
-        """Refresh the detail table only when the user opens the details tab."""
-        if index != 0 or self._pending_detail_message is None:
-            return
-        self._show_security_detail(
-            self._pending_detail_message,
-            auto_focus=False,
-            force_refresh=True,
-        )
-
-    def _refresh_eta_analysis(self, messages: list[V2xMessage]) -> None:
-        """Populate the ETA graph vehicle selector from the loaded session."""
-        options = build_eta_selection_options(messages)
-        current_key = self._eta_station_combo.currentData()
-        self._eta_station_combo.blockSignals(True)
-        self._eta_station_combo.clear()
-        for option in options:
-            self._eta_station_combo.addItem(option.label, option.key)
-        if current_key:
-            for index in range(self._eta_station_combo.count()):
-                if self._eta_station_combo.itemData(index) == current_key:
-                    self._eta_station_combo.setCurrentIndex(index)
-                    break
-        self._eta_station_combo.blockSignals(False)
-
-        selected_key = self._eta_station_combo.currentData()
-        self._eta_graph.set_messages(messages)
-        self._eta_graph.set_selection(selected_key)
-        self._eta_graph.set_current_time(messages[0].timestamp if messages else None)
-        self._eta_summary.setText(self._eta_graph.summary_text())
-        self._refresh_eta_dashboard()
-
-    def _on_eta_station_changed(self, station_id: str) -> None:
-        """Update the ETA graph when a single vehicle is selected."""
-        self._eta_graph.set_selection(self._eta_station_combo.currentData())
-        self._eta_summary.setText(self._eta_graph.summary_text())
-        self._refresh_eta_dashboard()
-
-    def _refresh_eta_dashboard(self) -> None:
-        """Render ETA metrics and event rows for the selected request track."""
-        if not hasattr(self, "_eta_metric_table") or not hasattr(self, "_eta_event_table"):
-            return
-        data = self._eta_graph.dashboard_data()
-        self._eta_metric_table.setRowCount(len(data.metrics))
-        for row, (metric, value) in enumerate(data.metrics):
-            self._eta_metric_table.setItem(row, 0, QTableWidgetItem(metric))
-            self._eta_metric_table.setItem(row, 1, QTableWidgetItem(value))
-
-        self._eta_event_table.setRowCount(len(data.events))
-        for row, event in enumerate(data.events):
-            values = [event.time_text, event.kind, event.content, event.details]
-            for column, value in enumerate(values):
-                item = QTableWidgetItem(value)
-                item.setData(Qt.ItemDataRole.UserRole, event)
-                self._eta_event_table.setItem(row, column, item)
-
-    def _on_eta_event_clicked(self, item: QTableWidgetItem) -> None:
-        """Synchronize playback, details, map and request focus from an ETA event row."""
-        event = item.data(Qt.ItemDataRole.UserRole)
-        if not isinstance(event, EtaDashboardEvent):
-            return
-        if event.message_type is not None and self._seek_eta_event_message(event):
-            return
-        self._focus_eta_event_request(event)
-
-    def _seek_eta_event_message(self, event: EtaDashboardEvent) -> bool:
-        """Seek to the concrete SREM/SSEM message represented by one event row."""
-        for index, msg in enumerate(self._player._messages):
-            if msg.msg_type != event.message_type:
-                continue
-            if abs((msg.timestamp - event.timestamp).total_seconds()) > 0.001:
-                continue
-            if not self._message_matches_eta_event_selection(msg, event):
-                continue
-            self._player.seek_to_index(index)
-            self._highlight_table_row(msg)
-            self._show_security_detail(msg, auto_focus=True, force_refresh=True)
-            self._focus_eta_event_request(event)
-            self._statusbar.showMessage(f"ETA-Ereignis geoeffnet: {event.kind} {event.time_text}", 4000)
-            return True
-        self._focus_eta_event_request(event)
-        self._statusbar.showMessage(
-            f"Keine passende Nachricht fuer ETA-Ereignis {event.time_text} gefunden",
-            4000,
-        )
-        return False
-
-    def _message_matches_eta_event_selection(self, msg: V2xMessage, event: EtaDashboardEvent) -> bool:
-        """Return whether msg belongs to the same request key as the dashboard event."""
-        key_parts = (event.selection_key or "").split(":")
-        if len(key_parts) < 6 or key_parts[0] != "REQ":
-            return True
-        intersection_id = self._coerce_detail_int(key_parts[1])
-        request_id = self._coerce_detail_int(key_parts[2])
-        sequence_number = self._coerce_detail_int(key_parts[3])
-        station_id = key_parts[4]
-        if msg.msg_type == MessageType.SREM and msg.station_id != station_id:
-            return False
-        return (
-            self._coerce_detail_int(msg.decoded_data.get("intersectionId")) == intersection_id
-            and self._coerce_detail_int(msg.decoded_data.get("requestId")) == request_id
-            and self._coerce_detail_int(msg.decoded_data.get("sequenceNumber")) == sequence_number
-        )
-
-    def _focus_eta_event_request(self, event: EtaDashboardEvent) -> None:
-        """Focus the map request geometry represented by the ETA dashboard row."""
-        key_parts = (event.selection_key or "").split(":")
-        if len(key_parts) < 6 or key_parts[0] != "REQ":
-            return
-        intersection_id = self._coerce_detail_int(key_parts[1])
-        request_id = self._coerce_detail_int(key_parts[2])
-        sequence_number = self._coerce_detail_int(key_parts[3])
-        if intersection_id is None or request_id is None or sequence_number is None:
-            return
-        self._map_widget.highlight_request(intersection_id, request_id, sequence_number)
-        self._map_widget.focus_intersection(intersection_id)
-
-    def _on_export_eta_dashboard(self) -> None:
-        """Export current ETA dashboard metrics and events as CSV and JSON."""
-        start_dir = self._memory.last_export_directory or self._memory.last_directory or str(Path.cwd())
-        dir_path = QFileDialog.getExistingDirectory(
-            self,
-            "ETA-Dashboard-Exportverzeichnis waehlen",
-            start_dir,
-        )
-        if not dir_path:
-            return
-        target_dir = Path(dir_path)
-        data = self._eta_graph.dashboard_data()
-        csv_path = target_dir / "eta_dashboard.csv"
-        json_path = target_dir / "eta_dashboard.json"
-        try:
-            self._write_eta_dashboard_exports(data, csv_path, json_path)
-        except Exception as exc:  # pragma: no cover
-            QMessageBox.critical(self, "ETA-Export fehlgeschlagen", str(exc))
-            return
-        self._memory.remember_export_directory(dir_path)
-        self._memory.save()
-        self._statusbar.showMessage(f"ETA-Dashboard exportiert nach {target_dir}", 5000)
-        QMessageBox.information(
-            self,
-            "ETA exportiert",
-            f"ETA-Dashboard wurde exportiert:\n{csv_path}\n{json_path}",
-        )
-
-    def _write_eta_dashboard_exports(self, data, csv_path: Path, json_path: Path) -> None:
-        """Write ETA dashboard metrics and events to CSV and JSON files."""
-        with csv_path.open("w", encoding="utf-8-sig", newline="") as handle:
-            writer = csv.writer(handle, delimiter=";")
-            writer.writerow(["Bereich", "Kennzahl/Zeit", "Typ", "Inhalt", "Details"])
-            for metric, value in data.metrics:
-                writer.writerow(["Kennzahl", metric, "", value, ""])
-            for event in data.events:
-                writer.writerow(
-                    [
-                        "Ereignis",
-                        event.time_text,
-                        event.kind,
-                        event.content,
-                        event.details,
-                    ]
-                )
-
-        json_payload = {
-            "metrics": [{"name": metric, "value": value} for metric, value in data.metrics],
-            "events": [
-                {
-                    "time": event.time_text,
-                    "kind": event.kind,
-                    "content": event.content,
-                    "details": event.details,
-                    "timestamp": event.timestamp.isoformat(),
-                    "message_type": event.message_type.value if event.message_type else None,
-                    "selection_key": event.selection_key,
-                }
-                for event in data.events
-            ],
-        }
-        json_path.write_text(json.dumps(json_payload, indent=2, ensure_ascii=False), encoding="utf-8")
-
-    def _toggle_message_table_maximized(self, maximized: bool) -> None:
-        """Expand the message table by collapsing the lower context tabs."""
-        self._message_table_maximized = maximized
-        self._context_tabs.setVisible(not maximized)
-        if hasattr(self, "_right_splitter"):
-            if maximized:
-                self._right_splitter.setSizes([1, 0])
-            else:
-                self._right_splitter.setSizes([460, 280])
-        self._btn_toggle_message_table.setText(
-            "Tabellenbereich wiederherstellen" if maximized else "Tabelle maximieren"
-        )
+        self._lbl_time.setText(
+            f"{self._player.format_time(seconds)} / {self._player.format_time(total_time)}")
 
     def _on_speed_changed(self, index: int) -> None:
-        """Handle speed selector changes."""
         if 0 <= index < len(SPEED_OPTIONS):
             self._player.set_speed(SPEED_OPTIONS[index])
 
     def _on_problem_replay_toggled(self, enabled: bool) -> None:
-        """Enable or disable replay that jumps only between issue timestamps."""
         self._player.set_focus_replay_enabled(enabled)
         if enabled and not self._problem_replay_indices:
             self._statusbar.showMessage("Keine Problemstellen fuer den aktuellen Filter gefunden", 4000)
         elif enabled:
             self._statusbar.showMessage(
-                f"Problemstellen-Replay aktiv: {len(self._problem_replay_indices)} Zeitpunkt(e)",
-                4000,
-            )
+                f"Problemstellen-Replay aktiv: {len(self._problem_replay_indices)} Zeitpunkt(e)", 4000)
         else:
             self._statusbar.showMessage("Problemstellen-Replay deaktiviert", 3000)
 
     def _on_slider_moved(self, value: int) -> None:
-        """Seek playback when the timeline slider is moved."""
         self._player.seek_to_position(value / 1000.0)
 
-    def _refresh_problem_replay_indices(self, messages: list[V2xMessage]) -> None:
-        """Precompute playback indices at which prioritization issues occur."""
-        indices = [occurrence.message_index for occurrence in collect_prioritization_issue_occurrences(messages)]
+    def _on_table_row_clicked(self, row: int, _: int) -> None:
+        ts_item = self._msg_table.item(row, COL_TIMESTAMP)
+        station_item = self._msg_table.item(row, COL_STATION)
+        if not ts_item or not station_item:
+            return
+        target_timestamp = ts_item.text()
+        target_station = station_item.text()
+        for index, msg in enumerate(self._player._messages):
+            if (msg.timestamp.strftime("%H:%M:%S.%f")[:-3] == target_timestamp
+                    and msg.station_id == target_station):
+                self._player.seek_to_index(index)
+                self._show_security_detail(msg, auto_focus=True, force_refresh=True)
+                return
 
+    def _refresh_problem_replay_indices(self, messages: list[V2xMessage]) -> None:
+        indices = [occurrence.message_index for occurrence in collect_prioritization_issue_occurrences(messages)]
         self._problem_replay_indices = indices
         self._player.set_focus_indices(indices)
         if hasattr(self, "_btn_prev_issue"):
@@ -1949,44 +2016,16 @@ class MainWindow(QMainWindow):
                 self._chk_problem_replay.blockSignals(False)
                 self._player.set_focus_replay_enabled(False)
 
-    def _on_table_row_clicked(self, row: int, _: int) -> None:
-        """Jump playback to the clicked row and show the message details."""
-        ts_item = self._msg_table.item(row, COL_TIMESTAMP)
-        station_item = self._msg_table.item(row, COL_STATION)
-        if not ts_item or not station_item:
-            return
+    # ── Detail / Security ──────────────────────────────────────────
 
-        target_timestamp = ts_item.text()
-        target_station = station_item.text()
-        for index, msg in enumerate(self._player._messages):
-            if msg.timestamp.strftime("%H:%M:%S.%f")[:-3] == target_timestamp and msg.station_id == target_station:
-                self._player.seek_to_index(index)
-                self._show_security_detail(msg, auto_focus=True, force_refresh=True)
-                return
-
-    def _show_security_detail(
-        self,
-        msg: V2xMessage,
-        *,
-        auto_focus: bool,
-        force_refresh: bool = False,
-    ) -> None:
-        """Render message and PKI details for the selected message."""
+    def _show_security_detail(self, msg: V2xMessage, *, auto_focus: bool, force_refresh: bool = False) -> None:
         self._pending_detail_message = msg
         detail_key = self._message_lookup_key(msg)
-        if not auto_focus and self._context_tabs.currentIndex() != 0:
-            return
         if not force_refresh and detail_key == self._last_detail_key:
             return
-
         rows = list(msg.to_detail_rows())
         if msg.security_info is None:
-            rows.append(
-                (
-                    "Sicherheitsheader",
-                    "Kein Sicherheitsheader vorhanden oder nicht extrahierbar",
-                )
-            )
+            rows.append(("Sicherheitsheader", "Kein Sicherheitsheader vorhanden oder nicht extrahierbar"))
         else:
             rows.extend(msg.security_info.to_table_rows())
         self._detail_table.setRowCount(len(rows))
@@ -1995,10 +2034,6 @@ class MainWindow(QMainWindow):
             self._detail_table.setItem(index, 1, QTableWidgetItem(value))
         self._detail_table.show()
         self._last_detail_key = detail_key
-        if auto_focus:
-            self._context_tabs.setCurrentIndex(0)
-
-        # Only toggle verify button when UI is fully initialized
         try:
             btn = self._btn_verify_signature
         except RuntimeError:
@@ -2012,39 +2047,26 @@ class MainWindow(QMainWindow):
                 btn.hide()
 
     def _on_verify_signature(self) -> None:
-        """Show a placeholder dialog for ECDSA signature verification.
+        QMessageBox.information(self, "Signaturverifikation",
+            "ECDSA-Signaturverifikation ist noch nicht implementiert.\n\n"
+            "Benötigt werden:\n  - Zertifikat der ausstellenden CA\n"
+            "  - Öffentlicher Schlüssel des Absenders\n"
+            "  - Vollständiger signierter Payload\n\n"
+            "Wenn du diese Funktion benötigst, öffne bitte ein Issue oder kontaktiere das Entwicklerteam.")
 
-        Real verification requires the certificate public key and the
-        full signed payload.  This is deliberately deferred to a future
-        opt-in build.
-        """
-        QMessageBox.information(
-            self,
-            "Signaturverifikation",
-            (
-                "ECDSA-Signaturverifikation ist noch nicht implementiert.\n\n"
-                "Benötigt werden:\n"
-                "  - Zertifikat der ausstellenden CA\n"
-                "  - Öffentlicher Schlüssel des Absenders\n"
-                "  - Vollständiger signierter Payload\n\n"
-                "Wenn du diese Funktion benötigst, öffne bitte ein Issue "
-                "oder kontaktiere das Entwicklerteam."
-            ),
-        )
+    # ── Scene Panel ────────────────────────────────────────────────
 
     def _update_scene_for_message(self, msg: V2xMessage | None, *, force: bool = False) -> None:
-        """Rebuild and display the current scene snapshot for one playback position."""
         if msg is None or not self._player._messages:
-            self._clear_scene_panel()
             self._refresh_prioritization_issues([])
             self._last_scene_cache_key = None
             self._last_scene_cache_snapshot = None
+            if hasattr(self, "_ws_badge_labels") and "issues" in self._ws_badge_labels:
+                self._ws_badge_labels["issues"].hide()
             return
-
         now = time.perf_counter()
         if not force and self._player.state == "playing" and now - self._last_scene_update_monotonic < 0.25:
             return
-
         scene_key = (id(self._player._messages), msg.timestamp.isoformat())
         if scene_key == self._last_scene_cache_key and self._last_scene_cache_snapshot is not None:
             scene = self._last_scene_cache_snapshot
@@ -2053,192 +2075,46 @@ class MainWindow(QMainWindow):
             self._last_scene_cache_key = scene_key
             self._last_scene_cache_snapshot = scene
         self._last_scene_update_monotonic = now
-        self._render_scene_snapshot(scene)
-        self._refresh_prioritization_issues(build_prioritization_issues(scene))
+        issues = build_prioritization_issues(scene)
+        self._refresh_prioritization_issues(issues)
+        critical_count = sum(1 for i in issues if i.severity == "error")
+        if hasattr(self, "_ws_badge_labels") and "issues" in self._ws_badge_labels:
+            badge = self._ws_badge_labels["issues"]
+            if critical_count > 0:
+                badge.setText(str(critical_count))
+                badge.show()
+            else:
+                badge.hide()
 
-    def _render_scene_snapshot(self, scene: SceneSnapshot) -> None:
-        """Render a scene snapshot into the scene panel widgets."""
-        intersections = sorted(scene.intersections.values(), key=lambda item: item.intersection_id)
-        overdue_requests = find_overdue_requests(scene.active_requests, scene.timeline_position)
-        clock_skew_warnings = get_clock_skew_warnings(scene)
-        eta_accuracy_seconds = get_eta_accuracy_seconds(scene)
-        forecast_groups = sum(len(forecast.segments_by_group) for forecast in scene.forecasts.values())
-        revision_mismatch_count = sum(1 for state in intersections if state.revision_mismatch)
-        msg_rate = self._estimate_visible_message_rate(scene.timeline_position)
-
-        self._scene_summary.setText(
-            "Zeitpunkt: "
-            f"{scene.timeline_position.strftime('%H:%M:%S.%f')[:-3]} | "
-            f"{len(intersections)} Kreuzung(en), "
-            f"{len(scene.active_requests)} offene Anforderung(en), "
-            f"{max(0, len(scene.request_states) - len(scene.active_requests))} kuerzlich beantwortet"
-        )
-        self._scene_metrics.setText(
-            "Forecasts: "
-            f"{forecast_groups} Signalgruppe(n) | "
-            f"Overdue Requests: {len(overdue_requests)} | "
-            f"Revisionen abweichend: {revision_mismatch_count} | "
-            f"Clock Skew: {len(clock_skew_warnings)} | "
-            f"ETA MAE: {self._format_eta_accuracy(eta_accuracy_seconds)} | "
-            f"Msgs/s: {msg_rate:.1f}"
-        )
-
-        warnings: list[str] = []
-        if not intersections:
-            warnings.append("Noch keine MAP/SPAT-Szene fuer den aktuellen Zeitbereich erkannt.")
-        if any(state.map_revision is None for state in intersections):
-            warnings.append("Mindestens eine SPAT-Nachricht ohne passende MAP-Basis.")
-        if any(state.revision_mismatch for state in intersections):
-            warnings.append("MAP/SPAT-Revisionen weichen voneinander ab.")
-        if overdue_requests:
-            warnings.append(f"{len(overdue_requests)} Anforderung(en) ohne SSEM-Antwort ueber Timeout.")
-        if clock_skew_warnings:
-            warnings.append(
-                "Uhrenversatz erkannt: "
-                + ", ".join(f"Int {intersection_id} {skew:+.1f}s" for intersection_id, skew in clock_skew_warnings[:3])
-            )
-        inaccurate_eta = [item for item in scene.eta_verifications if not item.is_accurate]
-        if inaccurate_eta:
-            warnings.append(f"ETA-Abweichung > 2s bei {len(inaccurate_eta)} verifizierten Anfrage(n).")
-        self._scene_warning_label.setVisible(bool(warnings))
-        self._scene_warning_label.setText(" | ".join(warnings))
-
-        self._scene_intersection_table.setRowCount(len(intersections))
-        for row, intersection in enumerate(intersections):
-            signal_groups = sorted(
-                intersection.signal_groups.values(),
-                key=lambda item: item.signal_group_id,
-            )
-            signal_group_summary = ", ".join(
-                f"SG {group.signal_group_id}: {group.phase.value}" for group in signal_groups[:3]
-            )
-            if len(signal_groups) > 3:
-                signal_group_summary += f" (+{len(signal_groups) - 3})"
-            forecast = scene.forecasts.get(intersection.intersection_id)
-            forecast_summary = self._format_forecast_summary(forecast)
-            revision_text = self._format_revision_text(intersection)
-
-            self._scene_intersection_table.setItem(row, 0, QTableWidgetItem(str(intersection.intersection_id)))
-            self._scene_intersection_table.setItem(row, 1, QTableWidgetItem(revision_text))
-            self._scene_intersection_table.setItem(
-                row, 2, QTableWidgetItem(signal_group_summary or "Keine Signalgruppen")
-            )
-            self._scene_intersection_table.setItem(row, 3, QTableWidgetItem(forecast_summary))
-            self._scene_intersection_table.setItem(row, 4, QTableWidgetItem(self._format_forecast_timeline(forecast)))
-
-        request_visuals = [visual for visuals in scene.request_visuals_by_intersection.values() for visual in visuals]
-        request_visuals.sort(
-            key=lambda visual: (
-                visual.display_rank,
-                -(visual.importance_level or 0),
-                -visual.requested_at.timestamp(),
-            )
-        )
-        self._scene_requests_table.setRowCount(len(request_visuals))
-        overdue_keys = {
-            (request.intersection_id, request.request_id, request.sequence_number) for request in overdue_requests
-        }
-        for row, request_visual in enumerate(request_visuals):
-            request_key = (
-                request_visual.intersection_id,
-                request_visual.request_id,
-                request_visual.sequence_number,
-            )
-            status = request_visual.status.value
-            if request_key in overdue_keys:
-                status = "timeout"
-            if request_visual.is_dominant:
-                status = f"{status} / dominant"
-            elif request_visual.display_rank > 0:
-                status = f"{status} / sekundar"
-            verification = self._find_eta_verification_by_key(
-                scene,
-                request_visual.intersection_id,
-                request_visual.request_id,
-                request_visual.sequence_number,
-            )
-            if verification is not None:
-                status += f" / ETA {verification.delta_seconds:+.1f}s"
-            lane_text = self._format_visual_lane_text(request_visual)
-            request_text = (
-                f"{request_visual.intersection_id}/{request_visual.request_id}/{request_visual.sequence_number}"
-            )
-
-            self._scene_requests_table.setItem(row, 0, QTableWidgetItem(request_text))
-            self._scene_requests_table.setItem(row, 1, QTableWidgetItem(request_visual.station_id))
-            self._scene_requests_table.setItem(
-                row,
-                2,
-                QTableWidgetItem(
-                    str(request_visual.importance_level) if request_visual.importance_level is not None else "-"
-                ),
-            )
-            self._scene_requests_table.setItem(row, 3, QTableWidgetItem(status))
-            self._scene_requests_table.setItem(row, 4, QTableWidgetItem(lane_text))
+    # ── Prioritization Issues ──────────────────────────────────────
 
     def _refresh_prioritization_issues(self, issues: list[PrioritizationIssue]) -> None:
-        """Render prioritization issues in the map-side panel."""
         self._current_prioritization_issues = issues
         if not hasattr(self, "_issue_list"):
             return
-        self._apply_issue_panel_policy(issues)
         self._issue_list.clear()
         self._refresh_issue_intersection_filter(issues)
         if not issues:
             self._issue_summary.setText("Keine priorisierungsrelevanten Fehler im aktuellen Zeitpunkt.")
+            self._issue_badge.setText("0")
             return
-
         filtered_issues = self._filter_prioritization_issues(issues)
         errors = sum(1 for issue in filtered_issues if issue.severity == "error")
-        warnings = len(filtered_issues) - errors
+        warnings_count = len(filtered_issues) - errors
         filter_suffix = "" if len(filtered_issues) == len(issues) else f" von {len(issues)}"
         self._issue_summary.setText(
-            f"{errors} Fehler, {warnings} Warnung(en){filter_suffix}. Klick fokussiert Request."
-        )
+            f"{errors} Fehler, {warnings_count} Warnung(en){filter_suffix}. Klick fokussiert Request.")
+        self._issue_badge.setText(str(len(filtered_issues)))
         if not filtered_issues:
             self._issue_summary.setText(f"Keine Fehler im aktuellen Filter ({len(issues)} insgesamt).")
             return
-
         for issue in filtered_issues:
             item = QListWidgetItem(self._format_issue_item(issue))
             item.setData(Qt.ItemDataRole.UserRole, issue)
             item.setToolTip(issue.message)
             self._issue_list.addItem(item)
 
-    def _apply_issue_panel_policy(self, issues: list[PrioritizationIssue]) -> None:
-        """Keep issue panel visible only when critical errors need attention."""
-        if not hasattr(self, "_issue_panel"):
-            return
-        has_critical = any(issue.severity == "error" for issue in issues)
-        should_collapse = not has_critical and self._is_compact_layout
-        if has_critical:
-            should_collapse = False
-        if getattr(self, "_issue_panel_collapsed", False) != should_collapse:
-            if hasattr(self, "_btn_toggle_issue_panel"):
-                self._btn_toggle_issue_panel.blockSignals(True)
-                self._btn_toggle_issue_panel.setChecked(should_collapse)
-                self._btn_toggle_issue_panel.blockSignals(False)
-            self._toggle_issue_panel_collapsed(should_collapse)
-
-    def _toggle_issue_panel_collapsed(self, collapsed: bool) -> None:
-        """Collapse or expand the prioritization issue panel without losing state."""
-        self._issue_panel_collapsed = collapsed
-        if hasattr(self, "_issue_content"):
-            self._issue_content.setVisible(not collapsed)
-        if hasattr(self, "_issue_panel"):
-            self._issue_panel.setMinimumWidth(44 if collapsed else 260)
-            self._issue_panel.setMaximumWidth(44 if collapsed else 320)
-        if hasattr(self, "_issue_panel_title"):
-            self._issue_panel_title.setText("!" if collapsed else "Priorisierungsfehler")
-            self._issue_panel_title.setToolTip("Priorisierungsfehler" if collapsed else "")
-        if hasattr(self, "_btn_toggle_issue_panel"):
-            self._btn_toggle_issue_panel.setText(">" if collapsed else "Einklappen")
-            self._btn_toggle_issue_panel.setToolTip(
-                "Priorisierungsfehler-Panel ausklappen" if collapsed else "Priorisierungsfehler-Panel einklappen"
-            )
-
     def _refresh_issue_intersection_filter(self, issues: list[PrioritizationIssue]) -> None:
-        """Keep the intersection filter options aligned with the current issues."""
         if not hasattr(self, "_issue_intersection_combo"):
             return
         current = self._issue_intersection_combo.currentData() or "all"
@@ -2253,11 +2129,7 @@ class MainWindow(QMainWindow):
         self._issue_intersection_combo.blockSignals(False)
         self._issue_filter_intersection = str(self._issue_intersection_combo.currentData() or "all")
 
-    def _filter_prioritization_issues(
-        self,
-        issues: list[PrioritizationIssue],
-    ) -> list[PrioritizationIssue]:
-        """Apply operator-selected issue-panel filters."""
+    def _filter_prioritization_issues(self, issues: list[PrioritizationIssue]) -> list[PrioritizationIssue]:
         mode = getattr(self, "_issue_filter_mode", "all")
         intersection_filter = getattr(self, "_issue_filter_intersection", "all")
         filtered = issues
@@ -2274,7 +2146,6 @@ class MainWindow(QMainWindow):
         return filtered
 
     def _on_issue_filter_changed(self, *_args) -> None:
-        """Refresh the issue panel when an operator changes diagnostics filters."""
         if hasattr(self, "_issue_filter_combo"):
             self._issue_filter_mode = str(self._issue_filter_combo.currentData() or "all")
         if hasattr(self, "_issue_intersection_combo"):
@@ -2284,7 +2155,6 @@ class MainWindow(QMainWindow):
             self._refresh_prioritization_issues(issues)
 
     def _format_issue_item(self, issue: PrioritizationIssue) -> str:
-        """Return compact issue card text."""
         lane_text = f"{issue.in_lane or '-'} -> {issue.out_lane or '-'}"
         delay_text = f"\nDelay: {issue.delay_seconds:.2f}s" if issue.delay_seconds is not None else ""
         return (
@@ -2295,7 +2165,6 @@ class MainWindow(QMainWindow):
         )
 
     def _on_prioritization_issue_clicked(self, item: QListWidgetItem) -> None:
-        """Synchronize map, ETA and details with a clicked prioritization issue."""
         issue = item.data(Qt.ItemDataRole.UserRole)
         if not isinstance(issue, PrioritizationIssue):
             return
@@ -2305,7 +2174,6 @@ class MainWindow(QMainWindow):
         self._select_issue_message(issue)
 
     def _select_eta_issue(self, issue: PrioritizationIssue) -> None:
-        """Select the matching ETA request track if present."""
         prefix = f"REQ:{issue.intersection_id}:{issue.request_id}:{issue.sequence_number}:{issue.station_id}:"
         for index in range(self._eta_station_combo.count()):
             key = self._eta_station_combo.itemData(index)
@@ -2314,7 +2182,6 @@ class MainWindow(QMainWindow):
                 return
 
     def _select_issue_message(self, issue: PrioritizationIssue) -> None:
-        """Jump to a correlated SREM/SSEM message for the issue when possible."""
         for index, msg in enumerate(self._player._messages):
             if msg.msg_type not in {MessageType.SREM, MessageType.SSEM}:
                 continue
@@ -2329,7 +2196,6 @@ class MainWindow(QMainWindow):
                 return
 
     def _coerce_detail_int(self, value: object) -> int | None:
-        """Small UI-local integer coercion for issue/message matching."""
         if isinstance(value, bool):
             return int(value)
         if isinstance(value, int):
@@ -2350,134 +2216,197 @@ class MainWindow(QMainWindow):
                     return nested
         return None
 
-    def _format_forecast_summary(self, forecast) -> str:
-        """Build a compact one-line summary of a SPAT forecast."""
-        if forecast is None or not forecast.segments_by_group:
-            return "Keine Prognose"
+    # ── ETA Analysis ───────────────────────────────────────────────
 
-        parts: list[str] = []
-        for signal_group_id, segments in sorted(forecast.segments_by_group.items())[:3]:
-            if not segments:
+    def _refresh_eta_analysis(self, messages: list[V2xMessage]) -> None:
+        options = build_eta_selection_options(messages)
+        current_key = self._eta_station_combo.currentData()
+        self._eta_station_combo.blockSignals(True)
+        self._eta_station_combo.clear()
+        for option in options:
+            self._eta_station_combo.addItem(option.label, option.key)
+        if current_key:
+            for index in range(self._eta_station_combo.count()):
+                if self._eta_station_combo.itemData(index) == current_key:
+                    self._eta_station_combo.setCurrentIndex(index)
+                    break
+        self._eta_station_combo.blockSignals(False)
+        selected_key = self._eta_station_combo.currentData()
+        self._eta_graph.set_messages(messages)
+        self._eta_graph.set_selection(selected_key)
+        self._eta_graph.set_current_time(messages[0].timestamp if messages else None)
+        self._eta_summary.setText(self._eta_graph.summary_text())
+        self._refresh_eta_metrics()
+        self._refresh_eta_dashboard()
+
+    def _on_eta_station_changed(self, station_id: str) -> None:
+        self._eta_graph.set_selection(self._eta_station_combo.currentData())
+        self._eta_summary.setText(self._eta_graph.summary_text())
+        self._refresh_eta_metrics()
+        self._refresh_eta_dashboard()
+
+    def _refresh_eta_metrics(self) -> None:
+        data = self._eta_graph.dashboard_data()
+        if data.metrics:
+            for i, (metric, value) in enumerate(data.metrics[:3]):
+                metric_widgets = [self._eta_metric_1, self._eta_metric_2, self._eta_metric_3]
+                if i < len(metric_widgets):
+                    card = metric_widgets[i]
+                    vl = card.findChild(QLabel)
+                    if vl:
+                        vl.setText(str(value))
+
+    def _refresh_eta_dashboard(self) -> None:
+        if not hasattr(self, "_eta_metric_table") or not hasattr(self, "_eta_event_table"):
+            return
+        data = self._eta_graph.dashboard_data()
+        self._eta_metric_table.setRowCount(len(data.metrics))
+        for row, (metric, value) in enumerate(data.metrics):
+            self._eta_metric_table.setItem(row, 0, QTableWidgetItem(metric))
+            self._eta_metric_table.setItem(row, 1, QTableWidgetItem(value))
+        self._eta_event_table.setRowCount(len(data.events))
+        for row, event in enumerate(data.events):
+            values = [event.time_text, event.kind, event.content, event.details]
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                item.setData(Qt.ItemDataRole.UserRole, event)
+                self._eta_event_table.setItem(row, column, item)
+
+    def _on_eta_event_clicked(self, item: QTableWidgetItem) -> None:
+        event = item.data(Qt.ItemDataRole.UserRole)
+        if not isinstance(event, EtaDashboardEvent):
+            return
+        if event.message_type is not None and self._seek_eta_event_message(event):
+            return
+        self._focus_eta_event_request(event)
+
+    def _seek_eta_event_message(self, event: EtaDashboardEvent) -> bool:
+        for index, msg in enumerate(self._player._messages):
+            if msg.msg_type != event.message_type:
                 continue
-            next_segment = segments[0]
-            duration = max(0.0, (next_segment.end - next_segment.start).total_seconds())
-            parts.append(f"SG {signal_group_id}: {next_segment.phase.value} ({duration:.1f}s)")
-        if len(forecast.segments_by_group) > 3:
-            parts.append(f"+{len(forecast.segments_by_group) - 3} weitere")
-        return " | ".join(parts) if parts else "Keine Prognose"
-
-    def _format_forecast_timeline(self, forecast) -> str:
-        """Render a compact ASCII timeline for the next 30 seconds."""
-        if forecast is None or not forecast.segments_by_group:
-            return "-" * FORECAST_TIMELINE_BUCKETS
-
-        group_parts: list[str] = []
-        for signal_group_id, segments in sorted(forecast.segments_by_group.items())[:2]:
-            buckets = ["?"] * FORECAST_TIMELINE_BUCKETS
-            if segments:
-                horizon_start = segments[0].start
-            else:
-                horizon_start = None
-            if horizon_start is None:
+            if abs((msg.timestamp - event.timestamp).total_seconds()) > 0.001:
                 continue
-            bucket_width = forecast.horizon_seconds / FORECAST_TIMELINE_BUCKETS
-            for bucket_index in range(FORECAST_TIMELINE_BUCKETS):
-                bucket_midpoint = horizon_start.timestamp() + ((bucket_index + 0.5) * bucket_width)
-                buckets[bucket_index] = self._phase_char_for_timestamp(
-                    segments,
-                    bucket_midpoint,
-                )
-            group_parts.append(f"SG{signal_group_id}:{''.join(buckets)}")
+            if not self._message_matches_eta_event_selection(msg, event):
+                continue
+            self._player.seek_to_index(index)
+            self._highlight_table_row(msg)
+            self._show_security_detail(msg, auto_focus=True, force_refresh=True)
+            self._focus_eta_event_request(event)
+            self._statusbar.showMessage(f"ETA-Ereignis geoeffnet: {event.kind} {event.time_text}", 4000)
+            return True
+        self._focus_eta_event_request(event)
+        self._statusbar.showMessage(
+            f"Keine passende Nachricht fuer ETA-Ereignis {event.time_text} gefunden", 4000)
+        return False
 
-        if len(forecast.segments_by_group) > 2:
-            group_parts.append(f"+{len(forecast.segments_by_group) - 2}")
-        return " ".join(group_parts) if group_parts else "-" * FORECAST_TIMELINE_BUCKETS
+    def _message_matches_eta_event_selection(self, msg: V2xMessage, event: EtaDashboardEvent) -> bool:
+        key_parts = (event.selection_key or "").split(":")
+        if len(key_parts) < 6 or key_parts[0] != "REQ":
+            return True
+        intersection_id = self._coerce_detail_int(key_parts[1])
+        request_id = self._coerce_detail_int(key_parts[2])
+        sequence_number = self._coerce_detail_int(key_parts[3])
+        station_id = key_parts[4]
+        if msg.msg_type == MessageType.SREM and msg.station_id != station_id:
+            return False
+        return (
+            self._coerce_detail_int(msg.decoded_data.get("intersectionId")) == intersection_id
+            and self._coerce_detail_int(msg.decoded_data.get("requestId")) == request_id
+            and self._coerce_detail_int(msg.decoded_data.get("sequenceNumber")) == sequence_number
+        )
 
-    def _phase_char_for_timestamp(self, segments, bucket_midpoint: float) -> str:
-        """Map one time bucket to a compact phase character."""
-        for segment in segments:
-            if segment.start.timestamp() <= bucket_midpoint <= segment.end.timestamp():
-                phase = segment.phase.value
-                if "Movement-Allowed" in phase:
-                    return "G"
-                if "clearance" in phase:
-                    return "C"
-                if "pre-Movement" in phase:
-                    return "P"
-                if "caution-Conflicting-Traffic" in phase:
-                    return "!"
-                if "stop" in phase or "Remain" in phase:
-                    return "R"
-                return "?"
-        return "."
+    def _focus_eta_event_request(self, event: EtaDashboardEvent) -> None:
+        key_parts = (event.selection_key or "").split(":")
+        if len(key_parts) < 6 or key_parts[0] != "REQ":
+            return
+        intersection_id = self._coerce_detail_int(key_parts[1])
+        request_id = self._coerce_detail_int(key_parts[2])
+        sequence_number = self._coerce_detail_int(key_parts[3])
+        if intersection_id is None or request_id is None or sequence_number is None:
+            return
+        self._map_widget.highlight_request(intersection_id, request_id, sequence_number)
+        self._map_widget.focus_intersection(intersection_id)
 
-    def _estimate_visible_message_rate(self, timeline_position) -> float:
-        """Estimate messages per second for the current filtered playback slice."""
-        messages = self._player._messages
-        if len(messages) < 2:
-            return float(len(messages))
+    def _on_export_eta_dashboard(self) -> None:
+        start_dir = self._memory.last_export_directory or self._memory.last_directory or str(Path.cwd())
+        dir_path = QFileDialog.getExistingDirectory(self, "ETA-Dashboard-Exportverzeichnis waehlen", start_dir)
+        if not dir_path:
+            return
+        target_dir = Path(dir_path)
+        data = self._eta_graph.dashboard_data()
+        csv_path = target_dir / "eta_dashboard.csv"
+        json_path = target_dir / "eta_dashboard.json"
+        try:
+            self._write_eta_dashboard_exports(data, csv_path, json_path)
+        except Exception as exc:
+            QMessageBox.critical(self, "ETA-Export fehlgeschlagen", str(exc))
+            return
+        self._memory.remember_export_directory(dir_path)
+        self._memory.save()
+        self._statusbar.showMessage(f"ETA-Dashboard exportiert nach {target_dir}", 5000)
+        QMessageBox.information(self, "ETA exportiert",
+            f"ETA-Dashboard wurde exportiert:\n{csv_path}\n{json_path}")
 
-        window_seconds = 5.0
-        start_time = timeline_position.timestamp() - window_seconds
-        count = sum(1 for msg in messages if start_time <= msg.timestamp.timestamp() <= timeline_position.timestamp())
-        return count / window_seconds
+    def _write_eta_dashboard_exports(self, data, csv_path: Path, json_path: Path) -> None:
+        with csv_path.open("w", encoding="utf-8-sig", newline="") as handle:
+            writer = csv.writer(handle, delimiter=";")
+            writer.writerow(["Bereich", "Kennzahl/Zeit", "Typ", "Inhalt", "Details"])
+            for metric, value in data.metrics:
+                writer.writerow(["Kennzahl", metric, "", value, ""])
+            for event in data.events:
+                writer.writerow(["Ereignis", event.time_text, event.kind, event.content, event.details])
+        json_payload = {
+            "metrics": [{"name": metric, "value": value} for metric, value in data.metrics],
+            "events": [{
+                "time": event.time_text, "kind": event.kind, "content": event.content,
+                "details": event.details, "timestamp": event.timestamp.isoformat(),
+                "message_type": event.message_type.value if event.message_type else None,
+                "selection_key": event.selection_key,
+            } for event in data.events],
+        }
+        json_path.write_text(json.dumps(json_payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    def _format_revision_text(self, intersection) -> str:
-        """Render MAP/SPAT revision state compactly."""
-        map_rev = "-" if intersection.map_revision is None else str(intersection.map_revision)
-        spat_rev = "-" if intersection.spat_revision is None else str(intersection.spat_revision)
-        if intersection.revision_mismatch:
-            return f"MAP {map_rev} / SPAT {spat_rev} (!)"
-        return f"MAP {map_rev} / SPAT {spat_rev}"
+    # ── Map Telemetry ──────────────────────────────────────────────
 
-    def _format_lane_text(self, request: ActiveRequest) -> str:
-        """Render active request lane information."""
-        in_lane = "-" if request.in_lane is None else str(request.in_lane)
-        out_lane = "-" if request.out_lane is None else str(request.out_lane)
-        return f"{in_lane} -> {out_lane}"
+    def _on_map_telemetry_updated(self, telemetry: dict[str, object]) -> None:
+        history = self.__dict__.get("_map_telemetry_history", [])
+        history.append(dict(telemetry))
+        del history[:-MAP_TELEMETRY_HISTORY_LIMIT]
+        dropped_total = sum(
+            int(telemetry.get(key, 0) or 0) for key in (
+                "budget_dropped_markers", "budget_dropped_infrastructure",
+                "budget_dropped_trajectories", "budget_dropped_trajectory_points",
+            )
+        )
+        if dropped_total and self._performance_mode == PERFORMANCE_MODE_NORMAL:
+            self._set_performance_mode(PERFORMANCE_MODE_SAVER, auto=True)
+            self._statusbar.showMessage(
+                "Karten-Payload war zu gross - Leistung automatisch auf Schonend reduziert", 5000)
 
-    def _format_visual_lane_text(self, request_visual) -> str:
-        """Render lane information for a request visual state."""
-        in_lane = "-" if request_visual.in_lane is None else str(request_visual.in_lane)
-        out_lane = "-" if request_visual.out_lane is None else str(request_visual.out_lane)
-        return f"{in_lane} -> {out_lane}"
+    def _on_map_issue_detected(self, message: str) -> None:
+        logger.info("Map issue detected: %s", message)
+        issues = self.__dict__.get("_map_issue_history", [])
+        issues.append(message)
+        del issues[:-20]
+        if self._should_fallback_to_native_map(message):
+            logger.warning("Fatal map issue — switching to native fallback: %s", message)
+            self._replace_map_widget("webengine", persist=False)
+            self._statusbar.showMessage(
+                f"Karte auf Native-Fallback gewechselt: {message}", 8000)
+            return
+        if self.__dict__.get("_map_safe_mode_active", False):
+            return
+        if len(issues) < MAP_SAFE_MODE_ISSUE_THRESHOLD:
+            self._statusbar.showMessage(f"Kartenhinweis: {message}", 5000)
+            return
+        self._map_safe_mode_active = True
+        self._set_performance_mode(PERFORMANCE_MODE_DIAGNOSTIC, auto=True)
+        self._statusbar.showMessage(
+            "Karten-Safe-Mode aktiv: wiederholte WebEngine/JavaScript-Probleme erkannt", 8000)
 
-    def _find_eta_verification(self, scene: SceneSnapshot, request: ActiveRequest):
-        """Find ETA verification data for one active request."""
-        for verification in scene.eta_verifications:
-            if (
-                verification.intersection_id == request.intersection_id
-                and verification.request_id == request.request_id
-                and verification.sequence_number == request.sequence_number
-            ):
-                return verification
-        return None
-
-    def _find_eta_verification_by_key(
-        self,
-        scene: SceneSnapshot,
-        intersection_id: int,
-        request_id: int,
-        sequence_number: int,
-    ):
-        """Find ETA verification data by explicit request correlation key."""
-        for verification in scene.eta_verifications:
-            if (
-                verification.intersection_id == intersection_id
-                and verification.request_id == request_id
-                and verification.sequence_number == sequence_number
-            ):
-                return verification
-        return None
-
-    def _format_eta_accuracy(self, value: float | None) -> str:
-        """Format mean absolute ETA error."""
-        if value is None:
-            return "-"
-        return f"{value:.1f}s"
+    # ── State Management ───────────────────────────────────────────
 
     def _update_controls_enabled(self, enabled: bool) -> None:
-        """Enable or disable playback and export controls."""
         self._btn_play.setEnabled(enabled)
         self._btn_pause.setEnabled(False)
         self._btn_stop.setEnabled(enabled)
@@ -2493,14 +2422,7 @@ class MainWindow(QMainWindow):
         self._chk_problem_replay.setEnabled(has_issues)
         self._btn_reload_last.setEnabled(bool(self._memory.existing_last_session_files()))
 
-    def _set_loading_state(
-        self,
-        loading: bool,
-        minimum: int = 0,
-        maximum: int = 0,
-        status_message: str = "",
-    ) -> None:
-        """Show or hide the loading progress indicator."""
+    def _set_loading_state(self, loading: bool, minimum: int = 0, maximum: int = 0, status_message: str = "") -> None:
         self._progress.setVisible(loading)
         self._progress.setRange(minimum, maximum)
         self._progress.setValue(minimum)
@@ -2511,49 +2433,16 @@ class MainWindow(QMainWindow):
             self._statusbar.showMessage(status_message)
 
     def _update_overview_for_session(self, paths: list[str], session: SessionData) -> None:
-        """Refresh the overview cards after a successful load."""
-        self._lbl_title.setText("Sitzung geladen")
-        self._lbl_subtitle.setText(
-            f"{Path(paths[0]).name}" if len(paths) == 1 else f"{len(paths)} PCAP-Dateien kombiniert"
-        )
-        msg_types = ", ".join(
-            f"{msg_type.value}: {count}"
-            for msg_type, count in sorted(session.msg_type_counts.items(), key=lambda item: item[0].value)
-        )
-        self._lbl_memory.setText(f"Nachrichtentypen: {msg_types}" if msg_types else "Keine Typverteilung verfuegbar")
-        self._set_stat_card_value(self._stat_files, str(len(paths)))
-        self._set_stat_card_value(self._stat_messages, str(len(session.messages)))
-        self._set_stat_card_value(self._stat_stations, str(len(session.station_ids)))
         self._update_status_metrics(len(session.messages))
-        self._update_compact_overview_text()
 
     def _refresh_memory_banner(self) -> None:
-        """Show a startup banner based on persistent memory."""
-        self._lbl_title.setText("PCAP2KML Player")
-        self._lbl_subtitle.setText("Ziehe PCAP-Dateien ins Fenster oder lade die letzte Sitzung mit einem Klick.")
         last_files = self._memory.existing_last_session_files()
         if last_files:
-            self._lbl_memory.setText(
-                f"Letzte Sitzung: {len(last_files)} Datei(en), "
-                f"{self._memory.last_session_message_count} Nachrichten, "
-                f"{self._memory.last_session_station_count} Stationen"
-            )
-            self._set_stat_card_value(self._stat_files, str(len(last_files)))
-            self._set_stat_card_value(self._stat_messages, str(self._memory.last_session_message_count))
-            self._set_stat_card_value(self._stat_stations, str(self._memory.last_session_station_count))
             self._status_metrics.setText("Bereit fuer letzte Sitzung")
-            self._update_compact_overview_text()
             return
-
-        self._lbl_memory.setText("Noch keine persistente Sitzung gespeichert")
-        self._set_stat_card_value(self._stat_files, "0")
-        self._set_stat_card_value(self._stat_messages, "0")
-        self._set_stat_card_value(self._stat_stations, "0")
         self._status_metrics.setText("Noch keine Sitzung geladen")
-        self._update_compact_overview_text()
 
     def _update_status_metrics(self, visible_messages: int) -> None:
-        """Update the compact status metrics label."""
         if not self._session:
             self._status_metrics.setText("Noch keine Sitzung geladen")
             return
@@ -2563,7 +2452,6 @@ class MainWindow(QMainWindow):
         )
 
     def _clear_session_views(self) -> None:
-        """Reset map, tables, and playback to the empty state."""
         self._map_widget.clear()
         self._msg_table.setRowCount(0)
         self._message_row_lookup = {}
@@ -2573,33 +2461,20 @@ class MainWindow(QMainWindow):
         self._problem_replay_indices = []
         self._refresh_prioritization_issues([])
         self._detail_table.hide()
-        self._clear_scene_panel()
         if hasattr(self, "_eta_station_combo"):
             self._eta_station_combo.blockSignals(True)
             self._eta_station_combo.clear()
             self._eta_station_combo.blockSignals(False)
         if hasattr(self, "_eta_graph"):
             self._eta_graph.set_messages([])
-            self._eta_graph.set_station(None)
+            self._eta_graph.set_selection(None)
             self._eta_graph.set_current_time(None)
             self._refresh_eta_dashboard()
         if hasattr(self, "_eta_summary"):
             self._eta_summary.setText("Keine PCAP-Sitzung geladen.")
-        if hasattr(self, "_context_tabs"):
-            self._context_tabs.setCurrentIndex(1)
-            self._context_tabs.setVisible(True)
-        if hasattr(self, "_btn_toggle_message_table"):
-            self._btn_toggle_message_table.blockSignals(True)
-            self._btn_toggle_message_table.setChecked(False)
-            self._btn_toggle_message_table.setText("Tabelle maximieren")
-            self._btn_toggle_message_table.blockSignals(False)
-        if hasattr(self, "_right_splitter"):
-            self._right_splitter.setSizes([460, 280])
-        self._message_table_maximized = False
         self._reset_playback_render_caches()
         self._issue_filter_mode = "all"
         self._issue_filter_intersection = "all"
-        self._apply_issue_panel_policy([])
         if hasattr(self, "_issue_filter_combo"):
             self._issue_filter_combo.blockSignals(True)
             self._issue_filter_combo.setCurrentIndex(0)
@@ -2623,48 +2498,29 @@ class MainWindow(QMainWindow):
         self._lbl_filter_hint.setText("Alle Typen und Stationen aktiv")
         self._update_controls_enabled(False)
 
-    def _clear_scene_panel(self) -> None:
-        """Reset the scene panel to its empty state."""
-        self._scene_summary.setText("Keine Szene verfuegbar. Lade eine PCAP-Datei und starte die Wiedergabe.")
-        self._scene_metrics.setText("")
-        self._scene_warning_label.clear()
-        self._scene_warning_label.hide()
-        self._scene_intersection_table.setRowCount(0)
-        self._scene_requests_table.setRowCount(0)
+    # ── Window State ───────────────────────────────────────────────
 
     def _restore_window_state(self) -> None:
-        """Restore persisted geometry and splitter layout."""
         geometry = self._settings.value("window/geometry")
         if geometry is not None:
             self.restoreGeometry(geometry)
-        splitter_state = self._settings.value("window/splitter")
-        if splitter_state is not None:
-            self._splitter.restoreState(splitter_state)
-        right_splitter_state = self._settings.value("window/right_splitter")
-        if right_splitter_state is not None and hasattr(self, "_right_splitter"):
-            self._right_splitter.restoreState(right_splitter_state)
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        """Persist window state and app memory on close."""
         self._settings.setValue("window/geometry", self.saveGeometry())
-        self._settings.setValue("window/splitter", self._splitter.saveState())
-        if hasattr(self, "_right_splitter"):
-            self._settings.setValue("window/right_splitter", self._right_splitter.saveState())
         self._memory.save()
         super().closeEvent(event)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
-        """Accept supported local PCAP files via drag and drop."""
         urls = event.mimeData().urls()
         if any(
-            url.isLocalFile() and Path(url.toLocalFile()).suffix.lower() in {".pcap", ".pcapng", ".cap"} for url in urls
+            url.isLocalFile() and Path(url.toLocalFile()).suffix.lower() in {".pcap", ".pcapng", ".cap"}
+            for url in urls
         ):
             event.acceptProposedAction()
             return
         event.ignore()
 
     def dropEvent(self, event: QDropEvent) -> None:
-        """Load supported dropped files."""
         paths = [
             url.toLocalFile()
             for url in event.mimeData().urls()

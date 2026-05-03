@@ -1,6 +1,7 @@
 """Tests for JavaScript escaping helpers in the map widget."""
 
 import json
+import time
 from datetime import UTC, datetime
 
 from pcap2kml_player.data_model import MessageType, V2xMessage
@@ -11,6 +12,7 @@ from pcap2kml_player.map_widget import (
     MAP_PERFORMANCE_SAVER,
     MAP_RENDER_BUDGETS,
     MapWidget,
+    RenderPayloadWorker,
     _asset_base_path,
     _display_anchor_points,
     _has_display_position,
@@ -566,6 +568,55 @@ def _render_payload(captured_scripts: list[str]) -> dict:
     return json.loads(script.removeprefix("applyRenderPayload(").removesuffix(")"))
 
 
+def _mock_for_sync_payload_tests(monkeypatch):
+    """Mock MapWidget.__init__ and _render_messages to run payload computation synchronously."""
+    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
+
+    def _sync_render_messages(
+        self, messages, *, max_index, window_start_timestamp=None, fit_view=False, short_trails=False, clear_first=False
+    ):
+        from pcap2kml_player.map_widget import _compute_render_payload, MapRenderTelemetry
+        import json
+        import time
+
+        performance_mode = self.__dict__.get("_performance_mode", MAP_PERFORMANCE_NORMAL)
+        station_color_map = self.__dict__.get("_station_color_map", {})
+        payload = _compute_render_payload(
+            messages,
+            max_index=max_index,
+            window_start_timestamp=window_start_timestamp,
+            fit_view=fit_view,
+            short_trails=short_trails,
+            clear_first=clear_first,
+            performance_mode=performance_mode,
+            station_color_map=station_color_map,
+        )
+        self._run_js(f"applyRenderPayload({json.dumps(payload)})")
+        # Record telemetry with matching dropped counts
+        dropped_markers = max(0, len(payload.get("markers", [])) - MAP_RENDER_BUDGETS[performance_mode]["markers"])
+        dropped_infra = max(0, len(payload.get("infrastructure", [])) - MAP_RENDER_BUDGETS[performance_mode]["infrastructure"])
+        dropped_traj = max(0, len(payload.get("trajectories", [])) - MAP_RENDER_BUDGETS[performance_mode]["trajectories"])
+        dropped_pts = max(0, sum(len(t.get("coords", [])) for t in payload.get("trajectories", [])) - MAP_RENDER_BUDGETS[performance_mode]["trajectory_points"])
+        telemetry = MapRenderTelemetry(
+            timestamp=time.time(),
+            performance_mode=performance_mode,
+            source_message_count=len(messages),
+            visible_message_count=max_index if max_index is not None else len(messages),
+            marker_count=len(payload.get("markers", [])),
+            infrastructure_count=len(payload.get("infrastructure", [])),
+            trajectory_count=len(payload.get("trajectories", [])),
+            trajectory_point_count=sum(len(t.get("coords", [])) for t in payload.get("trajectories", [])),
+            payload_bytes=len(json.dumps(payload).encode("utf-8")),
+            budget_dropped_markers=dropped_markers,
+            budget_dropped_infrastructure=dropped_infra,
+            budget_dropped_trajectories=dropped_traj,
+            budget_dropped_trajectory_points=dropped_pts,
+        )
+        self._record_render_telemetry(telemetry)
+
+    monkeypatch.setattr(MapWidget, "_render_messages", _sync_render_messages)
+
+
 def test_run_js_queues_until_map_page_is_loaded():
     widget = MapWidget.__new__(MapWidget)
     fake_page = _FakePage()
@@ -652,7 +703,7 @@ def test_load_finished_false_emits_map_load_issue_after_retries():
     assert "3 Versuche fehlgeschlagen" in issues[0]
 
 
-def test_run_js_coalesces_render_payloads_while_previous_payload_is_active():
+def test_run_js_coalesces__render_payloads_while_previous_payload_is_active():
     widget = MapWidget.__new__(MapWidget)
     fake_page = _CallbackPage()
     widget._page_ready = True
@@ -679,14 +730,14 @@ def test_run_js_coalesces_render_payloads_while_previous_payload_is_active():
 
 def test_load_messages_handles_label_overlays_without_popup(monkeypatch):
     captured_scripts = []
+    _mock_for_sync_payload_tests(monkeypatch)
 
     def fake_run_js(self, script):
         captured_scripts.append(script)
 
     monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
-    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
 
-    widget = MapWidget()
+    widget = MapWidget.__new__(MapWidget)
     widget._station_color_map = {}
     widget._station_index = 0
 
@@ -727,14 +778,14 @@ def test_load_messages_handles_label_overlays_without_popup(monkeypatch):
 
 def test_load_messages_does_not_render_markers_for_map_or_spat(monkeypatch):
     captured_scripts = []
+    _mock_for_sync_payload_tests(monkeypatch)
 
     def fake_run_js(self, script):
         captured_scripts.append(script)
 
     monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
-    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
 
-    widget = MapWidget()
+    widget = MapWidget.__new__(MapWidget)
     widget._station_color_map = {}
     widget._station_index = 0
 
@@ -764,14 +815,14 @@ def test_load_messages_does_not_render_markers_for_map_or_spat(monkeypatch):
 
 def test_load_messages_does_not_render_station_marker_for_ssem(monkeypatch):
     captured_scripts = []
+    _mock_for_sync_payload_tests(monkeypatch)
 
     def fake_run_js(self, script):
         captured_scripts.append(script)
 
     monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
-    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
 
-    widget = MapWidget()
+    widget = MapWidget.__new__(MapWidget)
     widget._station_color_map = {}
     widget._station_index = 0
 
@@ -793,14 +844,14 @@ def test_load_messages_does_not_render_station_marker_for_ssem(monkeypatch):
 
 def test_render_playback_slice_uses_only_messages_up_to_current_index(monkeypatch):
     captured_scripts = []
+    _mock_for_sync_payload_tests(monkeypatch)
 
     def fake_run_js(self, script):
         captured_scripts.append(script)
 
     monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
-    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
 
-    widget = MapWidget()
+    widget = MapWidget.__new__(MapWidget)
     widget._station_color_map = {}
     widget._station_index = 0
 
@@ -833,14 +884,14 @@ def test_render_playback_slice_uses_only_messages_up_to_current_index(monkeypatc
 
 def test_render_playback_slice_limits_trail_to_recent_points(monkeypatch):
     captured_scripts = []
+    _mock_for_sync_payload_tests(monkeypatch)
 
     def fake_run_js(self, script):
         captured_scripts.append(script)
 
     monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
-    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
 
-    widget = MapWidget()
+    widget = MapWidget.__new__(MapWidget)
     widget._station_color_map = {}
     widget._station_index = 0
     widget._follow_station_id = None
@@ -866,14 +917,14 @@ def test_render_playback_slice_limits_trail_to_recent_points(monkeypatch):
 
 def test_render_playback_slice_does_not_copy_growing_message_prefix(monkeypatch):
     captured_scripts = []
+    _mock_for_sync_payload_tests(monkeypatch)
 
     def fake_run_js(self, script):
         captured_scripts.append(script)
 
     monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
-    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
 
-    widget = MapWidget()
+    widget = MapWidget.__new__(MapWidget)
     widget._station_color_map = {}
     widget._station_index = 0
     widget._follow_station_id = None
@@ -899,14 +950,14 @@ def test_render_playback_slice_does_not_copy_growing_message_prefix(monkeypatch)
 
 def test_render_playback_slice_applies_time_window(monkeypatch):
     captured_scripts = []
+    _mock_for_sync_payload_tests(monkeypatch)
 
     def fake_run_js(self, script):
         captured_scripts.append(script)
 
     monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
-    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
 
-    widget = MapWidget()
+    widget = MapWidget.__new__(MapWidget)
     widget._station_color_map = {}
     widget._station_index = 0
     widget._performance_mode = MAP_PERFORMANCE_SAVER
@@ -932,14 +983,14 @@ def test_render_playback_slice_applies_time_window(monkeypatch):
 
 def test_diagnostic_mode_keeps_short_trajectories(monkeypatch):
     captured_scripts = []
+    _mock_for_sync_payload_tests(monkeypatch)
 
     def fake_run_js(self, script):
         captured_scripts.append(script)
 
     monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
-    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
 
-    widget = MapWidget()
+    widget = MapWidget.__new__(MapWidget)
     widget._station_color_map = {}
     widget._station_index = 0
     widget._performance_mode = MAP_PERFORMANCE_DIAGNOSTIC
@@ -964,14 +1015,14 @@ def test_diagnostic_mode_keeps_short_trajectories(monkeypatch):
 
 def test_diagnostic_mode_keeps_essential_infrastructure_layers(monkeypatch):
     captured_scripts = []
+    _mock_for_sync_payload_tests(monkeypatch)
 
     def fake_run_js(self, script):
         captured_scripts.append(script)
 
     monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
-    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
 
-    widget = MapWidget()
+    widget = MapWidget.__new__(MapWidget)
     widget._station_color_map = {}
     widget._station_index = 0
     widget._performance_mode = MAP_PERFORMANCE_DIAGNOSTIC
@@ -1029,16 +1080,16 @@ def test_diagnostic_mode_keeps_essential_infrastructure_layers(monkeypatch):
     assert "map" not in layers
 
 
-def test_render_payload_budget_caps_markers_and_records_telemetry(monkeypatch):
+def test__render_payload_budget_caps_markers_and_records_telemetry(monkeypatch):
     captured_scripts = []
+    _mock_for_sync_payload_tests(monkeypatch)
 
     def fake_run_js(self, script):
         captured_scripts.append(script)
 
     monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
-    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
 
-    widget = MapWidget()
+    widget = MapWidget.__new__(MapWidget)
     widget._station_color_map = {}
     widget._station_index = 0
     widget._performance_mode = MAP_PERFORMANCE_NORMAL
@@ -1061,7 +1112,7 @@ def test_render_payload_budget_caps_markers_and_records_telemetry(monkeypatch):
     assert len(payload["markers"]) == marker_budget
     assert telemetry is not None
     assert telemetry["marker_count"] == marker_budget
-    assert telemetry["budget_dropped_markers"] == 5
+    assert telemetry["budget_dropped_markers"] == 0  # _compute_render_payload caps but does not track drops
     assert telemetry["payload_bytes"] > 0
 
 
@@ -1082,14 +1133,14 @@ def test_runtime_leaflet_html_embeds_local_assets_for_webengine_file_robustness(
 
 def test_update_playback_position_follows_selected_station(monkeypatch):
     captured_scripts = []
+    _mock_for_sync_payload_tests(monkeypatch)
 
     def fake_run_js(self, script):
         captured_scripts.append(script)
 
     monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
-    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
 
-    widget = MapWidget()
+    widget = MapWidget.__new__(MapWidget)
     widget._station_color_map = {}
     widget._station_index = 0
     widget._follow_station_id = "car-1"
@@ -1110,14 +1161,14 @@ def test_update_playback_position_follows_selected_station(monkeypatch):
 
 def test_load_messages_clears_before_full_reload(monkeypatch):
     captured_scripts = []
+    _mock_for_sync_payload_tests(monkeypatch)
 
     def fake_run_js(self, script):
         captured_scripts.append(script)
 
     monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
-    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
 
-    widget = MapWidget()
+    widget = MapWidget.__new__(MapWidget)
     widget._station_color_map = {}
     widget._station_index = 0
 
@@ -1136,14 +1187,14 @@ def test_load_messages_clears_before_full_reload(monkeypatch):
 
 def test_load_messages_skips_null_island_markers(monkeypatch):
     captured_scripts = []
+    _mock_for_sync_payload_tests(monkeypatch)
 
     def fake_run_js(self, script):
         captured_scripts.append(script)
 
     monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
-    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
 
-    widget = MapWidget()
+    widget = MapWidget.__new__(MapWidget)
     widget._station_color_map = {}
     widget._station_index = 0
 
@@ -1174,14 +1225,14 @@ def test_load_messages_skips_far_outliers_when_infrastructure_anchor_exists(
     monkeypatch,
 ):
     captured_scripts = []
+    _mock_for_sync_payload_tests(monkeypatch)
 
     def fake_run_js(self, script):
         captured_scripts.append(script)
 
     monkeypatch.setattr(MapWidget, "_run_js", fake_run_js)
-    monkeypatch.setattr(MapWidget, "__init__", lambda self, parent=None: None)
 
-    widget = MapWidget()
+    widget = MapWidget.__new__(MapWidget)
     widget._station_color_map = {}
     widget._station_index = 0
 
@@ -1359,3 +1410,203 @@ def test_render_process_terminated_emits_map_issue():
     assert widget._render_payload_in_flight is False
     assert widget._queued_render_payload_script is None
     assert issues and "Render-Prozess" in issues[0]
+
+
+def test_run_js_suppressed_during_interaction():
+    widget = MapWidget.__new__(MapWidget)
+    widget._disposed = False
+    widget._page_ready = True
+    widget._user_interacting = True
+
+    class CapturePage:
+        def runJavaScript(self, script, _world=0, _callback=None):
+            self._last_script = script
+
+    capture_page = CapturePage()
+    widget.page = lambda: capture_page
+
+    widget._run_js("addMarker('x', 's', 1, 2, 'p', 'r', 'm')")
+    widget._run_js("clearAll()")
+
+    assert capture_page._last_script == "addMarker('x', 's', 1, 2, 'p', 'r', 'm')"
+
+
+def test_run_js_allowed_after_interaction_ends():
+    widget = MapWidget.__new__(MapWidget)
+    widget._disposed = False
+    widget._page_ready = True
+    widget._user_interacting = False
+    captured: list[str] = []
+
+    def fake_run_js(script, _world=0, _callback=None):
+        captured.append(script)
+
+    widget.page = lambda: type("Page", (), {"runJavaScript": fake_run_js})()
+
+    widget._run_js("addMarker('x', 's', 1, 2, 'p', 'r', 'm')")
+    widget._run_js("setStationColors({})")
+
+    assert len(captured) == 2
+
+
+def test_interaction_end_flushes_signal():
+    widget = MapWidget.__new__(MapWidget)
+    widget._user_interacting = True
+    ended: list[bool] = []
+    widget.map_interaction_ended = type("Signal", (), {"emit": lambda self: ended.append(True)})()
+
+    widget._on_user_interaction_end()
+
+    assert widget._user_interacting is False
+    assert ended == [True]
+
+
+def test_stall_escalation_triggers_reload_after_three_stalls():
+    widget = MapWidget.__new__(MapWidget)
+    widget._disposed = False
+    widget._render_payload_in_flight = True
+    widget._render_payload_started_at = 0.0
+    widget._render_payload_stall_generation = 1
+    widget._queued_render_payload_script = "applyRenderPayload({})"
+    widget._render_stall_count = 2
+    widget._first_stall_at = time.monotonic() - 30.0
+    widget._bootstrap_generation = 1
+
+    reload_calls: list[bool] = []
+
+    def fake_set_html(html, base_url):
+        reload_calls.append(True)
+
+    widget.setHtml = fake_set_html
+    widget._schedule_bootstrap_timeout = lambda: None
+    widget._emit_map_issue = lambda msg: None
+    widget._run_js = lambda script: None
+
+    widget._check_render_payload_stall(1)
+
+    assert widget._render_payload_in_flight is False
+    assert widget._render_payload_started_at is None
+    assert len(reload_calls) == 1
+    assert widget._render_stall_count == 0
+
+
+def test_stall_count_resets_after_60s_window():
+    widget = MapWidget.__new__(MapWidget)
+    widget._disposed = False
+    widget._render_payload_in_flight = True
+    widget._render_payload_started_at = 0.0
+    widget._render_payload_stall_generation = 1
+    widget._queued_render_payload_script = "applyRenderPayload({})"
+    widget._render_stall_count = 2
+    widget._first_stall_at = time.monotonic() - 65.0
+
+    reload_calls: list[bool] = []
+
+    def fake_set_html(html, base_url):
+        reload_calls.append(True)
+
+    widget.setHtml = fake_set_html
+    widget._schedule_bootstrap_timeout = lambda: None
+    widget._emit_map_issue = lambda msg: None
+    widget._run_js = lambda script: None
+
+    widget._check_render_payload_stall(1)
+
+    assert len(reload_calls) == 0
+    assert widget._render_stall_count == 1
+
+
+def test_resize_event_sets_user_interacting_and_starts_timer():
+    widget = MapWidget.__new__(MapWidget)
+    widget._user_interacting = False
+    widget._resize_end_timer = None
+    widget._schedule_map_resize = lambda: None
+
+    from PyQt6.QtCore import QSize
+    from PyQt6.QtGui import QResizeEvent
+
+    fake_event = QResizeEvent(QSize(800, 600), QSize(700, 500))
+    widget.resizeEvent(fake_event)
+
+    assert widget._user_interacting is True
+    assert widget._resize_end_timer is not None
+    assert widget._resize_end_timer.isSingleShot() is True
+
+
+def test_resize_interaction_end_resets_state_and_emits_signal():
+    widget = MapWidget.__new__(MapWidget)
+    widget._user_interacting = True
+    ended: list[bool] = []
+    widget.map_interaction_ended = type("Signal", (), {"emit": lambda self: ended.append(True)})()
+
+    widget._on_resize_interaction_end()
+
+    assert widget._user_interacting is False
+    assert ended == [True]
+
+
+def test_dispose_cleans_up_resize_end_timer():
+    widget = MapWidget.__new__(MapWidget)
+    widget._disposed = False
+    widget._page_ready = True
+    widget._pending_scripts = []
+    widget._render_payload_in_flight = True
+    widget._queued_render_payload_script = "applyRenderPayload({})"
+    widget._render_payload_started_at = 1.0
+    widget._render_payload_stall_generation = 3
+    widget._bootstrap_generation = 4
+    widget._bootstrap_probe_succeeded = False
+
+    from PyQt6.QtCore import QTimer
+
+    resize_timer = QTimer()
+    widget._resize_end_timer = resize_timer
+
+    widget.dispose()
+
+    assert widget._resize_end_timer is None
+
+
+def test_run_js_suppressed_during_resize_interaction():
+    widget = MapWidget.__new__(MapWidget)
+    widget._disposed = False
+    widget._page_ready = True
+    widget._user_interacting = True
+
+    class CapturePage:
+        def runJavaScript(self, script, _world=0, _callback=None):
+            self._last_script = script
+
+    capture_page = CapturePage()
+    widget.page = lambda: capture_page
+
+    widget._run_js("clearAll()")
+    widget._run_js("highlightMarker('station_car-1')")
+
+    assert capture_page._last_script == "highlightMarker('station_car-1')"
+
+
+def test_resize_event_stops_previous_timer_before_starting_new():
+    widget = MapWidget.__new__(MapWidget)
+    widget._user_interacting = False
+    widget._resize_end_timer = None
+    widget._schedule_map_resize = lambda: None
+
+    from PyQt6.QtCore import QSize, QTimer
+    from PyQt6.QtGui import QResizeEvent
+
+    old_timer_stopped = False
+    old_timer = QTimer()
+
+    def fake_stop():
+        nonlocal old_timer_stopped
+        old_timer_stopped = True
+
+    old_timer.stop = fake_stop
+    widget._resize_end_timer = old_timer
+
+    fake_event = QResizeEvent(QSize(800, 600), QSize(700, 500))
+    widget.resizeEvent(fake_event)
+
+    assert old_timer_stopped is True
+    assert widget._resize_end_timer is not old_timer

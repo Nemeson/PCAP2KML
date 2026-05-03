@@ -6,6 +6,7 @@ playback highlighting via JavaScript calls.
 
 from __future__ import annotations
 
+import bisect
 import json
 import logging
 import sys
@@ -15,26 +16,25 @@ from math import cos, hypot, radians
 from pathlib import Path
 
 from PyQt6 import sip
-from PyQt6.QtCore import QObject, QTimer, QUrl, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QResizeEvent, QShowEvent
+from PyQt6.QtCore import Qt, QObject, QThread, QTimer, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QHideEvent, QResizeEvent, QShowEvent
 from PyQt6.QtWebChannel import QWebChannel
 from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineSettings
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 
 from .data_model import MessageType, V2xMessage
-from .scene_model import build_scene_snapshot
+from .map_backend import (
+    MAP_PERFORMANCE_DIAGNOSTIC,
+    MAP_PERFORMANCE_MODES,
+    MAP_PERFORMANCE_NORMAL,
+    MAP_PERFORMANCE_SAVER,
+    METERS_PER_DEGREE_LATITUDE,
+)
+from .scene_model import _extract_map_reference_point, build_scene_snapshot
 
 logger = logging.getLogger(__name__)
 PLAYBACK_TRAIL_POINTS = 8
 DISPLAY_CLUSTER_RADIUS_M = 5000.0
-MAP_PERFORMANCE_NORMAL = "normal"
-MAP_PERFORMANCE_SAVER = "saver"
-MAP_PERFORMANCE_DIAGNOSTIC = "diagnostic"
-MAP_PERFORMANCE_MODES = {
-    MAP_PERFORMANCE_NORMAL,
-    MAP_PERFORMANCE_SAVER,
-    MAP_PERFORMANCE_DIAGNOSTIC,
-}
 MAP_RENDER_BUDGETS = {
     MAP_PERFORMANCE_NORMAL: {
         "markers": 1500,
@@ -55,7 +55,7 @@ MAP_RENDER_BUDGETS = {
         "trajectory_points": 400,
     },
 }
-MAP_RENDER_STALL_SECONDS = 8.0
+MAP_RENDER_STALL_SECONDS = 5.0
 MAP_BOOTSTRAP_TIMEOUT_SECONDS = 6.0
 
 
@@ -326,8 +326,8 @@ def _polyline_label_point(
 
 def _point_distance_meters(point_a: tuple[float, float], point_b: tuple[float, float]) -> float:
     """Approximate local distance in meters between two nearby points."""
-    lat_scale = 111_320.0
-    lon_scale = max(1e-6, 111_320.0 * cos(radians((point_a[0] + point_b[0]) / 2.0)))
+    lat_scale = METERS_PER_DEGREE_LATITUDE
+    lon_scale = max(1e-6, METERS_PER_DEGREE_LATITUDE * cos(radians((point_a[0] + point_b[0]) / 2.0)))
     dx = (point_a[1] - point_b[1]) * lon_scale
     dy = (point_a[0] - point_b[0]) * lat_scale
     return hypot(dx, dy)
@@ -504,8 +504,8 @@ def _offset_polyline(coords: list[tuple[float, float]], offset_m: float) -> list
     for index, point in enumerate(coords):
         prev_point = coords[index - 1] if index > 0 else coords[index]
         next_point = coords[index + 1] if index < len(coords) - 1 else coords[index]
-        lat_scale = 111_320.0
-        lon_scale = max(1e-6, 111_320.0 * cos(radians(point[0])))
+        lat_scale = METERS_PER_DEGREE_LATITUDE
+        lon_scale = max(1e-6, METERS_PER_DEGREE_LATITUDE * cos(radians(point[0])))
         dx = (next_point[1] - prev_point[1]) * lon_scale
         dy = (next_point[0] - prev_point[0]) * lat_scale
         length = hypot(dx, dy)
@@ -1126,6 +1126,7 @@ LEAFLET_HTML = """<!DOCTYPE html>
     <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
     <style>
         html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; }
+        /* Smooth marker interpolation (Phase 3) - JS-driven tweening */
     </style>
 </head>
 <body>
@@ -1224,6 +1225,7 @@ LEAFLET_HTML = """<!DOCTYPE html>
         });
 
         var markers = {};
+        var markerTweens = {};
         var trajectories = {};
         var infrastructureLayers = {};
         var mapPerformanceMode = 'normal';
@@ -1258,11 +1260,45 @@ LEAFLET_HTML = """<!DOCTYPE html>
             mapPerformanceMode = mode || 'normal';
         }
 
+        // Marker tweening utilities for smooth playback
+        function easeInOutCubic(t) {
+            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        }
+
+        function animateMarkerTo(id, targetLat, targetLon, durationMs) {
+            var marker = markers[id];
+            if (!marker) return;
+            if (markerTweens[id]) {
+                cancelAnimationFrame(markerTweens[id]);
+            }
+            var startLatLng = marker.getLatLng();
+            var startLat = startLatLng.lat;
+            var startLon = startLatLng.lng;
+            var startTime = null;
+
+            function step(timestamp) {
+                if (!markers[id]) return;
+                if (startTime === null) startTime = timestamp;
+                var elapsed = timestamp - startTime;
+                var progress = Math.min(elapsed / durationMs, 1);
+                var eased = easeInOutCubic(progress);
+                var currentLat = startLat + (targetLat - startLat) * eased;
+                var currentLon = startLon + (targetLon - startLon) * eased;
+                marker.setLatLng([currentLat, currentLon]);
+                if (progress < 1) {
+                    markerTweens[id] = requestAnimationFrame(step);
+                } else {
+                    delete markerTweens[id];
+                }
+            }
+            markerTweens[id] = requestAnimationFrame(step);
+        }
+
         // Called from Python to add a marker
         function addMarker(id, stationId, lat, lon, popup, color, layerName) {
             var group = overlayGroups[layerName] || overlayGroups.markers;
             if (markers[id]) {
-                markers[id].setLatLng([lat, lon]);
+                animateMarkerTo(id, lat, lon, 300);
                 setLayerPopup(markers[id], popup);
             } else {
                 markers[id] = L.marker([lat, lon], {
@@ -1447,6 +1483,10 @@ LEAFLET_HTML = """<!DOCTYPE html>
             }
             for (var key in markers) {
                 if (!active[key]) {
+                    if (markerTweens[key]) {
+                        cancelAnimationFrame(markerTweens[key]);
+                        delete markerTweens[key];
+                    }
                     overlayGroups.markers.removeLayer(markers[key]);
                     delete markers[key];
                 }
@@ -1561,6 +1601,15 @@ LEAFLET_HTML = """<!DOCTYPE html>
             map.panTo(latLng, {animate: false});
         }
 
+        function getMapCenterZoom() {
+            var center = map.getCenter();
+            return [center.lat, center.lng, map.getZoom()];
+        }
+
+        function setMapView(lat, lng, zoom) {
+            map.setView([lat, lng], zoom, {animate: false});
+        }
+
         // Called from Python to fit the map view to all markers
         function fitToMarkers() {
             map.invalidateSize(false);
@@ -1651,6 +1700,9 @@ LEAFLET_HTML = """<!DOCTYPE html>
 
         // Called from Python to clear all markers and trajectories
         function clearAll() {
+            for (var key in markerTweens) {
+                cancelAnimationFrame(markerTweens[key]);
+            }
             for (var key in markers) {
                 overlayGroups.markers.removeLayer(markers[key]);
                 disposeLayer(markers[key]);
@@ -1663,6 +1715,7 @@ LEAFLET_HTML = """<!DOCTYPE html>
                 removeInfrastructureLayer(key);
             }
             markers = {};
+            markerTweens = {};
             trajectories = {};
             infrastructureLayers = {};
         }
@@ -1676,6 +1729,13 @@ LEAFLET_HTML = """<!DOCTYPE html>
         } else {
             console.warn('Qt WebChannel unavailable; marker click follow mode disabled.');
         }
+
+        map.on('movestart zoomstart', function() {
+            if (window.bridge) { window.bridge.onMapInteractionStart(); }
+        });
+        map.on('moveend zoomend', function() {
+            if (window.bridge) { window.bridge.onMapInteractionEnd(); }
+        });
         }
     </script>
 </body>
@@ -1738,10 +1798,20 @@ class MapBridge(QObject):
     """Bridge object exposed to JavaScript via QWebChannel."""
 
     message_clicked = pyqtSignal(str)  # station_id
+    map_interaction_started = pyqtSignal()
+    map_interaction_ended = pyqtSignal()
 
     @pyqtSlot(str)
     def onMarkerClicked(self, station_id: str) -> None:
         self.message_clicked.emit(station_id)
+
+    @pyqtSlot()
+    def onMapInteractionStart(self) -> None:
+        self.map_interaction_started.emit()
+
+    @pyqtSlot()
+    def onMapInteractionEnd(self) -> None:
+        self.map_interaction_ended.emit()
 
 
 class DiagnosticWebEnginePage(QWebEnginePage):
@@ -1757,11 +1827,251 @@ class DiagnosticWebEnginePage(QWebEnginePage):
             self.java_script_issue.emit(f"{level_name}: {message} ({source_id}:{line_number})")
 
 
+_MESSAGE_INDEX_CACHE: dict[int, tuple[int, list[float], list[int]]] = {}
+_MESSAGE_INDEX_CACHE_MAX = 8
+
+
+def _message_index(messages: list[V2xMessage]) -> tuple[list[float], list[int]]:
+    """Return cached (timestamps_seconds, infrastructure_indices) for messages.
+
+    Keyed by id(messages) + len. Invalidates when length grows (live capture).
+    """
+    cache_key = id(messages)
+    cached = _MESSAGE_INDEX_CACHE.get(cache_key)
+    if cached is not None and cached[0] == len(messages):
+        return cached[1], cached[2]
+    timestamps = [m.timestamp.timestamp() for m in messages]
+    infra_indices = [
+        i for i, m in enumerate(messages) if m.msg_type in INFRASTRUCTURE_MESSAGE_COLORS
+    ]
+    _MESSAGE_INDEX_CACHE[cache_key] = (len(messages), timestamps, infra_indices)
+    if len(_MESSAGE_INDEX_CACHE) > _MESSAGE_INDEX_CACHE_MAX:
+        _MESSAGE_INDEX_CACHE.pop(next(iter(_MESSAGE_INDEX_CACHE)))
+    return timestamps, infra_indices
+
+
+def _compute_render_payload(
+    messages: list[V2xMessage],
+    *,
+    max_index: int | None,
+    window_start_timestamp: float | None = None,
+    fit_view: bool,
+    short_trails: bool,
+    clear_first: bool,
+    performance_mode: str,
+    station_color_map: dict[str, str],
+) -> dict[str, object]:
+    station_coords: dict[str, list] = {}
+    markers_by_id: dict[str, dict[str, object]] = {}
+    budget = MAP_RENDER_BUDGETS.get(performance_mode, MAP_RENDER_BUDGETS[MAP_PERFORMANCE_NORMAL])
+    end_index = len(messages) if max_index is None else min(max_index + 1, len(messages))
+    display_anchors = _display_anchor_points(messages, max_index=max_index)
+
+    timestamps, infra_indices = _message_index(messages)
+    if window_start_timestamp is not None:
+        window_start_index = bisect.bisect_left(timestamps, window_start_timestamp, hi=end_index)
+    else:
+        window_start_index = 0
+
+    def _process(index: int) -> None:
+        msg = messages[index]
+        if not _has_display_position(msg) or not _is_near_display_anchors(msg, display_anchors):
+            return
+        color = INFRASTRUCTURE_MESSAGE_COLORS.get(msg.msg_type, station_color_map.get(msg.station_id, "#3388ff"))
+        marker_lat, marker_lon = _marker_position_for_message(msg)
+        if msg.msg_type not in NON_STATION_MARKER_TYPES:
+            marker_id_raw = _marker_id_for_message(msg)
+            markers_by_id[marker_id_raw] = {
+                "id": marker_id_raw,
+                "stationId": msg.station_id,
+                "lat": marker_lat,
+                "lon": marker_lon,
+                "popup": (
+                    f"<b>{msg.msg_type.value}</b><br>"
+                    f"Station: {msg.station_id}<br>"
+                    f"Time: {msg.timestamp.strftime('%H:%M:%S.%f')[:-3]}<br>"
+                    f"Pos: {msg.latitude:.6f}, {msg.longitude:.6f}"
+                ),
+                "color": color,
+                "layerName": "markers",
+            }
+            station_coords.setdefault(msg.station_id, []).append([msg.latitude, msg.longitude])
+
+    for index in range(window_start_index, end_index):
+        _process(index)
+    if window_start_index > 0:
+        for index in infra_indices:
+            if index >= window_start_index:
+                break
+            _process(index)
+
+    infrastructure_payload: list[dict[str, object]] = []
+    for overlay in _infrastructure_overlays_for_messages(messages, max_index=max_index):
+        if performance_mode != MAP_PERFORMANCE_NORMAL and overlay["kind"] == "label":
+            continue
+        if performance_mode == MAP_PERFORMANCE_DIAGNOSTIC and overlay.get("layer") not in {
+            "map_inbound",
+            "map_outbound",
+            "map_connections",
+            "map_stoplines",
+            "map_requests",
+            "spat",
+        }:
+            continue
+        overlay_id = str(overlay["id"])
+        layer_name = str(overlay["layer"])
+        overlay_color = str(overlay["color"])
+        if overlay["kind"] == "circle":
+            infrastructure_payload.append(
+                {
+                    "kind": "circle",
+                    "id": overlay_id,
+                    "lat": overlay["lat"],
+                    "lon": overlay["lon"],
+                    "radius": overlay["radius"],
+                    "color": overlay_color,
+                    "popup": str(overlay.get("popup", "")),
+                    "layerName": layer_name,
+                }
+            )
+        elif overlay["kind"] == "polyline":
+            infrastructure_payload.append(
+                {
+                    "kind": "polyline",
+                    "id": overlay_id,
+                    "coords": overlay["coords"],
+                    "color": overlay_color,
+                    "popup": str(overlay.get("popup", "")),
+                    "layerName": layer_name,
+                    "weight": overlay.get("weight", 3),
+                    "opacity": overlay.get("opacity", 0.85),
+                    "dashArray": str(overlay.get("dashArray", "8 6")),
+                    "tooltip": str(overlay.get("tooltip", "")),
+                }
+            )
+        elif overlay["kind"] == "label":
+            infrastructure_payload.append(
+                {
+                    "kind": "label",
+                    "id": overlay_id,
+                    "lat": overlay["lat"],
+                    "lon": overlay["lon"],
+                    "text": str(overlay["text"]),
+                    "color": overlay_color,
+                    "layerName": layer_name,
+                }
+            )
+
+    trajectories_payload: list[dict[str, object]] = []
+    render_trajectories = performance_mode == MAP_PERFORMANCE_NORMAL
+    if performance_mode == MAP_PERFORMANCE_SAVER and len(station_coords) <= 25:
+        render_trajectories = True
+    if performance_mode == MAP_PERFORMANCE_DIAGNOSTIC and len(station_coords) <= 10:
+        render_trajectories = True
+    for station_id, coords in station_coords.items():
+        if not render_trajectories:
+            continue
+        if short_trails:
+            coords = coords[-PLAYBACK_TRAIL_POINTS:]
+        trajectories_payload.append(
+            {
+                "stationId": station_id,
+                "coords": coords,
+                "color": station_color_map.get(station_id, "#3388ff"),
+            }
+        )
+
+    marker_payload = list(markers_by_id.values())
+    if len(marker_payload) > int(budget["markers"]):
+        marker_payload = marker_payload[-int(budget["markers"]) :]
+    if len(infrastructure_payload) > int(budget["infrastructure"]):
+        infrastructure_payload = infrastructure_payload[: int(budget["infrastructure"])]
+    if len(trajectories_payload) > int(budget["trajectories"]):
+        trajectories_payload = trajectories_payload[-int(budget["trajectories"]) :]
+
+    total_points = sum(len(t["coords"]) for t in trajectories_payload)
+    max_points = int(budget["trajectory_points"])
+    if total_points > max_points > 0:
+        remaining = max_points
+        for i, t in enumerate(trajectories_payload):
+            coords = t["coords"]
+            keep = max(1, remaining // max(len(trajectories_payload) - i, 1))
+            if len(coords) > keep:
+                t["coords"] = coords[-keep:]
+            remaining -= len(t["coords"])
+
+    return {
+        "clear": clear_first,
+        "fitView": fit_view,
+        "bounds": _payload_bounds(marker_payload, infrastructure_payload),
+        "performanceMode": performance_mode,
+        "stationColors": station_color_map,
+        "markers": marker_payload,
+        "infrastructure": infrastructure_payload,
+        "trajectories": trajectories_payload,
+    }
+
+
+class RenderPayloadWorker(QThread):
+    """Compute map render payloads in a background thread."""
+
+    payload_ready = pyqtSignal(str, float)
+
+    def __init__(
+        self,
+        messages: list[V2xMessage],
+        max_index: int | None,
+        window_start_timestamp: float | None,
+        fit_view: bool,
+        short_trails: bool,
+        clear_first: bool,
+        performance_mode: str,
+        station_color_map: dict[str, str],
+        *,
+        parent: QObject | None = None,
+    ):
+        super().__init__(parent)
+        self._messages = messages
+        self._max_index = max_index
+        self._window_start_timestamp = window_start_timestamp
+        self._fit_view = fit_view
+        self._short_trails = short_trails
+        self._clear_first = clear_first
+        self._performance_mode = performance_mode
+        self._station_color_map = dict(station_color_map)
+        self._cancelled = False
+
+    def cancel(self) -> None:
+        self._cancelled = True
+
+    def run(self) -> None:
+        if self._cancelled:
+            return
+        try:
+            payload = _compute_render_payload(
+                self._messages,
+                max_index=self._max_index,
+                window_start_timestamp=self._window_start_timestamp,
+                fit_view=self._fit_view,
+                short_trails=self._short_trails,
+                clear_first=self._clear_first,
+                performance_mode=self._performance_mode,
+                station_color_map=self._station_color_map,
+            )
+            if self._cancelled:
+                return
+            payload_json = json.dumps(payload)
+            self.payload_ready.emit(payload_json, time.time())
+        except Exception:
+            logger.exception("RenderPayloadWorker crashed")
+
+
 class MapWidget(QWebEngineView):
     """Interactive Leaflet map displaying V2X entity positions and trajectories."""
 
     telemetry_updated = pyqtSignal(dict)
     map_issue_detected = pyqtSignal(str)
+    map_interaction_ended = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1800,8 +2110,15 @@ class MapWidget(QWebEngineView):
         self._last_payload_was_replaced = False
         self._page_load_failures = 0
         self._page_reload_timer: QTimer | None = None
+        self._user_interacting = False
+        self._render_stall_count = 0
+        self._first_stall_at: float | None = None
+        self._render_worker: RenderPayloadWorker | None = None
+        self._resize_end_timer: QTimer | None = None
 
         self._bridge.message_clicked.connect(self._on_marker_clicked)
+        self._bridge.map_interaction_started.connect(self._on_user_interaction_start)
+        self._bridge.map_interaction_ended.connect(self._on_user_interaction_end)
         self.loadFinished.connect(self._on_load_finished)
         self._diagnostic_page.renderProcessTerminated.connect(self._on_render_process_terminated)
 
@@ -1836,6 +2153,18 @@ class MapWidget(QWebEngineView):
             stall_timer.deleteLater()
         self.__dict__["_stall_timer"] = None
 
+        resize_end_timer = self.__dict__.get("_resize_end_timer")
+        if resize_end_timer is not None:
+            resize_end_timer.stop()
+            resize_end_timer.deleteLater()
+        self.__dict__["_resize_end_timer"] = None
+
+        worker = self.__dict__.get("_render_worker")
+        if worker is not None and worker.isRunning():
+            worker.cancel()
+            worker.wait(500)
+        self.__dict__["_render_worker"] = None
+
     def _get_station_color(self, station_id: str) -> str:
         """Assign a color to a station ID, creating a new one if needed."""
         if station_id not in self._station_color_map:
@@ -1858,9 +2187,9 @@ class MapWidget(QWebEngineView):
 
     def latest_telemetry(self) -> dict[str, object] | None:
         """Return the latest render telemetry, if available."""
-        if self._latest_telemetry is None:
+        if self.__dict__.get("_latest_telemetry") is None:
             return None
-        return self._latest_telemetry.to_dict()
+        return self.__dict__["_latest_telemetry"].to_dict()
 
     def reload_map_page(self) -> None:
         """Reload the embedded Leaflet page and drop pending JavaScript work."""
@@ -1880,13 +2209,32 @@ class MapWidget(QWebEngineView):
         if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
             return
         self._follow_station_id = None
+        center = self._compute_intersection_center(messages)
         self._render_messages(
             messages,
             max_index=None,
-            fit_view=True,
+            fit_view=False,
             short_trails=False,
             clear_first=True,
         )
+        if center is not None:
+            state = {"lat": center[0], "lon": center[1], "zoom": 16}
+            self.store_view_state(state)
+            QTimer.singleShot(100, lambda: self.restore_view_state(state))
+
+    @staticmethod
+    def _compute_intersection_center(messages: list[V2xMessage]) -> tuple[float, float] | None:
+        """Return the first MAPEM/SPATEM intersection reference point."""
+        for msg in messages:
+            if msg.msg_type in (MessageType.MAPEM, MessageType.SPATEM):
+                intersections = msg.decoded_data.get("intersections")
+                if isinstance(intersections, list) and intersections:
+                    for intersection in intersections:
+                        if isinstance(intersection, dict):
+                            point = _extract_map_reference_point(intersection)
+                            if point is not None:
+                                return point
+        return None
 
     def render_playback_slice(
         self,
@@ -1922,185 +2270,30 @@ class MapWidget(QWebEngineView):
         short_trails: bool,
         clear_first: bool,
     ) -> None:
-        """Internal renderer for a full load or a playback time slice."""
-        # Assign colors and set them in JS
-        # Group by station for trajectories
-        station_coords: dict[str, list] = {}
-        markers_by_id: dict[str, dict[str, object]] = {}
-        performance_mode = self.__dict__.get("_performance_mode", MAP_PERFORMANCE_NORMAL)
-        budget = MAP_RENDER_BUDGETS.get(
-            performance_mode,
-            MAP_RENDER_BUDGETS[MAP_PERFORMANCE_NORMAL],
+        if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
+            return
+
+        render_worker = self.__dict__.get("_render_worker")
+        if render_worker is not None and render_worker.isRunning():
+            render_worker.cancel()
+            render_worker.wait(500)
+
+        self._render_worker = RenderPayloadWorker(
+            messages,
+            max_index=max_index,
+            window_start_timestamp=window_start_timestamp,
+            fit_view=fit_view,
+            short_trails=short_trails,
+            clear_first=clear_first,
+            performance_mode=self.__dict__.get("_performance_mode", MAP_PERFORMANCE_NORMAL),
+            station_color_map=self._station_color_map,
         )
-        end_index = len(messages) if max_index is None else min(max_index + 1, len(messages))
-        display_anchors = _display_anchor_points(messages, max_index=max_index)
-        visible_message_count = 0
+        self._render_worker.payload_ready.connect(self._on_worker_payload_ready, Qt.ConnectionType.QueuedConnection)
+        self._render_worker.start()
 
-        for index, msg in enumerate(messages):
-            if index >= end_index:
-                break
-            msg_timestamp = msg.timestamp.timestamp()
-            if not _has_display_position(msg) or not _is_near_display_anchors(msg, display_anchors):
-                continue
-            if (
-                window_start_timestamp is not None
-                and msg_timestamp < window_start_timestamp
-                and msg.msg_type not in INFRASTRUCTURE_MESSAGE_COLORS
-            ):
-                continue
-            visible_message_count += 1
-            color = self._color_for_message(msg)
-            marker_lat, marker_lon = _marker_position_for_message(msg)
-            popup = (
-                f"<b>{msg.msg_type.value}</b><br>"
-                f"Station: {msg.station_id}<br>"
-                f"Time: {msg.timestamp.strftime('%H:%M:%S.%f')[:-3]}<br>"
-                f"Pos: {msg.latitude:.6f}, {msg.longitude:.6f}"
-            )
-
-            if msg.msg_type not in NON_STATION_MARKER_TYPES:
-                # Place/update the current dynamic marker at the latest visible position.
-                marker_id_raw = _marker_id_for_message(msg)
-                markers_by_id[marker_id_raw] = {
-                    "id": marker_id_raw,
-                    "stationId": msg.station_id,
-                    "lat": marker_lat,
-                    "lon": marker_lon,
-                    "popup": popup,
-                    "color": color,
-                    "layerName": "markers",
-                }
-
-            # Collect trajectory coordinates
-            if msg.msg_type not in NON_STATION_MARKER_TYPES:
-                station_coords.setdefault(msg.station_id, []).append([msg.latitude, msg.longitude])
-
-        infrastructure_payload: list[dict[str, object]] = []
-        for overlay in _infrastructure_overlays_for_messages(messages, max_index=max_index):
-            if performance_mode != MAP_PERFORMANCE_NORMAL and overlay["kind"] == "label":
-                continue
-            if performance_mode == MAP_PERFORMANCE_DIAGNOSTIC and overlay.get("layer") not in {
-                "map_inbound",
-                "map_outbound",
-                "map_connections",
-                "map_stoplines",
-                "map_requests",
-                "spat",
-            }:
-                continue
-            overlay_id = str(overlay["id"])
-            layer_name = str(overlay["layer"])
-            overlay_color = str(overlay["color"])
-            if overlay["kind"] == "circle":
-                infrastructure_payload.append(
-                    {
-                        "kind": "circle",
-                        "id": overlay_id,
-                        "lat": overlay["lat"],
-                        "lon": overlay["lon"],
-                        "radius": overlay["radius"],
-                        "color": overlay_color,
-                        "popup": str(overlay.get("popup", "")),
-                        "layerName": layer_name,
-                    }
-                )
-            elif overlay["kind"] == "polyline":
-                infrastructure_payload.append(
-                    {
-                        "kind": "polyline",
-                        "id": overlay_id,
-                        "coords": overlay["coords"],
-                        "color": overlay_color,
-                        "popup": str(overlay.get("popup", "")),
-                        "layerName": layer_name,
-                        "weight": overlay.get("weight", 3),
-                        "opacity": overlay.get("opacity", 0.85),
-                        "dashArray": str(overlay.get("dashArray", "8 6")),
-                        "tooltip": str(overlay.get("tooltip", "")),
-                    }
-                )
-            elif overlay["kind"] == "label":
-                infrastructure_payload.append(
-                    {
-                        "kind": "label",
-                        "id": overlay_id,
-                        "lat": overlay["lat"],
-                        "lon": overlay["lon"],
-                        "text": str(overlay["text"]),
-                        "color": overlay_color,
-                        "layerName": layer_name,
-                    }
-                )
-
-        # Draw trajectories
-        trajectories_payload: list[dict[str, object]] = []
-        render_trajectories = performance_mode == MAP_PERFORMANCE_NORMAL
-        if performance_mode == MAP_PERFORMANCE_SAVER and len(station_coords) <= 25:
-            render_trajectories = True
-        if performance_mode == MAP_PERFORMANCE_DIAGNOSTIC and len(station_coords) <= 10:
-            render_trajectories = True
-        for station_id, coords in station_coords.items():
-            if not render_trajectories:
-                continue
-            if short_trails:
-                coords = coords[-PLAYBACK_TRAIL_POINTS:]
-            trajectories_payload.append(
-                {
-                    "stationId": station_id,
-                    "coords": coords,
-                    "color": self._get_station_color(station_id),
-                }
-            )
-
-        marker_payload = list(markers_by_id.values())
-        dropped_markers = max(0, len(marker_payload) - int(budget["markers"]))
-        if dropped_markers:
-            marker_payload = marker_payload[-int(budget["markers"]) :]
-
-        dropped_infrastructure = max(
-            0,
-            len(infrastructure_payload) - int(budget["infrastructure"]),
-        )
-        if dropped_infrastructure:
-            infrastructure_payload = infrastructure_payload[: int(budget["infrastructure"])]
-
-        dropped_trajectories = max(0, len(trajectories_payload) - int(budget["trajectories"]))
-        if dropped_trajectories:
-            trajectories_payload = trajectories_payload[-int(budget["trajectories"]) :]
-
-        dropped_trajectory_points = self._trim_trajectory_payload(
-            trajectories_payload,
-            int(budget["trajectory_points"]),
-        )
-
-        payload = {
-            "clear": clear_first,
-            "fitView": fit_view,
-            "bounds": _payload_bounds(marker_payload, infrastructure_payload),
-            "performanceMode": performance_mode,
-            "stationColors": self._station_color_map,
-            "markers": marker_payload,
-            "infrastructure": infrastructure_payload,
-            "trajectories": trajectories_payload,
-        }
-        payload_json = json.dumps(payload)
-        self._record_render_telemetry(
-            MapRenderTelemetry(
-                timestamp=time.time(),
-                performance_mode=performance_mode,
-                source_message_count=end_index,
-                visible_message_count=visible_message_count,
-                marker_count=len(marker_payload),
-                infrastructure_count=len(infrastructure_payload),
-                trajectory_count=len(trajectories_payload),
-                trajectory_point_count=sum(len(trajectory["coords"]) for trajectory in trajectories_payload),
-                payload_bytes=len(payload_json.encode("utf-8")),
-                budget_dropped_markers=dropped_markers,
-                budget_dropped_infrastructure=dropped_infrastructure,
-                budget_dropped_trajectories=dropped_trajectories,
-                budget_dropped_trajectory_points=dropped_trajectory_points,
-            )
-        )
+    def _on_worker_payload_ready(self, payload_json: str, _compute_time: float) -> None:
+        if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
+            return
         self._run_js(f"applyRenderPayload({payload_json})")
 
     def _trim_trajectory_payload(
@@ -2171,11 +2364,37 @@ class MapWidget(QWebEngineView):
         """Refresh Leaflet sizing after Qt exposes the WebEngine view."""
         super().showEvent(event)
         self._schedule_map_resize()
+        # Restore saved view state after a short delay so invalidateSize finishes first
+        saved = self.save_view_state()
+        if saved is not None:
+            QTimer.singleShot(50, lambda: self.restore_view_state(saved))
+
+    def hideEvent(self, event: QHideEvent) -> None:
+        """Save the current map view state before the widget is hidden."""
+        super().hideEvent(event)
+        try:
+            self._execute_js("getMapCenterZoom()", lambda result: self.store_view_state(
+                {"lat": result[0], "lon": result[1], "zoom": result[2]} if isinstance(result, list) and len(result) == 3 else None
+            ))
+        except Exception:
+            pass
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         """Refresh Leaflet sizing after DPI/window-size changes."""
-        super().resizeEvent(event)
+        try:
+            super().resizeEvent(event)
+        except RuntimeError:
+            pass
+        if self.__dict__.get("_disposed", False):
+            return
         self._schedule_map_resize()
+        self._on_user_interaction_start()
+        if self.__dict__.get("_resize_end_timer") is not None:
+            self._resize_end_timer.stop()
+        self._resize_end_timer = QTimer()
+        self._resize_end_timer.setSingleShot(True)
+        self._resize_end_timer.timeout.connect(self._on_resize_interaction_end)
+        self._resize_end_timer.start(200)
 
     def clear(self) -> None:
         """Remove all markers and trajectories from the map."""
@@ -2184,6 +2403,28 @@ class MapWidget(QWebEngineView):
         self._station_index = 0
         self._follow_station_id = None
 
+    def set_view(self, lat: float, lon: float, zoom: int) -> None:
+        """Set the map view to a specific center and zoom."""
+        self._run_js(f"setMapView({lat}, {lon}, {zoom})")
+
+    def save_view_state(self) -> dict[str, object] | None:
+        """Return the last saved map center and zoom as a serializable dict."""
+        return self.__dict__.get("_saved_view_state")
+
+    def store_view_state(self, state: dict[str, object] | None) -> None:
+        """Store a view state dict for later restore_view_state."""
+        self.__dict__["_saved_view_state"] = state
+
+    def restore_view_state(self, state: dict[str, object] | None) -> None:
+        """Restore the map view from a previously saved state."""
+        if state is None:
+            return
+        lat = state.get("lat")
+        lon = state.get("lon")
+        zoom = state.get("zoom")
+        if lat is not None and lon is not None and zoom is not None:
+            self.set_view(float(lat), float(lon), int(zoom))
+
     def _schedule_map_resize(self) -> None:
         """Defer Leaflet invalidateSize until Qt has delivered expose/resize."""
         QTimer.singleShot(0, lambda: self._run_js("map.invalidateSize(false)"))
@@ -2191,6 +2432,21 @@ class MapWidget(QWebEngineView):
     def _on_marker_clicked(self, station_id: str) -> None:
         """Remember which dynamic object should be followed during playback."""
         self._follow_station_id = station_id
+
+    def _on_user_interaction_start(self) -> None:
+        self._user_interacting = True
+
+    def _on_user_interaction_end(self) -> None:
+        self._user_interacting = False
+        self.map_interaction_ended.emit()
+
+    def _on_resize_interaction_end(self) -> None:
+        self._user_interacting = False
+        self.map_interaction_ended.emit()
+
+    @property
+    def user_interacting(self) -> bool:
+        return self._user_interacting
 
     def _on_load_finished(self, ok: bool) -> None:
         """Flush queued JavaScript once the embedded map page is ready."""
@@ -2313,11 +2569,18 @@ class MapWidget(QWebEngineView):
         """Execute JavaScript in the web page."""
         if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
             return
+        if self.__dict__.get("_user_interacting", False):
+            if not (
+                script.startswith("applyRenderPayload(")
+                or script.startswith("highlightMarker(")
+                or script.startswith("addMarker(")
+            ):
+                return
         if not self._page_ready:
             self._pending_scripts.append(script)
             return
         if script.startswith("applyRenderPayload("):
-            if self._render_payload_in_flight:
+            if self.__dict__.get("_render_payload_in_flight", False):
                 self._queued_render_payload_script = script
                 self._last_payload_was_replaced = True
                 self._mark_latest_telemetry_replaced()
@@ -2342,7 +2605,6 @@ class MapWidget(QWebEngineView):
                 page.runJavaScript(script, 0, callback)
             except TypeError:
                 page.runJavaScript(script, 0)
-                callback(None)
         except RuntimeError as exc:
             self._disposed = True
             self._render_payload_in_flight = False
@@ -2398,10 +2660,42 @@ class MapWidget(QWebEngineView):
             self._render_payload_started_at = None
             queued = self._queued_render_payload_script
             self._queued_render_payload_script = None
-            self._emit_map_issue(f"Karten-Renderpayload lief seit >{MAP_RENDER_STALL_SECONDS:.0f}s — Flag zurückgesetzt")
+            self._emit_map_issue(
+                f"Karten-Renderpayload lief seit >{MAP_RENDER_STALL_SECONDS:.0f}s — Flag zurueckgesetzt"
+            )
             if queued is not None:
                 logger.info("Flushing queued render payload after stall reset")
                 self._run_js(queued)
+
+            now = time.monotonic()
+            if self._first_stall_at is None or now - self._first_stall_at > 60.0:
+                self._first_stall_at = now
+                self._render_stall_count = 0
+            self._render_stall_count += 1
+            if self._render_stall_count >= 3:
+                logger.warning(
+                    "Map page reload triggered after %d stall events in %ds",
+                    self._render_stall_count,
+                    int(now - self._first_stall_at),
+                )
+                self._first_stall_at = None
+                self._render_stall_count = 0
+                # Cancel the stall timer for any flushed payload and reset all
+                # in-flight state so late callbacks and old timers are harmless.
+                stall_timer = self.__dict__.get("_stall_timer")
+                if stall_timer is not None:
+                    stall_timer.stop()
+                    stall_timer.deleteLater()
+                self.__dict__["_stall_timer"] = None
+                self._page_ready = False
+                self._bootstrap_probe_succeeded = False
+                self._pending_scripts = []
+                self._render_payload_in_flight = False
+                self._queued_render_payload_script = None
+                self._render_payload_started_at = None
+                self._bootstrap_generation += 1
+                self.setHtml(_leaflet_runtime_html(), QUrl.fromLocalFile(str(_asset_base_path()) + "/"))
+                self._schedule_bootstrap_timeout()
 
     def _on_java_script_issue(self, message: str) -> None:
         """Forward JavaScript errors from the map page to the main window."""

@@ -189,6 +189,28 @@ class EtaVerification:
         """Whether the ETA error stays within a 2-second operator tolerance."""
         return abs(self.delta_seconds) <= 2.0
 
+    @property
+    def accuracy_percentile(self) -> float:
+        """Return a normalized accuracy score (1.0 = perfect, 0.0 = very inaccurate).
+
+        Maps |delta| to a percentile-like score for dashboard coloring:
+        <= 1s  -> 1.0 (excellent)
+        <= 2s  -> 0.8 (good, within tolerance)
+        <= 5s  -> 0.5 (fair)
+        <= 10s -> 0.2 (poor)
+        > 10s  -> 0.0 (unacceptable)
+        """
+        abs_delta = abs(self.delta_seconds)
+        if abs_delta <= 1.0:
+            return 1.0
+        if abs_delta <= 2.0:
+            return 0.8
+        if abs_delta <= 5.0:
+            return 0.5
+        if abs_delta <= 10.0:
+            return 0.2
+        return 0.0
+
 
 @dataclass
 class PrioritizationIssue:

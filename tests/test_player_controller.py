@@ -185,3 +185,37 @@ def test_seek_to_position_no_messages() -> None:
     controller = PlayerController()
     controller.seek_to_position(0.5)
     assert controller.current_index == 0
+
+
+def test_player_tick_does_not_depend_on_map_widget_for_state() -> None:
+    base = datetime(2025, 8, 22, 12, 0, 0)
+    session = SessionData(
+        messages=[
+            _message(base),
+            _message(base + timedelta(seconds=2)),
+        ]
+    )
+
+    controller = PlayerController()
+    controller.set_session(session)
+    controller.play()
+
+    assert controller.state == "playing"
+
+    controller._on_tick()
+    controller._on_tick()
+
+    assert controller.current_index >= 0
+    assert controller.state == "playing"
+
+
+def test_focus_replay_with_empty_focus_indices_does_not_play() -> None:
+    base = datetime(2025, 8, 22, 12, 0, 0)
+    session = SessionData(messages=[_message(base)])
+    controller = PlayerController()
+    controller.set_session(session)
+    controller.set_focus_indices([])
+    controller.set_focus_replay_enabled(True)
+    controller.play()
+    assert controller.state == "stopped"
+    assert controller.current_index == 0

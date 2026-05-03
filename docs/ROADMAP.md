@@ -1,138 +1,172 @@
-# PCAP2KML Player — Aktualisierte Roadmap
+# PCAP2KML Player — Roadmap
 
-**Stand:** 2026-04-25 | **Version:** 1.7.0+
+**Stand:** 2026-05-02 | **Aktive Version:** 1.7.0 | **Branch:** release/1.7.0
 
----
-
-## Phase 1: Stabilisierung & Testing (ABGESCHLOSSEN)
-
-- [x] Test-Suite mit pytest
-- [x] Unit- und Integrationstests für Kernmodule
-- [x] Globales Exception-Handling
-- [x] ASN.1-Decoding-Fehler-Logging
-- [x] Parser-Robustheit (Timeout, pyshark, GeoNetworking)
-- [x] Drag & Drop, Letzte Sitzung, UX-Auffrischung
+Detaillierter Integrationsplan v1.8: [`integration_plan_v1.8.md`](integration_plan_v1.8.md)
+Aktuelles Performance-Profil: [`profiling/stutter_profile.md`](profiling/stutter_profile.md)
 
 ---
 
-## Phase 2: ASN.1-Decoding-Verbesserung (ABGESCHLOSSEN)
+## Status auf einen Blick
 
-- [x] Erweiterte Nachrichtenfelder (CAM, DENM, MAPEM, SPATEM, SREM/SSEM)
-- [x] Schema-Management (Download, Integritätsprüfung, Fallback)
-- [x] Performance: Lazy-Compiling, Cache
-
----
-
-## Phase 2.5: PKI-Signatur-Analyse (TEILWEISE)
-
-- [x] **A1 — Parser-Vervollständigung**: `assurance_level`, `station_type`, `validity`, `region`, `ITS-AID`
-- [x] **A2 — UI-Platzhalter**: "Signatur prüfen"-Button mit Hinweisdialog
-- [x] **A3 — ECDSA-Verifikation**: Standalone-Skript (`scripts/verify_ecdsa.py`), opt-in via `cryptography`
-- [ ] Zertifikatsketten vollständig parsen (erfordert echte ASN.1/UPER-Decodierung)
-- [ ] Signaturverifikation in Haupt-App integrieren
-
-**Anmerkung**: Echte kryptografische Verifikation ist auf explizite **Benutzeranfrage** beschränkt (Sicherheits-/Compliance-Anforderungen).
+| Release | Theme | Status |
+|---------|-------|--------|
+| v1.0–v1.7 | Stabilisierung, ASN.1, Tests, Map-Stability | **abgeschlossen** |
+| v1.8 | Analyse-Tiefe + IVIM + Darstellungs-Fixes + Live-Capture-Architektur-Prep | in Arbeit |
+| v1.9 | Visualisierung (Heatmap, Track-Vergleich, Conformance-Checker) | geplant |
+| v2.0 | Live-Capture (Cohda + OpenC2X), CLI, MSI/Signing, Auto-Update, Plugin-API | geplant |
 
 ---
 
-## Phase 2.6: Szenen-Aggregation & Phasenprognose (TEILWEISE)
+## Abgeschlossen bis v1.7
 
-- [x] Szenen-Datenmodell (IntersectionState, SignalGroupState, SpatForecast)
-- [x] MAP-zu-SPaT-Join
-- [x] SREM-zu-SSEM-Korrelation
+### Stabilisierung & Testing
+- [x] pytest-Test-Suite mit 306 Tests, 80.2 % Coverage
+- [x] Unit-/Integrations-/E2E-/Property-/GUI-Tests, pytest-Marks (unit, integration, gui, e2e, property, slow, benchmark, pcap_real)
+- [x] Fixture-Hierarchie (`tests/conftest.py`, `factories.py`, `conftest_pcap.py`)
+- [x] Globales Exception-Handling, robust auch im Headless-Modus
+- [x] Race-Condition in `_cleanup_loader` behoben, Worker-Lifecycle gehaertet
+- [x] ruff + mypy + GitHub Actions CI (Windows), lokales `scripts/run_ci.ps1`
+
+### Parser & ASN.1
+- [x] Erweiterte Nachrichtenfelder (CAM, DENM, MAPEM, SPATEM, SREM, SSEM)
+- [x] Schema-Management mit Download, Integritaetspruefung, Fallback (ETSI Forge GitLab)
+- [x] Lazy-Compiling, Cache, Timeout-Handling
+- [x] Pyshark + scapy Dual-Backend mit automatischer Auswahl
+- [x] Drag & Drop, Letzte Sitzung, Recent-Files
+
+### Szenen-Aggregation
+- [x] Datenmodell (IntersectionState, SignalGroupState, SpatForecast)
+- [x] MAP-zu-SPaT-Join, SREM-zu-SSEM-Korrelation
 - [x] Timeout-Detektor, Uhrenversatz-Check, ETA-Verifikation
-- [x] **Flow-Freigabe-Check**: Lane-Connectivity + `resolve_flow_status()`
-- [x] Phasenprognose-Panel (aktueller Stand)
-- [ ] Segmentliste für die nächsten 30 s je SignalGroup (vollständige Segmentierung)
+- [x] Lane-Connectivity, `resolve_flow_status()`, Phasenprognose-Panel
 
----
+### Karten- und Export-Funktionalitaet
+- [x] WebEngine/Leaflet ausschliesslich, Native-Map-Widget entfernt
+- [x] Auto-Recovery bei Map-Fehlern
+- [x] Export-Formate: KML, GeoJSON, CSV, GPX, KML-Tour
+- [x] Statistik-Dashboard als eigenstaendiger Dialog
+- [x] JS-Escaping gegen Script-Injection
 
-## Phase 3: Karten- und Visualisierung (TEILWEISE)
+### PKI-Signatur (Teilweise)
+- [x] Parser-Vervollstaendigung (`assurance_level`, `station_type`, `validity`, `region`, `ITS-AID`)
+- [x] UI-Platzhalter "Signatur pruefen" mit Hinweisdialog
+- [x] Standalone-ECDSA-Verifikationsskript (`scripts/verify_ecdsa.py`)
 
-### Bereits implementiert
-- [x] **Export-Formate**: GeoJSON, CSV, GPX, KML Tour
-- [x] **Statistik-Dashboard**: Eigenständiger Dialog mit Nachrichtenraten, Speed/Heading
-- [x] **JS-Escaping**: Sicherheit gegen Script-Injection
+### v1.7 Map-Stability & Threading-Hardening
+- [x] Leaflet-Interaction-Detection-Bridge — pausiert JS-Calls bei Pan/Zoom
+- [x] Catch-up-Flush nach Interaction-End
+- [x] Stall-Timeout 8s -> 5s, Auto-Reload nach 3 Stalls in 60 s
+- [x] RenderPayloadWorker — Payload-Berechnung off-thread
+- [x] QueuedConnection fuer worker-Signale, ParsingWorker-Cancel-Check
+- [x] resizeEvent-Interaction-Gate verhindert Map-Freeze beim Maximieren
+- [x] i18n, ThemeManager, Konstanten-Konsolidierung, CI-Erweiterungen
 
-### Stubs / Vorbereitet
-- [ ] Offline-Kartenunterstützung (Vector-Tiles / MapLibre)
-- [ ] Heatmap-Overlay + Cluster-Ansicht
-- [ ] Koordinaten- und Maßstabsanzeige
-- [ ] Screenshot-Export
-- [ ] Dichte-Timeline + Loop-Modus + Lesezeichen + Frame-Navigation
+### v1.8 Vorarbeiten (bereits gemerged in 1.7-Branch)
+- [x] **T1.1** Stutter-Diagnose-Profiler ([scripts/profiling/profile_replay.py](../scripts/profiling/profile_replay.py))
+- [x] **T1.1** Stutter-Profiling-Bericht ([docs/profiling/stutter_profile.md](profiling/stutter_profile.md))
+- [x] **T1.3a** Bisect-Index-Cut + Reorder + Index-Cache in `_compute_render_payload`
+       — rxa p95: 238 → 43 ms (-82 %), txa p95: 780 → 243 ms (-69 %)
+- [x] **T1.3b** Trail-Window-Default in Production bereits aktiv (120 s normal / 45 s saver / 20 s diagnostic)
 
-**Nächste Schritte**: MapLibre-Integration für Offline-Vector-Tiles (MBTiles / PMTiles), dann Heatmap/Cluster als MapLibre-Layer.
-
----
-
-## Phase 4: Analyse und Export (TEILWEISE)
-
-- [x] KML-Export (bestehend)
-- [x] **GeoJSON-Export** (neu)
-- [x] **CSV-Export** (neu)
-- [x] **GPX-Export** (neu)
-- [x] **Zeitanimierte KML-Tour** (neu)
-- [x] **Statistik-Dashboard** (neu)
-- [ ] Statistik-Dashboard: Diagramme/Charts (Matplotlib / PyQtGraph)
-- [ ] Geschwindigkeits-/Heading-Verteilung als Histogramm
-
----
-
-## Phase 5: Architektur und Verteilung (IN ARBEIT)
-
-- [x] **pyproject.toml** mit ruff, mypy, pytest, Coverage
-- [x] **GitHub Actions CI** (Windows)
-- [x] **Lokales CI-Skript** (`scripts/run_ci.ps1`)
-- [ ] Type-Checking: 100% mypy-clean (derzeit teilweise ignoriert für Qt-Overrides)
+### Aus 1.7-Restbestand uebernommen ins v1.8/spaeter
+- [ ] PKI: Zertifikatsketten vollstaendig parsen + Signaturverifikation in Haupt-App integrieren _(opt-in, nur auf User-Request)_
+- [ ] Szenen: vollstaendige Segmentliste fuer naechste 30 s je SignalGroup
+- [ ] mypy 100 % clean (Qt-Overrides aktuell teilweise ignoriert)
 - [ ] Pre-commit-Hooks
-- [ ] PyInstaller-Bundle für Windows
-- [ ] Headless-Kommandozeilenmodus
+- [ ] Diagramme im Statistik-Dashboard (Matplotlib oder PyQtGraph)
+- [ ] Geschwindigkeits-/Heading-Histogramme
 
 ---
 
-## Phase 6: Test-Strategie & Qualitätssicherung (ABGESCHLOSSEN)
+## v1.8 — Analyse-Tiefe (in Arbeit)
 
-- [x] **Teststrategie** (`tests/TESTING_STRATEGY.md`) — Pyramide, Risikomatrix, Marks
-- [x] **Fixture-Hierarchie** (`tests/conftest.py`, `factories.py`, `conftest_pcap.py`)
-- [x] **Coverage-Gate** 80% — aktuell 80.2% Line (306/306 Tests passing)
-- [x] **pytest-Marks**: unit, integration, gui, e2e, property, slow, benchmark, pcap_real
-- [x] **Unit-Test-Erweiterung**: 39 neue Tests (security_parser, player_controller, map_backend)
-- [x] **Bugfixes**: Race-Condition in `_cleanup_loader`, Exception-Handler robust für headless
-- [ ] 90% Branch Coverage (aktuell ~65%; erfordert 200+ Parser/Scene-Tests)
-- [ ] Property-Tests (Hypothesis — malformed ASN.1/NMEA Frames)
-- [ ] GUI-Tests mit pytest-qt (headless `QT_QPA_PLATFORM=offscreen`)
+**Theme:** Engineer kann eine V2X-Message vollstaendig verstehen, ohne den PCAP extern zu oeffnen. Replay laeuft fluessig.
 
----
+| Status | Ticket |
+|--------|--------|
+| ✅ done | **T1.1** Stutter-Profiling — Befund O(N)-Vollscan dokumentiert |
+| ✅ done | **T1.3a** Bisect-Cut + Reorder + Index-Cache (rxa p95 −82 %, txa p95 −69 %) |
+| ✅ done | **T1.3b** Trail-Window-Default (bereits in Production) |
+| ◻ open | **T1.2** JS-Bridge-Latenz in Live-App messen |
+| ◻ open | **T1.3c** `_display_anchor_points` Cache (naechster Hebel: Frametime-Gate p95 < 18 ms) |
+| ◻ open | **T1.3d** Inkrementelles Marker-Update (Delta statt Full-Repaint) |
+| ◻ open | **T1.3e** orjson, falls nach c/d noch noetig |
+| ◻ open | **T2** Message-Inspector (Decode-Tree + Hex/Raw + konfigurierbarer Trigger mit MouseOver-Tooltips) |
+| ◻ open | **T3** Filterleiste (Multi-Select Stations-ID × Type × Zeit, persistent, FilterModel-Reuse) |
+| ◻ open | **T4** IVIM-Support (ETSI TS 103 301 v2.2.1, ISO-14823-Icons, KML, synthetische Test-Fixtures) |
+| ◻ open | **T5** Statistik-Tab Phase 1 (eigener Tab, post-hoc, **read-only Standards-Profil-Anzeige**: C-Roads, C2C-CC, ETSI, BSI) |
+| ◻ open | **T6** `MessageSource`-Abstraktion (Refactor ohne UI-Aenderung, Live-Capture-Vorbereitung) |
+| ◻ open | **T7** Code-Signing-Cert beschaffen (parallel laufender Track) |
 
-## Zusammenfassung der Änderungen
-
-| Branch | Inhalt | Tests |
-|--------|--------|-------|
-| `bugfix/optimization-round` | Thread-Safety, Signal-Leaks, Timer-Lifecycle, Performance | 245/245 |
-| `feature/ci-toolchain` | ruff, mypy, GitHub Actions CI | 254/254 |
-| `feature/scene-aggregation-flow` | Lane-Connectivity, Flow-Freigabe-Check | 254/254 |
-| `feature/pki-verification` | PKI-Parser, UI-Platzhalter, ECDSA-Skript | 254/254 |
-| `feature/phase-d-visualization` | Dashboard, Export-Formate (GeoJSON/CSV/GPX/KML) | 267/267 |
-| `feature/testing-strategy` | Teststrategie, Fixtures, 39 neue Tests | 306/306 |
-
-**Gesamt auf `master`: 306 Tests, 80.2% Coverage, 25.7s Laufzeit**
+**Coverage-Ziel:** 83 %  |  **CI Performance-Gate:** p95-Frametime < 18 ms auf 100/500 MB Test-PCAPs
 
 ---
 
-- **MapLibre-Integration**: Erfordert WebEngine- oder Qt-Widget-Backend für Vektor-Tiles.
-- **Offline-Karten**: MBTiles oder PMTiles als Assets einbinden.
-- **Diagramme**: Matplotlib oder PyQtGraph als optionale Dependency.
-- **PKI-Integration**: Echte ECDSA-Verifikation nur auf explizite Anfrage.
+## v1.9 — Visualisierung (geplant)
+
+**Theme:** Mehrere Stationen und Datendichten gleichzeitig erfassbar machen.
+
+- ◻ Heatmap-Layer (Density, Speed, RSSI sofern verfuegbar)
+- ◻ Track-Vergleich RSU↔Vehicle gemischt, n Stationen synchron, Diff-View
+- ◻ Replay-Export als MP4/GIF
+- ◻ Konfliktanalyse SREM↔SPATEM, MAPEM-Geometrie-Plausibilitaet, CAM-Heading-Sprung-Detektor
+- ◻ **Statistik-Tab Phase 2** — Conformance-Checker mit Pass/Warn/Fail gegen C-Roads / C2C-CC / ETSI / BSI
+- ◻ MapLibre-Integration fuer Offline-Vector-Tiles (MBTiles / PMTiles)
+- ◻ _(Optional, Feature-Flag)_ 3D-View via Cesium
+
+**Coverage-Ziel:** 86 %
 
 ---
 
-## Empfohlene Nächste Schritte (nach Priorität)
+## v2.0 — Live-Capture & Distribution (geplant)
 
-1. **MapLibre-Integration** (Phase 3) — höchste Priorität für Offline-Karten
-2. **Diagramme im Dashboard** (Phase 4) — Matplotlib/PyQtGraph für visuelle Statistiken
-3. **Pre-commit-Hooks** (Phase 5) — Automatische Formatierung vor Commit
-4. **PyInstaller-Bundle** (Phase 5) — Verteilungsfertige Windows-Exe
+**Theme:** Aus dem Offline-Tool wird ein Live-Operationswerkzeug mit Enterprise-Distribution.
+
+- ◻ Live-Capture ueber Cohda MK6 (Raw-Socket, BTP/GeoNet) und OpenC2X (UDP-Multicast), Ringbuffer, Pause/Record
+- ◻ CLI-Modus fuer Batch-Konvertierung (PCAP → KML/GeoJSON ohne UI)
+- ◻ MSI-Installer + Code-Signing (signtool.exe in CI, EV- oder OV-Cert)
+- ◻ PyInstaller-Bundle fuer Windows
+- ◻ Auto-Update gegen GitHub-Releases
+- ◻ Plugin-API fuer Custom-Decoder
+
+**Coverage-Ziel:** 89 %
 
 ---
 
-*Letzte Aktualisierung: 2026-04-25*
+## Release-uebergreifende Continuous-Themen
+
+- Coverage +3 % pro Release (80 → 89 bei v2.0)
+- Performance-Benchmark im CI mit Regression-Gate (100 / 500 / 1000 MB Capture)
+- Streaming-Parser umstellen, sobald Captures > 1 GB realistisch werden
+- Diagnostics-Bundle-Export (Logs + Sysinfo + PCAP-Header) als Menuepunkt fuer Bug-Reports
+
+---
+
+## Rahmenentscheidungen (2026-05-02)
+
+| Punkt | Entscheidung |
+|-------|--------------|
+| Primaernutzer | Internes Team, spaeter externe V2X-Engineers |
+| Hauptschmerz | Replay-Stutter + Analyse-Tiefe |
+| Live-Capture | Architektur in v1.8, Feature in v2.0 |
+| Live-Capture-Targets | Cohda MK6 + OpenC2X |
+| Code-Signing | Cert muss beschafft werden (kritischer Pfad v2.0) |
+| Anonymisierung | Nicht erforderlich (interne Daten) |
+| IVIM-Testdaten | Synthetisch generiert, ETSI Plugtest-Captures als Fallback |
+| Standards-Compliance | v1.8 read-only (Profil-Anzeige), v1.9 aktiver Checker |
+| PKI-Signaturpruefung | Bleibt opt-in auf User-Request, keine Default-Aktivierung |
+
+---
+
+## Verweise
+
+- Detail-Plan v1.8: [`integration_plan_v1.8.md`](integration_plan_v1.8.md)
+- Performance-Befund: [`profiling/stutter_profile.md`](profiling/stutter_profile.md)
+- Teststrategie: [`../tests/TESTING_STRATEGY.md`](../tests/TESTING_STRATEGY.md)
+- Benutzerhandbuch: [`benutzerhandbuch.html`](benutzerhandbuch.html)
+- Changelog: [`../CHANGELOG.md`](../CHANGELOG.md)
+
+---
+
+*Letzte Aktualisierung: 2026-05-02*
