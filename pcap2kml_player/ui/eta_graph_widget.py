@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen
+from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import QWidget
 
 from ..data_model import MessageType, V2xMessage
@@ -255,6 +255,10 @@ class EtaGraphWidget(QWidget):
             if eta is None and verification is not None:
                 eta = verification.predicted_eta
             remaining_seconds = max(0.0, (eta - msg.timestamp).total_seconds()) if eta else 0.0
+            # Validate: reject physically implausible ETA values (> 30 min or negative)
+            if eta is not None and remaining_seconds > 1800.0:
+                eta = None
+                remaining_seconds = 0.0
             error_seconds = verification.delta_seconds if verification is not None else None
             relative_seconds = _relative_seconds(msg.timestamp, self._start_time)
             label = _request_label("SREM", request_id, sequence_number)
@@ -278,14 +282,21 @@ class EtaGraphWidget(QWidget):
                     )
                 )
 
+        # Build speed curve from CAM messages that overlap with the request window
+        # Include messages before start_time to warm up the moving average
         speed_messages = [
             msg
             for msg in self._messages
             if msg.station_id == self._selection.station_id
             and msg.speed is not None
-            and msg.timestamp >= self._start_time
+            and msg.timestamp >= self._start_time - timedelta(seconds=5)
         ]
         self._speed_points = _smooth_speed_points(speed_messages, self._start_time)
+        # Filter speed points to only those within the actual request window
+        self._speed_points = [
+            point for point in self._speed_points
+            if point.timestamp >= self._start_time
+        ]
 
         ssem_events = [msg for msg in self._messages if _matches_ssem(msg, self._selection)]
         self._status_bands = _build_status_bands(ssem_events, self._start_time, end_time)
@@ -391,6 +402,12 @@ class EtaGraphWidget(QWidget):
             painter.drawText(QPointF(x + 4, plot.bottom() - 8), request_event.label[:32])
 
     def _draw_eta_series(self, painter: QPainter, plot: QRectF, duration: float, eta_max: float) -> None:
+        if not self._eta_points:
+            return
+        # Draw filled area under the ETA curve
+        eta_color = QColor("#2563eb")
+        fill_color = QColor("#2563eb")
+        fill_color.setAlpha(30)
         points = [
             QPointF(
                 _x_for_relative(point.relative_seconds, duration, plot),
@@ -398,38 +415,87 @@ class EtaGraphWidget(QWidget):
             )
             for point in self._eta_points
         ]
-        self._draw_polyline_or_points(painter, points, QColor("#2563eb"), 2.8)
+        # Build closed path for fill
+        if len(points) >= 2:
+            path = QPainterPath()
+            path.moveTo(points[0])
+            for point in points[1:]:
+                path.lineTo(point)
+            path.lineTo(QPointF(points[-1].x(), plot.bottom()))
+            path.lineTo(QPointF(points[0].x(), plot.bottom()))
+            path.closeSubpath()
+            painter.fillPath(path, fill_color)
+        # Draw polyline
+        self._draw_polyline_or_points(painter, points, eta_color, 2.8)
+        # Draw error indicators with severity-based colors
         painter.setFont(QFont("Segoe UI", 8))
         for eta_point, draw_point in zip(self._eta_points, points):
             if eta_point.error_seconds is None:
                 continue
-            color = QColor("#16a34a") if abs(eta_point.error_seconds) <= 2.0 else QColor("#dc2626")
+            abs_error = abs(eta_point.error_seconds)
+            if abs_error <= 1.0:
+                color = QColor("#16a34a")  # excellent
+            elif abs_error <= 2.0:
+                color = QColor("#84cc16")  # good
+            elif abs_error <= 5.0:
+                color = QColor("#f59e0b")  # fair
+            else:
+                color = QColor("#dc2626")  # poor
+            # Draw error bar circle
             painter.setPen(QPen(color, 1))
-            painter.drawText(QPointF(draw_point.x() + 5, draw_point.y() - 5), f"{eta_point.error_seconds:+.1f}s")
+            painter.setBrush(color)
+            painter.drawEllipse(draw_point, 4.0, 4.0)
+            painter.setPen(QPen(color))
+            painter.drawText(QPointF(draw_point.x() + 6, draw_point.y() - 6), f"{eta_point.error_seconds:+.1f}s")
 
     def _draw_speed_series(self, painter: QPainter, plot: QRectF, duration: float, speed_max: float) -> None:
+        if not self._speed_points:
+            return
+        speed_color = QColor("#16a34a")
+        fill_color = QColor("#16a34a")
+        fill_color.setAlpha(20)
         points = [
             QPointF(
                 _x_for_relative(point.relative_seconds, duration, plot), _y_for_value(point.speed_mps, speed_max, plot)
             )
             for point in self._speed_points
         ]
-        self._draw_polyline_or_points(painter, points, QColor("#16a34a"), 2.0)
+        # Build closed path for fill
+        if len(points) >= 2:
+            path = QPainterPath()
+            path.moveTo(points[0])
+            for point in points[1:]:
+                path.lineTo(point)
+            path.lineTo(QPointF(points[-1].x(), plot.bottom()))
+            path.lineTo(QPointF(points[0].x(), plot.bottom()))
+            path.closeSubpath()
+            painter.fillPath(path, fill_color)
+        self._draw_polyline_or_points(painter, points, speed_color, 2.0)
 
     def _draw_diagnostics(self, painter: QPainter, plot: QRectF, diagnosis_y: float, duration: float) -> None:
         if not self._diagnostics:
             return
+        # Group diagnostics by type for better visual scanning
         painter.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
         painter.setPen(QPen(QColor("#7f1d1d")))
         painter.drawText(QPointF(plot.left() - 58, diagnosis_y + 4), "Checks")
-        for item in self._diagnostics[:8]:
+        for index, item in enumerate(self._diagnostics[:12]):
             x = _x_for_relative(item.relative_seconds, duration, plot)
-            painter.setPen(QPen(item.color, 2))
+            # Severity-based color: use item color but derive severity from label keywords
+            severity_color = _diagnostic_severity_color(item.label)
+            # Draw semi-transparent vertical span line
+            span_pen = QPen(severity_color)
+            span_pen.setWidth(1)
+            span_color = QColor(severity_color)
+            span_color.setAlpha(40)
+            painter.setPen(span_pen)
             painter.drawLine(QPointF(x, plot.top()), QPointF(x, plot.bottom()))
-            painter.setBrush(item.color)
-            painter.drawEllipse(QPointF(x, diagnosis_y), 4.0, 4.0)
-            painter.setPen(QPen(item.color))
-            painter.drawText(QPointF(x + 6, diagnosis_y + 4), item.label[:28])
+            # Stagger labels vertically to reduce overlap
+            label_y = diagnosis_y + ((index % 3) * 14)
+            painter.setBrush(severity_color)
+            painter.drawEllipse(QPointF(x, label_y), 4.0, 4.0)
+            painter.setPen(QPen(severity_color))
+            painter.drawText(QPointF(x + 6, label_y + 4), item.label[:28])
 
     def _draw_polyline_or_points(self, painter: QPainter, points: list[QPointF], color: QColor, width: float) -> None:
         if not points:
@@ -632,6 +698,27 @@ def _detect_diagnostics(
     if not eta_points and srem_messages:
         diagnostics.append(_diagnostic(srem_messages[0].timestamp, start_time, "SREM ohne verwertbare ETA"))
     return diagnostics
+
+
+def _diagnostic_severity_color(label: str) -> QColor:
+    """Map diagnostic label keywords to a severity QColor.
+
+    Returns one of four severity colors:
+    - excellent  (#16a34a)  – nominal / granted / good
+    - good       (#84cc16)  – acceptable / ack / minor
+    - fair       (#f59e0b)  – warning / late / delay / degraded
+    - poor       (#dc2626)  – error / reject / timeout / critical / fail
+    """
+    token = label.lower()
+    if any(keyword in token for keyword in ("ok", "good", "granted", "nominal", "valid")):
+        return QColor("#16a34a")
+    if any(keyword in token for keyword in ("acceptable", "ack", "tolerant", "minor", "soft")):
+        return QColor("#84cc16")
+    if any(keyword in token for keyword in ("warning", "late", "slow", "delay", "degraded", "caution")):
+        return QColor("#f59e0b")
+    if any(keyword in token for keyword in ("error", "critical", "reject", "deny", "timeout", "expired", "missed", "fail", "fatal")):
+        return QColor("#dc2626")
+    return QColor("#dc2626")
 
 
 def _diagnostic(timestamp: datetime, start_time: datetime, label: str) -> DiagnosticItem:

@@ -17,7 +17,7 @@ from pathlib import Path
 
 from PyQt6 import sip
 from PyQt6.QtCore import Qt, QObject, QThread, QTimer, QUrl, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QResizeEvent, QShowEvent
+from PyQt6.QtGui import QHideEvent, QResizeEvent, QShowEvent
 from PyQt6.QtWebChannel import QWebChannel
 from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineSettings
 from PyQt6.QtWebEngineWidgets import QWebEngineView
@@ -30,7 +30,7 @@ from .map_backend import (
     MAP_PERFORMANCE_SAVER,
     METERS_PER_DEGREE_LATITUDE,
 )
-from .scene_model import build_scene_snapshot
+from .scene_model import _extract_map_reference_point, build_scene_snapshot
 
 logger = logging.getLogger(__name__)
 PLAYBACK_TRAIL_POINTS = 8
@@ -1126,6 +1126,7 @@ LEAFLET_HTML = """<!DOCTYPE html>
     <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
     <style>
         html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; }
+        /* Smooth marker interpolation (Phase 3) - JS-driven tweening */
     </style>
 </head>
 <body>
@@ -1224,6 +1225,7 @@ LEAFLET_HTML = """<!DOCTYPE html>
         });
 
         var markers = {};
+        var markerTweens = {};
         var trajectories = {};
         var infrastructureLayers = {};
         var mapPerformanceMode = 'normal';
@@ -1258,11 +1260,45 @@ LEAFLET_HTML = """<!DOCTYPE html>
             mapPerformanceMode = mode || 'normal';
         }
 
+        // Marker tweening utilities for smooth playback
+        function easeInOutCubic(t) {
+            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        }
+
+        function animateMarkerTo(id, targetLat, targetLon, durationMs) {
+            var marker = markers[id];
+            if (!marker) return;
+            if (markerTweens[id]) {
+                cancelAnimationFrame(markerTweens[id]);
+            }
+            var startLatLng = marker.getLatLng();
+            var startLat = startLatLng.lat;
+            var startLon = startLatLng.lng;
+            var startTime = null;
+
+            function step(timestamp) {
+                if (!markers[id]) return;
+                if (startTime === null) startTime = timestamp;
+                var elapsed = timestamp - startTime;
+                var progress = Math.min(elapsed / durationMs, 1);
+                var eased = easeInOutCubic(progress);
+                var currentLat = startLat + (targetLat - startLat) * eased;
+                var currentLon = startLon + (targetLon - startLon) * eased;
+                marker.setLatLng([currentLat, currentLon]);
+                if (progress < 1) {
+                    markerTweens[id] = requestAnimationFrame(step);
+                } else {
+                    delete markerTweens[id];
+                }
+            }
+            markerTweens[id] = requestAnimationFrame(step);
+        }
+
         // Called from Python to add a marker
         function addMarker(id, stationId, lat, lon, popup, color, layerName) {
             var group = overlayGroups[layerName] || overlayGroups.markers;
             if (markers[id]) {
-                markers[id].setLatLng([lat, lon]);
+                animateMarkerTo(id, lat, lon, 300);
                 setLayerPopup(markers[id], popup);
             } else {
                 markers[id] = L.marker([lat, lon], {
@@ -1447,6 +1483,10 @@ LEAFLET_HTML = """<!DOCTYPE html>
             }
             for (var key in markers) {
                 if (!active[key]) {
+                    if (markerTweens[key]) {
+                        cancelAnimationFrame(markerTweens[key]);
+                        delete markerTweens[key];
+                    }
                     overlayGroups.markers.removeLayer(markers[key]);
                     delete markers[key];
                 }
@@ -1561,6 +1601,15 @@ LEAFLET_HTML = """<!DOCTYPE html>
             map.panTo(latLng, {animate: false});
         }
 
+        function getMapCenterZoom() {
+            var center = map.getCenter();
+            return [center.lat, center.lng, map.getZoom()];
+        }
+
+        function setMapView(lat, lng, zoom) {
+            map.setView([lat, lng], zoom, {animate: false});
+        }
+
         // Called from Python to fit the map view to all markers
         function fitToMarkers() {
             map.invalidateSize(false);
@@ -1651,6 +1700,9 @@ LEAFLET_HTML = """<!DOCTYPE html>
 
         // Called from Python to clear all markers and trajectories
         function clearAll() {
+            for (var key in markerTweens) {
+                cancelAnimationFrame(markerTweens[key]);
+            }
             for (var key in markers) {
                 overlayGroups.markers.removeLayer(markers[key]);
                 disposeLayer(markers[key]);
@@ -1663,6 +1715,7 @@ LEAFLET_HTML = """<!DOCTYPE html>
                 removeInfrastructureLayer(key);
             }
             markers = {};
+            markerTweens = {};
             trajectories = {};
             infrastructureLayers = {};
         }
@@ -2134,9 +2187,9 @@ class MapWidget(QWebEngineView):
 
     def latest_telemetry(self) -> dict[str, object] | None:
         """Return the latest render telemetry, if available."""
-        if self._latest_telemetry is None:
+        if self.__dict__.get("_latest_telemetry") is None:
             return None
-        return self._latest_telemetry.to_dict()
+        return self.__dict__["_latest_telemetry"].to_dict()
 
     def reload_map_page(self) -> None:
         """Reload the embedded Leaflet page and drop pending JavaScript work."""
@@ -2156,13 +2209,32 @@ class MapWidget(QWebEngineView):
         if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
             return
         self._follow_station_id = None
+        center = self._compute_intersection_center(messages)
         self._render_messages(
             messages,
             max_index=None,
-            fit_view=True,
+            fit_view=False,
             short_trails=False,
             clear_first=True,
         )
+        if center is not None:
+            state = {"lat": center[0], "lon": center[1], "zoom": 16}
+            self.store_view_state(state)
+            QTimer.singleShot(100, lambda: self.restore_view_state(state))
+
+    @staticmethod
+    def _compute_intersection_center(messages: list[V2xMessage]) -> tuple[float, float] | None:
+        """Return the first MAPEM/SPATEM intersection reference point."""
+        for msg in messages:
+            if msg.msg_type in (MessageType.MAPEM, MessageType.SPATEM):
+                intersections = msg.decoded_data.get("intersections")
+                if isinstance(intersections, list) and intersections:
+                    for intersection in intersections:
+                        if isinstance(intersection, dict):
+                            point = _extract_map_reference_point(intersection)
+                            if point is not None:
+                                return point
+        return None
 
     def render_playback_slice(
         self,
@@ -2292,13 +2364,32 @@ class MapWidget(QWebEngineView):
         """Refresh Leaflet sizing after Qt exposes the WebEngine view."""
         super().showEvent(event)
         self._schedule_map_resize()
+        # Restore saved view state after a short delay so invalidateSize finishes first
+        saved = self.save_view_state()
+        if saved is not None:
+            QTimer.singleShot(50, lambda: self.restore_view_state(saved))
+
+    def hideEvent(self, event: QHideEvent) -> None:
+        """Save the current map view state before the widget is hidden."""
+        super().hideEvent(event)
+        try:
+            self._execute_js("getMapCenterZoom()", lambda result: self.store_view_state(
+                {"lat": result[0], "lon": result[1], "zoom": result[2]} if isinstance(result, list) and len(result) == 3 else None
+            ))
+        except Exception:
+            pass
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         """Refresh Leaflet sizing after DPI/window-size changes."""
-        super().resizeEvent(event)
+        try:
+            super().resizeEvent(event)
+        except RuntimeError:
+            pass
+        if self.__dict__.get("_disposed", False):
+            return
         self._schedule_map_resize()
         self._on_user_interaction_start()
-        if self._resize_end_timer is not None:
+        if self.__dict__.get("_resize_end_timer") is not None:
             self._resize_end_timer.stop()
         self._resize_end_timer = QTimer()
         self._resize_end_timer.setSingleShot(True)
@@ -2311,6 +2402,28 @@ class MapWidget(QWebEngineView):
         self._station_color_map.clear()
         self._station_index = 0
         self._follow_station_id = None
+
+    def set_view(self, lat: float, lon: float, zoom: int) -> None:
+        """Set the map view to a specific center and zoom."""
+        self._run_js(f"setMapView({lat}, {lon}, {zoom})")
+
+    def save_view_state(self) -> dict[str, object] | None:
+        """Return the last saved map center and zoom as a serializable dict."""
+        return self.__dict__.get("_saved_view_state")
+
+    def store_view_state(self, state: dict[str, object] | None) -> None:
+        """Store a view state dict for later restore_view_state."""
+        self.__dict__["_saved_view_state"] = state
+
+    def restore_view_state(self, state: dict[str, object] | None) -> None:
+        """Restore the map view from a previously saved state."""
+        if state is None:
+            return
+        lat = state.get("lat")
+        lon = state.get("lon")
+        zoom = state.get("zoom")
+        if lat is not None and lon is not None and zoom is not None:
+            self.set_view(float(lat), float(lon), int(zoom))
 
     def _schedule_map_resize(self) -> None:
         """Defer Leaflet invalidateSize until Qt has delivered expose/resize."""
@@ -2567,6 +2680,19 @@ class MapWidget(QWebEngineView):
                 )
                 self._first_stall_at = None
                 self._render_stall_count = 0
+                # Cancel the stall timer for any flushed payload and reset all
+                # in-flight state so late callbacks and old timers are harmless.
+                stall_timer = self.__dict__.get("_stall_timer")
+                if stall_timer is not None:
+                    stall_timer.stop()
+                    stall_timer.deleteLater()
+                self.__dict__["_stall_timer"] = None
+                self._page_ready = False
+                self._bootstrap_probe_succeeded = False
+                self._pending_scripts = []
+                self._render_payload_in_flight = False
+                self._queued_render_payload_script = None
+                self._render_payload_started_at = None
                 self._bootstrap_generation += 1
                 self.setHtml(_leaflet_runtime_html(), QUrl.fromLocalFile(str(_asset_base_path()) + "/"))
                 self._schedule_bootstrap_timeout()

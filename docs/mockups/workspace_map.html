@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>PCAP2KML v2 Mockup — Karten-Workspace</title>
+<link rel="stylesheet" href="design.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ── Titlebar ──────────────────────────────────────────── -->
+  <header class="titlebar">
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <span class="brand-name">PCAP2KML Player</span>
+      <span class="brand-version">v2.0-preview</span>
+    </div>
+
+    <nav class="menu">
+      <span class="menu-item">Datei</span>
+      <span class="menu-item">Bearbeiten</span>
+      <span class="menu-item">Ansicht</span>
+      <span class="menu-item">Werkzeuge</span>
+      <span class="menu-item">Hilfe</span>
+    </nav>
+
+    <div class="title-spacer"></div>
+
+    <div class="title-actions">
+      <div class="session-pill">
+        <span class="dot"></span>
+        <code>txa_22082025.pcap · rxa_22082025.pcap</code>
+      </div>
+
+      <button class="icon-btn" title="Inspector ausdocken (zweiter Monitor)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="4" width="20" height="14" rx="2"/><line x1="8" y1="22" x2="16" y2="22"/><line x1="12" y1="18" x2="12" y2="22"/>
+        </svg>
+      </button>
+      <button class="icon-btn" title="Einstellungen">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ── Workspace tabs ────────────────────────────────────── -->
+  <div class="workspacebar">
+    <div class="ws-tab active">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>
+      </svg>
+      Karte
+      <span class="kbd">⌘1</span>
+    </div>
+    <div class="ws-tab">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+      ETA-Analyse
+      <span class="kbd">⌘2</span>
+    </div>
+    <div class="ws-tab">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+      Priorisierungs&shy;fehler
+      <span class="kbd">⌘3</span>
+    </div>
+    <div class="ws-tab">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+      Tabellen
+      <span class="kbd">⌘4</span>
+    </div>
+
+    <div class="ws-spacer"></div>
+
+    <div class="ws-meta">
+      <span>5'948 Nachrichten · 14 Stationen · 8:13 Dauer</span>
+    </div>
+  </div>
+
+  <!-- ── Main: 3-column dock layout ────────────────────────── -->
+  <main class="main">
+
+    <!-- ── Left dock: Filter + Stationen ────────────────── -->
+    <aside class="dock dock-left">
+
+      <div class="dock-section" style="flex: 0 0 auto;">
+        <div class="dock-header">Filter</div>
+        <div class="search-row">
+          <span class="search-icon">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </span>
+          <input class="input" placeholder="Filtern…">
+        </div>
+      </div>
+
+      <div class="dock-section" style="flex: 0 0 auto;">
+        <div class="dock-header">
+          Nachrichtentypen
+          <div class="actions"><button class="icon-btn" title="Alle">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          </button></div>
+        </div>
+        <div class="dock-body" style="padding-bottom: var(--s-3);">
+          <div class="filter-row checked"><span class="cb"></span><span class="label" style="color: var(--msg-cam);">●</span><span class="label">CAM</span><span class="count">3'214</span></div>
+          <div class="filter-row checked"><span class="cb"></span><span class="label" style="color: var(--msg-denm);">●</span><span class="label">DENM</span><span class="count">128</span></div>
+          <div class="filter-row checked"><span class="cb"></span><span class="label" style="color: var(--msg-srem);">●</span><span class="label">SREM</span><span class="count">412</span></div>
+          <div class="filter-row checked"><span class="cb"></span><span class="label" style="color: var(--msg-ssem);">●</span><span class="label">SSEM</span><span class="count">389</span></div>
+          <div class="filter-row checked"><span class="cb"></span><span class="label" style="color: var(--msg-mapem);">●</span><span class="label">MAPEM</span><span class="count">8</span></div>
+          <div class="filter-row checked"><span class="cb"></span><span class="label" style="color: var(--msg-spatem);">●</span><span class="label">SPATEM</span><span class="count">1'797</span></div>
+          <div class="filter-row"><span class="cb"></span><span class="label" style="color: var(--msg-ivim);">●</span><span class="label">IVIM</span><span class="count">0</span></div>
+        </div>
+      </div>
+
+      <div class="dock-section" style="flex: 0 0 auto;">
+        <div class="dock-header">Zeitfenster</div>
+        <div class="dock-body" style="padding-top: var(--s-2);">
+          <div class="time-range">
+            <div class="time-range-track">
+              <div class="time-range-fill"></div>
+              <div class="time-range-handle" style="left: 12%;"></div>
+              <div class="time-range-handle" style="left: 82%;"></div>
+            </div>
+            <div class="time-range-labels"><span>00:00</span><span>08:13</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dock-section" style="flex: 1 1 0; min-height: 0;">
+        <div class="dock-header">
+          Stationen <span style="font-weight: 400; color: var(--text-4);">14</span>
+          <div class="actions">
+            <button class="icon-btn" title="Sortieren">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="dock-body">
+          <div class="list-item selected">
+            <span class="swatch" style="background: var(--msg-cam);"></span>
+            <div>
+              <div class="label">Fahrzeug 0xA1F2</div>
+              <div class="meta">04:e5:48:73:91:2d · 1'248 msg</div>
+            </div>
+            <span class="meta">CAM</span>
+          </div>
+          <div class="list-item">
+            <span class="swatch" style="background: var(--msg-cam);"></span>
+            <div>
+              <div class="label">Fahrzeug 0xB73E</div>
+              <div class="meta">04:e5:48:48:48:48 · 1'192 msg</div>
+            </div>
+            <span class="meta">CAM</span>
+          </div>
+          <div class="list-item">
+            <span class="swatch" style="background: var(--msg-mapem);"></span>
+            <div>
+              <div class="label">RSU Kreuzung 1015</div>
+              <div class="meta">42:ee:24:0e:bc:b7 · 2'186 msg</div>
+            </div>
+            <span class="meta">MAP·SPaT</span>
+          </div>
+          <div class="list-item">
+            <span class="swatch" style="background: var(--msg-cam);"></span>
+            <div>
+              <div class="label">Fahrzeug 0xC284</div>
+              <div class="meta">00:0d:41:ff:5b:57 · 774 msg</div>
+            </div>
+            <span class="meta">CAM</span>
+          </div>
+          <div class="list-item">
+            <span class="swatch" style="background: var(--msg-srem);"></span>
+            <div>
+              <div class="label">Tram 2228</div>
+              <div class="meta">2228620000 · 412 msg</div>
+            </div>
+            <span class="meta">SREM</span>
+          </div>
+          <div class="list-item">
+            <span class="swatch" style="background: var(--msg-cam);"></span>
+            <div>
+              <div class="label">Fahrzeug 0xD9A0</div>
+              <div class="meta">04:e5:48:17:1f:21 · 638 msg</div>
+            </div>
+            <span class="meta">CAM</span>
+          </div>
+          <div class="list-item">
+            <span class="swatch" style="background: var(--msg-mapem);"></span>
+            <div>
+              <div class="label">RSU Kreuzung 1042</div>
+              <div class="meta">7153 · 498 msg</div>
+            </div>
+            <span class="meta">MAP·SPaT</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ── Center: Map workspace ──────────────────────────── -->
+    <section class="workspace">
+      <div class="map-canvas">
+
+        <!-- Decorative trail traces -->
+        <svg class="map-overlay" style="inset: 0; width: 100%; height: 100%;" preserveAspectRatio="none">
+          <path d="M 80 420 Q 220 380, 380 340 T 700 250" stroke="oklch(58% 0.16 230 / 0.5)" stroke-width="3" fill="none"/>
+          <path d="M 60 200 Q 180 220, 320 240 T 620 280" stroke="oklch(58% 0.16 230 / 0.4)" stroke-width="3" fill="none"/>
+          <path d="M 200 480 Q 320 380, 440 320 T 720 360" stroke="oklch(60% 0.20 30 / 0.4)" stroke-width="2.5" fill="none" stroke-dasharray="6 6"/>
+          <circle cx="500" cy="300" r="80" fill="none" stroke="oklch(58% 0.14 165 / 0.3)" stroke-width="1.5" stroke-dasharray="4 4"/>
+          <circle cx="500" cy="300" r="40" fill="oklch(58% 0.14 165 / 0.06)"/>
+        </svg>
+
+        <!-- Stations -->
+        <div class="map-station" style="left: 700px; top: 250px; background: var(--msg-cam); width: 18px; height: 18px; box-shadow: 0 0 0 4px oklch(58% 0.16 230 / 0.25), var(--shadow-1);"></div>
+        <div class="map-station" style="left: 620px; top: 280px; background: var(--msg-cam);"></div>
+        <div class="map-station" style="left: 720px; top: 360px; background: var(--msg-denm);"></div>
+        <div class="map-station" style="left: 500px; top: 300px; background: var(--msg-mapem); width: 16px; height: 16px;"></div>
+        <div class="map-station" style="left: 340px; top: 410px; background: var(--msg-srem);"></div>
+        <div class="map-station" style="left: 200px; top: 480px; background: var(--msg-cam);"></div>
+
+        <!-- Map controls -->
+        <div class="map-controls">
+          <button title="Zoom in"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          <button title="Zoom out"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          <button title="Auf Auswahl zentrieren"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></button>
+          <button title="Layer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></button>
+        </div>
+
+        <!-- Legend -->
+        <div class="legend">
+          <div class="legend-item"><span class="swatch" style="background: var(--msg-cam);"></span><span>CAM Fahrzeug</span></div>
+          <div class="legend-item"><span class="swatch" style="background: var(--msg-denm);"></span><span>DENM Warnung</span></div>
+          <div class="legend-item"><span class="swatch" style="background: var(--msg-srem);"></span><span>SREM Anforderung</span></div>
+          <div class="legend-item"><span class="swatch" style="background: var(--msg-ssem);"></span><span>SSEM Antwort</span></div>
+          <div class="legend-item"><span class="swatch" style="background: var(--msg-mapem);"></span><span>MAPEM RSU</span></div>
+          <div class="legend-item"><span class="swatch" style="background: var(--msg-spatem);"></span><span>SPATEM Phase</span></div>
+        </div>
+
+        <!-- Floating playback hint near current station -->
+        <div class="floating-hint" style="left: 730px; top: 220px;">
+          <strong style="color: var(--text-1);">Fahrzeug 0xA1F2</strong>
+          <div style="margin-top: 4px; color: var(--text-3);">42.3 km/h · NW · t = 03:08.4</div>
+        </div>
+
+        <!-- Tile credit -->
+        <div style="position: absolute; bottom: 4px; right: 8px; font-size: 10px; color: var(--text-4); font-family: var(--font-mono);">
+          © OpenStreetMap · Leaflet
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Right dock: Inspector ──────────────────────────── -->
+    <aside class="dock dock-right">
+
+      <div class="insp-tabs">
+        <div class="insp-tab active">Auswahl</div>
+        <div class="insp-tab">Sitzung</div>
+        <div class="insp-tab">Statistik</div>
+        <div class="insp-tab">PKI</div>
+      </div>
+
+      <div class="dock-body" style="flex: 1; padding: var(--s-4) var(--s-4) var(--s-3);">
+
+        <div style="display: flex; align-items: baseline; gap: var(--s-3); margin-bottom: var(--s-2);">
+          <span class="chip" style="background: oklch(58% 0.16 230 / 0.12); color: var(--msg-cam);">
+            <span class="swatch" style="background: var(--msg-cam);"></span>CAM
+          </span>
+          <span style="font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-3);">#03284</span>
+        </div>
+
+        <div class="h-panel">Fahrzeug 0xA1F2</div>
+        <div style="font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-3); margin-bottom: var(--s-4);">
+          04:e5:48:73:91:2d
+        </div>
+
+        <div class="card" style="padding: var(--s-3); margin-bottom: var(--s-4);">
+          <div class="stat-row" style="padding-top: 0;"><span class="stat-label">Position</span><span class="stat-value">48.7625, 9.1542</span></div>
+          <div class="stat-row"><span class="stat-label">Geschwindigkeit</span><span class="stat-value">42.3 km/h</span></div>
+          <div class="stat-row"><span class="stat-label">Heading</span><span class="stat-value">312° NW</span></div>
+          <div class="stat-row" style="padding-bottom: 0;"><span class="stat-label">Zeitstempel</span><span class="stat-value">15:42:08.412</span></div>
+        </div>
+
+        <div style="font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); font-weight: 600; margin-bottom: var(--s-2);">
+          Nachrichtenfelder
+        </div>
+
+        <div style="font-family: var(--font-mono); font-size: 11.5px; line-height: 1.6;">
+          <div style="display: grid; grid-template-columns: 1fr auto; padding: 5px 0; border-bottom: 1px solid var(--border-subtle);"><span style="color: var(--text-3);">stationID</span><span style="color: var(--text-1);">2'235'050'749</span></div>
+          <div style="display: grid; grid-template-columns: 1fr auto; padding: 5px 0; border-bottom: 1px solid var(--border-subtle);"><span style="color: var(--text-3);">protocolVersion</span><span style="color: var(--text-1);">2</span></div>
+          <div style="display: grid; grid-template-columns: 1fr auto; padding: 5px 0; border-bottom: 1px solid var(--border-subtle);"><span style="color: var(--text-3);">stationType</span><span style="color: var(--text-1);">passengerCar</span></div>
+          <div style="display: grid; grid-template-columns: 1fr auto; padding: 5px 0; border-bottom: 1px solid var(--border-subtle);"><span style="color: var(--text-3);">driveDirection</span><span style="color: var(--text-1);">forward</span></div>
+          <div style="display: grid; grid-template-columns: 1fr auto; padding: 5px 0; border-bottom: 1px solid var(--border-subtle);"><span style="color: var(--text-3);">vehicleLength</span><span style="color: var(--text-1);">4.2 m</span></div>
+          <div style="display: grid; grid-template-columns: 1fr auto; padding: 5px 0; border-bottom: 1px solid var(--border-subtle);"><span style="color: var(--text-3);">accel.longitudinal</span><span style="color: var(--text-1);">+0.4 m/s²</span></div>
+          <div style="display: grid; grid-template-columns: 1fr auto; padding: 5px 0;"><span style="color: var(--text-3);">curvature</span><span style="color: var(--text-1);">0.0012 1/m</span></div>
+        </div>
+
+        <details style="margin-top: var(--s-4);">
+          <summary style="cursor: pointer; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); font-weight: 600;">Roh-Bytes (118 B)</summary>
+          <pre style="font-family: var(--font-mono); font-size: 10.5px; color: var(--text-2); padding: var(--s-3); background: var(--surface-2); border-radius: var(--r-2); margin-top: var(--s-2); overflow-x: auto;">
+01 02 03 80 04 7A 50 28
+F4 92 1C 80 03 18 4E A0
+B3 27 8C 04 02 88 30 00
+00 4C 50 02 9A 80 1A 60
+70 04 0A 0E 0F 80 00 00
+…
+</pre>
+        </details>
+
+      </div>
+    </aside>
+  </main>
+
+  <!-- ── Transport bar ─────────────────────────────────────── -->
+  <div class="transport">
+    <div class="transport-controls">
+      <button class="transport-btn" title="Zurück">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M11 19V5l-9 7 9 7zm11 0V5l-9 7 9 7z"/></svg>
+      </button>
+      <button class="transport-btn primary" title="Pause">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+      </button>
+      <button class="transport-btn" title="Stop">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14"/></svg>
+      </button>
+      <button class="transport-btn" title="Vor">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M13 5v14l9-7-9-7zm-11 14l9-7-9-7v14z"/></svg>
+      </button>
+    </div>
+
+    <div class="transport-timeline">
+      <span class="timeline-time current">03:08.4</span>
+      <div class="timeline-track">
+        <div class="timeline-progress"></div>
+        <div class="timeline-handle"></div>
+        <div class="timeline-marks">
+          <span class="timeline-mark" style="left: 18%;"></span>
+          <span class="timeline-mark" style="left: 27%;"></span>
+          <span class="timeline-mark" style="left: 51%;"></span>
+          <span class="timeline-mark" style="left: 64%;"></span>
+        </div>
+      </div>
+      <span class="timeline-time">08:13.0</span>
+    </div>
+
+    <div class="transport-aux">
+      <div class="speed-select">
+        <span class="speed-opt">0.5×</span>
+        <span class="speed-opt active">1×</span>
+        <span class="speed-opt">2×</span>
+        <span class="speed-opt">5×</span>
+      </div>
+      <button class="perf-mode" title="Performance-Modus">
+        <span class="gauge"></span>
+        Normal
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Status bar ────────────────────────────────────────── -->
+  <div class="statusbar">
+    <span class="status-item"><span class="ind green"></span>Map healthy</span>
+    <span class="status-item">Render p95 <strong style="color: var(--text-2);">22 ms</strong></span>
+    <span class="status-item">Memory <strong style="color: var(--text-2);">412 MB</strong></span>
+    <span class="status-item">2 Dateien · 5'948 msg</span>
+    <div class="status-spacer"></div>
+    <span class="status-item">CAM v2 · DENM v2 · MAPEM v1.3.1 · TS103301 v2.2.1</span>
+    <span class="status-item">UTC+02:00</span>
+  </div>
+
+</div>
+
+</body>
+</html>
