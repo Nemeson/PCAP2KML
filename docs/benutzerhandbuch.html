@@ -312,10 +312,10 @@
     <p>Datenorientierte V2X-Analyse: PCAP-Dateien laden, Nachrichten auf einer interaktiven Karte visualisieren, Priorisierungsfehler diagnostizieren und Ergebnisse als KML oder CSV exportieren.</p>
     <div class="hero-meta">
       <div class="hero-meta-item"><strong>Version</strong>1.7.0</div>
-      <div class="hero-meta-item"><strong>Plattform</strong>Windows 10/11 · macOS · Linux</div>
-      <div class="hero-meta-item"><strong>Stack</strong>Python 3.10+ · PyQt6 · WebEngine/Leaflet</div>
+      <div class="hero-meta-item"><strong>Plattform</strong>Windows 10/11</div>
+      <div class="hero-meta-item"><strong>Ausfuehrung</strong>PCAP2KML-Player.exe</div>
       <div class="hero-meta-item"><strong>Formate</strong>.pcap · .pcapng · .cap</div>
-      <div class="hero-meta-item"><strong>Stand</strong>2026-05-02</div>
+      <div class="hero-meta-item"><strong>Stand</strong>2026-05-04</div>
     </div>
   </div>
 
@@ -346,17 +346,18 @@
       <h2>Systemvoraussetzungen</h2>
       <table>
         <tr><th>Komponente</th><th>Mindestanforderung</th></tr>
-        <tr><td>Python</td><td>3.10 oder neuer</td></tr>
-        <tr><td>PyQt6</td><td>6.4 oder neuer</td></tr>
-        <tr><td>scapy</td><td>2.5 oder neuer (PCAP-Parsing)</td></tr>
-        <tr><td>simplekml</td><td>1.3 oder neuer (KML-Export)</td></tr>
+        <tr><td>Betriebssystem</td><td>Windows 10 oder Windows 11</td></tr>
+        <tr><td>Programmdatei</td><td><code>PCAP2KML-Player.exe</code></td></tr>
+        <tr><td>Speicherplatz</td><td>Ausreichend Platz fuer PCAP-Dateien, Exporte und Diagnoseberichte</td></tr>
         <tr><td>RAM</td><td>4 GB empfohlen (große Captures)</td></tr>
-        <tr><td>Internetverbindung</td><td>Für Kartenkacheln und Schema-Updates</td></tr>
+        <tr><td>Internetverbindung</td><td>Für Online-Kartenkacheln und optionale Schema-Updates</td></tr>
+        <tr><td>Optional</td><td>Wireshark / TShark fuer erweiterte Decoderabdeckung</td></tr>
       </table>
       <div class="callout warn">
         <strong>Hinweis</strong>
-        Fehlen <code>scapy</code> oder <code>simplekml</code>, erscheint beim Start ein Warnhinweis.
-        PCAP-Parsing bzw. KML-Export sind dann nicht verfügbar.
+        Fuer die normale EXE-Nutzung muessen Python, PyQt oder Python-Pakete
+        nicht separat installiert werden. Die App bringt die benoetigte Laufzeit
+        im bereitgestellten EXE-Paket mit.
       </div>
     </div>
   </section>
@@ -366,16 +367,15 @@
     <div class="section">
       <h2>Anwendung starten</h2>
       <ol class="steps">
-        <li>Terminal öffnen und in das Projektverzeichnis wechseln:<br>
-            <code style="font-family:monospace;background:#f0f4fa;padding:2px 6px;border-radius:4px;">cd C:\PythonTools\PCAP2KML</code></li>
-        <li>Abhängigkeiten installieren (einmalig):<br>
-            <code style="font-family:monospace;background:#f0f4fa;padding:2px 6px;border-radius:4px;">pip install -r requirements.txt</code></li>
-        <li>Anwendung starten:<br>
-            <code style="font-family:monospace;background:#f0f4fa;padding:2px 6px;border-radius:4px;">python -m pcap2kml_player.main</code></li>
+        <li>Den bereitgestellten Programmordner lokal ablegen, z.&nbsp;B. im Programme- oder Projektordner.</li>
+        <li><code style="font-family:monospace;background:#f0f4fa;padding:2px 6px;border-radius:4px;">PCAP2KML-Player.exe</code> per Doppelklick starten.</li>
+        <li>Falls Windows SmartScreen oder eine Unternehmensrichtlinie nachfragt, die Ausfuehrung gemaess interner Freigabe bestaetigen.</li>
+        <li>Mit <strong>PCAP laden</strong> eine oder mehrere Capture-Dateien auswaehlen oder Dateien per Drag &amp; Drop in das Fenster ziehen.</li>
       </ol>
       <div class="callout tip">
         <strong>Tipp</strong>
-        Unter Windows kann eine <code>.bat</code>-Startdatei angelegt werden, um den Aufruf zu vereinfachen.
+        Die Funktion <strong>Letzte Sitzung</strong> oeffnet die zuletzt erfolgreich
+        geladenen Dateien erneut, sofern sie noch am gleichen Speicherort liegen.
       </div>
     </div>
   </section>
@@ -860,17 +860,16 @@
 
       <div class="callout info">
         <strong>Hinweis</strong>
-        Der gewählte Modus wird sitzungsübergreifend gespeichert
-        (<code>QSettings</code>-Schlüssel <code>ui/performance_mode</code>) und
-        bleibt nach Programm-Neustart erhalten.
+        Der gewaehlte Modus wird gespeichert und bleibt nach einem Neustart der
+        EXE erhalten.
       </div>
 
       <div class="callout tip">
         <strong>Empfehlung</strong>
-        Bei spürbarem Stuttering der Wiedergabe zuerst auf <em>Schonend</em> wechseln.
-        Die T1.3a-Optimierung (ab v1.7) reduziert den Render-Aufwand bereits um
-        ca. 80 % gegenüber älteren Versionen, dichte Captures profitieren aber weiterhin
-        von kürzeren Trail-Fenstern.
+        Bei spuerbarem Stuttering der Wiedergabe zuerst auf <em>Schonend</em>
+        wechseln. Bei sehr grossen oder sehr dichten Captures hilft
+        <em>Diagnose</em>, weil weniger Kartenobjekte gleichzeitig gerendert
+        werden.
       </div>
     </div>
   </section>
@@ -880,39 +879,36 @@
     <div class="section">
       <h2>Map-Stabilität</h2>
       <p>
-        Die Kartenanzeige basiert auf <strong>Leaflet.js</strong> innerhalb eines
-        eingebetteten <strong>QWebEngineView</strong>. Mehrere Schutzmechanismen
-        verhindern Aussetzer und Freeze-Zustände während längerer Sitzungen:
+        Die Kartenanzeige nutzt eine eingebettete Online-Karte. Mehrere
+        Schutzmechanismen verhindern Aussetzer und Freeze-Zustaende waehrend
+        laengerer Sitzungen:
       </p>
 
       <table>
         <tr><th>Mechanismus</th><th>Wirkung</th></tr>
-        <tr><td><strong>Interaction-Pausierung</strong></td>
-            <td>Während Pan, Zoom oder Fenster-Resize werden Karten-JavaScript-Aufrufe
-                automatisch zurückgehalten. Nach Interaktions-Ende erfolgt ein
-                <em>Catch-up-Flush</em> mit dem aktuellen Render-Zustand.</td></tr>
-        <tr><td><strong>Off-Thread-Render-Worker</strong></td>
-            <td>Die Berechnung der Render-Payload läuft im Hintergrund-Thread
-                (<code>RenderPayloadWorker</code>), das UI bleibt reaktiv.</td></tr>
-        <tr><td><strong>Stall-Detection</strong></td>
-            <td>Antwortet die Map-Engine länger als 5 s nicht, wird der Render-Aufruf
-                als Stall markiert. Drei Stalls innerhalb 60 s lösen einen
-                automatischen Reload der Map aus.</td></tr>
+        <tr><td><strong>Interaktion schuetzen</strong></td>
+            <td>Waehrend Pan, Zoom oder Fenster-Resize werden Kartenaktualisierungen
+                kurz gebuendelt. Danach springt die Karte automatisch auf den
+                aktuellen Wiedergabezustand.</td></tr>
+        <tr><td><strong>Hintergrundberechnung</strong></td>
+            <td>Aufwendige Kartenberechnungen laufen im Hintergrund, damit die
+                Oberflaeche bedienbar bleibt.</td></tr>
+        <tr><td><strong>Haenger erkennen</strong></td>
+            <td>Antwortet die Karte laenger nicht, wird der Zustand erkannt und
+                automatisch behandelt.</td></tr>
         <tr><td><strong>Auto-Recovery</strong></td>
-            <td>Bei Crash der WebEngine-Render-Pipeline lädt die Map-Komponente
-                automatisch ihre HTML-Grundlage neu und stellt den letzten
-                Render-Zustand wieder her.</td></tr>
-        <tr><td><strong>Resize-Gate</strong></td>
-            <td>Beim Maximieren oder Bildschirm-Wechsel wird ein Resize-Timer
-                aktiviert, der unmittelbare Render-Aufrufe puffert und Freeze
-                durch Layout-Stürme verhindert.</td></tr>
+            <td>Bei wiederholten Kartenproblemen laedt die App die Kartenansicht
+                neu und stellt den letzten bekannten Zustand wieder her.</td></tr>
+        <tr><td><strong>Resize-Schutz</strong></td>
+            <td>Beim Maximieren oder Bildschirm-Wechsel werden Aktualisierungen
+                gepuffert, damit die Karte nicht einfriert.</td></tr>
       </table>
 
       <div class="callout info">
         <strong>Diagnose</strong>
-        Auffällige Stalls werden im Log mit Präfix <code>[map.stall]</code> protokolliert.
-        Ein Auto-Reload erscheint als <code>[map.reload]</code>-Eintrag mitsamt
-        Trigger-Begründung.
+        Bei wiederholten Kartenproblemen <strong>Diagnose exportieren</strong>
+        ausfuehren und den Bericht zusammen mit einer kurzen Beschreibung des
+        Problems weitergeben.
       </div>
 
       <div class="callout warn">
@@ -1321,9 +1317,9 @@
       <table>
         <tr><th>Problem</th><th>Ursache</th><th>Lösung</th></tr>
         <tr>
-          <td>„Fehlende Abhängigkeiten"-Dialog beim Start</td>
-          <td><code>scapy</code> oder <code>simplekml</code> nicht installiert</td>
-          <td><code>pip install scapy simplekml</code> ausführen</td>
+          <td>EXE startet nicht</td>
+          <td>Windows blockiert die Datei oder der Programmordner ist unvollstaendig</td>
+          <td>Datei gemaess interner Freigabe entsperren; kompletten bereitgestellten Ordner erneut kopieren</td>
         </tr>
         <tr>
           <td>Karte bleibt leer / grau</td>
@@ -1374,31 +1370,30 @@
         <tr>
           <td>Map dauerhaft leer trotz Reload</td>
           <td>Render-Pipeline-Crash oder fehlende GPU-Beschleunigung</td>
-          <td>Anwendung neu starten; bei Wiederholung mit Software-OpenGL starten
-              (Umgebungsvariable <code>QT_OPENGL=software</code>)</td>
+          <td>Anwendung neu starten; bei Wiederholung <strong>Diagnose exportieren</strong> ausfuehren und Bericht weitergeben</td>
         </tr>
       </table>
 
       <div class="callout danger">
         <strong>Unerwarteter Fehler</strong>
-        Erscheint ein Fehlerdialog „Unerwarteter Fehler", bitte den vollständigen
-        Stack-Trace aus der Konsole sichern und als Issue melden.
-        Die Anwendung bleibt nach dem Dialog weiter bedienbar.
+        Erscheint ein Fehlerdialog „Unerwarteter Fehler", bitte wenn moeglich
+        <strong>Diagnose exportieren</strong> ausfuehren und den erzeugten Bericht
+        zusammen mit der betroffenen PCAP-Beschreibung weitergeben.
       </div>
 
-      <h3>Log-Ausgabe aktivieren</h3>
+      <h3>Diagnosebericht erzeugen</h3>
       <p>
-        Für erweiterte Diagnoseinformationen die Anwendung aus dem Terminal starten.
-        Alle Log-Einträge erscheinen im Format <code>HH:MM:SS [LEVEL] Modul: Nachricht</code>.
+        Fuer erweiterte Diagnoseinformationen in der Werkzeugleiste
+        <strong>Diagnose exportieren</strong> waehlen. Die App schreibt einen
+        Bericht mit Sitzungsdaten, Kartenstatus und Laufzeitinformationen in den
+        ausgewaehlten Ordner.
       </p>
     </div>
   </section>
 
   <!-- Footer -->
   <div style="background:var(--navy);color:#6a829c;padding:24px 56px;font-size:12px;margin-left:0;">
-    PCAP2KML Player · Benutzerhandbuch v1.7 · Stand 2026-05-02 · SWARCO ITS ·
-    Erstellt mit Claude Code ·
-    <span style="color:#4a6280;">Technische Fragen: nemeson@gmail.com</span>
+    PCAP2KML Player · Benutzerhandbuch fuer die Windows-EXE · Stand 2026-05-04 · SWARCO ITS
   </div>
 
 </div><!-- /.main -->

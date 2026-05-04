@@ -210,248 +210,58 @@ Verzeichnis. Der Bericht enthaelt:
 `Karte neu laden` initialisiert die eingebettete Leaflet-Seite neu, leert die
 Safe-Mode-Fehlerhistorie und rendert die aktuelle Sitzung erneut.
 
-## Architektur
-
-### Parser und Decoding
-
-- `pcap_parser.py` nutzt `pyshark` bevorzugt und faellt auf `scapy` zurueck
-- Direkte GeoNetworking-/BTP-Erkennung fuer EtherType `0x8947`
-- Fallback-Nachrichtenerkennung ueber ITS-PDU-Header `messageId`
-- NMEA-Parsing fuer GNSS-Daten
-- ASN.1-Decoding ueber `asn1tools`
-- MAP-Normalisierung fuer Lane-Rollen, Connections und Stopline-Fallback
-
-### Playback und Visualisierung
-
-- `player_controller.py` steuert die synchronisierte Wiedergabe
-- `map_widget.py` bettet Leaflet in `QWebEngineView` ein
-- `ui/main_window.py` verbindet Playback, Filter, Export, Detailbereich und Szenenpanel
-
-### Szenenmodell
-
-`scene_model.py` aggregiert den flachen Nachrichtenstrom in fachliche Zustandsobjekte:
-
-- `IntersectionState`
-- `SignalGroupState`
-- `SpatForecast`
-- `ActiveRequest`
-- `RequestVisualState`
-- `SceneSnapshot`
-- `EtaVerification`
-- `PrioritizationIssue`
-- `PrioritizationIssueOccurrence`
-
-Die Issue-Historie wird zentral berechnet und fuer unveraenderte Message-Listen
-gecacht. Problemstellen-Replay und Export nutzen dadurch dieselben
-Erstauftretenszeitpunkte.
-
-### Security / PKI
-
-`security_parser.py` extrahiert bereits Grundinformationen aus ETSI TS 103 097 Security-Containern, darunter Signer-Typ, Signaturdaten, Gueltigkeit und weitere Zertifikatsfelder. Die tiefe Signatur- und Kettenpruefung ist noch nicht vollstaendig umgesetzt.
-
 ## ASN.1-Schema-Update
 
-Das Schema-Update arbeitet jetzt robust in zwei Modi:
+Die EXE bringt lokale ASN.1-Schemata fuer die Dekodierung mit. Ueber
+`ASN.1-Schemas` koennen diese bei Bedarf aktualisiert werden. Das ist vor allem
+dann sinnvoll, wenn Captures mit neueren ETSI-Schema-Versionen analysiert werden
+oder Dekodierungen unerwartet unvollstaendig wirken.
 
-- vorhandenes Git-Checkout in `assets/asn1`: `git pull`
-- eingebetteter lokaler Schema-Ordner ohne `.git`: temporaerer Clone in ein Temp-Verzeichnis, danach Uebernahme nur der relevanten `.asn`-Dateien
-
-Nach einem erfolgreichen Update werden In-Memory- und `.pkl`-Caches invalidiert, damit neue Schemata sofort wirksam sind.
-
-## Projektstruktur
-
-```text
-PCAP2KML/
-├── docs/
-│   └── ROADMAP.md
-├── pcap2kml_player/
-│   ├── app_memory.py
-│   ├── asn1_schemas.py
-│   ├── data_model.py
-│   ├── kml_exporter.py
-│   ├── main.py
-│   ├── map_widget.py
-│   ├── nmea_parser.py
-│   ├── parsing_worker.py
-│   ├── pcap_parser.py
-│   ├── player_controller.py
-│   ├── scene_model.py
-│   ├── security_parser.py
-│   ├── ui/
-│   │   └── main_window.py
-│   ├── assets/
-│   │   ├── asn1/
-│   │   └── cache/
-│   └── requirements.txt
-├── testfiles/
-├── tests/
-├── CHANGELOG.md
-└── README.md
-```
+Nach einem erfolgreichen Update verwendet die App die neuen Schemata sofort fuer
+die naechste Analyse. Bereits geladene Sitzungen sollten danach erneut geladen
+werden.
 
 ## Voraussetzungen
 
 - Windows 10 oder 11
-- Python 3.11+
-- Wireshark / TShark optional, aber empfohlen fuer `pyshark`
+- PCAP2KML-Player als Windows-EXE, z. B. `PCAP2KML-Player.exe`
+- Schreibrechte im Zielordner fuer Exporte und Diagnoseberichte
+- Internetzugang fuer Online-Kartenkacheln und optionale ASN.1-Schema-Updates
+- Optional: Wireshark / TShark fuer erweiterte Decoderabdeckung
 
-Hinweis: Ohne `TShark` funktioniert die App weiterhin ueber den `scapy`-Fallback, allerdings mit moeglicherweise eingeschraenkter Decoderabdeckung je Capture.
+Hinweis: Python, PyQt und die benoetigten Laufzeitbibliotheken sind bei der
+EXE-Nutzung nicht separat zu installieren. Falls TShark fehlt, kann die App
+weiterhin PCAPs ueber den eingebauten Fallback lesen; je Capture kann die
+Decoderabdeckung dann eingeschraenkt sein.
 
-## Installation
+## EXE Starten
 
-```powershell
-cd C:\PythonTools\PCAP2KML\pcap2kml_player
-py -m pip install -r requirements.txt
-```
+1. Den bereitgestellten Ordner an einen lokalen Ort kopieren, z. B. nach
+   `C:\Programme\PCAP2KML Player` oder in einen Projektordner.
+2. `PCAP2KML-Player.exe` per Doppelklick starten.
+3. Falls Windows SmartScreen oder eine Unternehmensrichtlinie nachfragt, die
+   Ausfuehrung gemaess interner Freigabe bestaetigen.
+4. Mit `PCAP laden` eine oder mehrere `.pcap`, `.pcapng` oder `.cap` Dateien
+   oeffnen. Alternativ Dateien direkt per Drag & Drop ins Fenster ziehen.
 
-## Anwendung starten
+Die App merkt sich die zuletzt erfolgreich geladene Sitzung. Beim naechsten
+Start kann sie ueber `Letzte Sitzung` erneut geoeffnet werden, solange die
+Dateien noch am selben Speicherort liegen.
 
-```powershell
-cd C:\PythonTools\PCAP2KML
-py pcap2kml_player\main.py
-```
+### Karten- und Grafikhinweise
 
-Alternativ kann der Windows-Launcher verwendet werden. Er prueft zuerst die
-Python-Requirements und bietet bei fehlenden Paketen eine optionale
-Nachinstallation per `pip` an:
+Die EXE setzt konservative Grafikoptionen, damit die eingebettete Leaflet-Karte
+auf typischen Windows-Notebooks stabil laeuft. Falls die Karte leer bleibt oder
+traege reagiert:
 
-```powershell
-cd C:\PythonTools\PCAP2KML
-py pcap2kml_launcher.py
-```
+- `Karte neu laden` ausfuehren
+- unten in der Statusleiste den Leistungsmodus pruefen
+- bei grossen Captures kurz warten, bis die Karte ihre Layer reduziert hat
+- `Diagnose exportieren` nutzen und den erzeugten Bericht weitergeben
 
-### QtWebEngine/Grafiktreiber-Hinweis
-
-Auf manchen Windows-Rechnern schreibt QtWebEngine/Chromium Meldungen wie
-`QueryVideoProcessorCustomExtForHDR: Failed to retrieve D3D11 device` ins
-Terminal. Die App setzt beim Start konservative Chromium-Flags gegen fragile
-DirectComposition-/HDR-/Video-Overlay-Pfade und bevorzugt im Standardbetrieb
-Software-OpenGL plus den Qt-Software-Rasterizer:
-
-```text
---disable-direct-composition
---disable-features=DirectComposition,DirectCompositionVideoOverlays,UseHDRTransferFunction
---disable-accelerated-video-decode
---disable-gpu-memory-buffer-video-frames
---force-color-profile=srgb
---disable-gpu
---disable-gpu-compositing
---disable-accelerated-2d-canvas
---disable-webgl
---disable-webgl2
---disable-gpu-rasterization
---disable-oop-rasterization
-```
-
-Die letzten fuenf Flags sind entscheidend fuer Rechner, auf denen Chromiums
-GPU-Prozess `kFatalFailure: Failed to create shared context for virtualization`
-meldet. Ohne diese Flags versucht Chromium trotz `--disable-gpu` GLES-Kontexte
-fuer Canvas-2D-Beschleunigung und WebGL zu erstellen — die Kontexterstellung
-schlaegt fehl und die Karte bleibt leer. Mit `--disable-accelerated-2d-canvas`
-verwendet Chromium stattdessen CPU-basiertes Skia fuer alle Canvas-Operationen,
-was den Leaflet-Renderer auf beliebiger Hardware funktionsfaehig haelt.
-
-Ergaenzend dazu werden gesetzt:
-
-```text
-QT_OPENGL=software
-QT_OPENGL_DLL=<PyQt6>\Qt6\bin\opengl32sw.dll
-QSG_RHI_PREFER_SOFTWARE_RENDERER=1
-```
-
-Damit wird der problematische D3D11-/SceneGraph-Treiberpfad auf vielen
-Windows-Rechnern umgangen. Leaflet/WebEngine bleibt der Standard, damit
-Basiskarten wie OSM, Schwarz-Weiss, Dunkel und Satellit verfuegbar bleiben.
-Falls QtWebEngine trotz Software-OpenGL weiterhin keinen GLES-Kontext erstellen
-kann, erkennt die App das automatisch: Nach dem Laden der Seite prueft ein
-JavaScript-Probe, ob Leaflet tatsaechlich initialisiert wurde. Schlaegt diese
-Pruefung vor dem ersten erfolgreichen Bootstrap fehl oder laeuft sie in einen
-6-Sekunden-Timeout, wechselt die App selbstaendig auf den nativen Backend -
-auch dann, wenn `loadFinished(ok=True)` bereits gefeuert hat (was trotz
-defektem GL-Kontext passiert). Sobald Leaflet einmal erfolgreich initialisiert
-wurde, werden spaete Bootstrap-Timeouts ignoriert; dadurch verschwindet die
-geografische Karte nach dem Laden groesserer PCAPs nicht mehr aufgrund eines
-verzoegerten Timers. Ebenso loest ein
-Chromium-Render-Prozess-Absturz (`renderProcessTerminated`) sofort einen Wechsel
-aus. Dieser automatische Wechsel wird nicht dauerhaft gespeichert; der naechste
-App-Start versucht es erneut mit Leaflet. Der native Backend kann auch manuell
-ueber `Karte: Native` in der Toolbar gewaehlt werden. Er zeigt Marker, kurze
-Trajektorien, Inbound-/Outbound-Lanes, Connections, Stoplines und
-Request-Overlays direkt in Qt ohne Leaflet-Tiles und ohne
-QtWebEngine-GPU-Compositor, damit die Analyse auf problematischen Notebooks
-weiterhin nutzbar bleibt. Beim Backend-Wechsel wird das alte WebEngine-Widget
-vor `deleteLater()` explizit entschaerft: ausstehende JavaScript-Callbacks,
-Renderqueues und Timer werden verworfen, damit spaete WebEngine-Callbacks nicht
-mehr auf ein bereits geloeschtes Qt/C++-Objekt zugreifen.
-
-Der Karten-Backend kann fuer Tests auch explizit gesetzt werden:
-
-```powershell
-$env:PCAP2KML_MAP_BACKEND="native"
-py pcap2kml_launcher.py
-```
-
-Oder fuer einen Vergleich mit der Leaflet-/WebEngine-Karte:
-
-```powershell
-$env:PCAP2KML_MAP_BACKEND="webengine"
-py pcap2kml_launcher.py
-```
-
-Falls Karte oder WebEngine auf einem Rechner trotzdem instabil laufen, kann
-Software-Rendering weiterhin explizit gesetzt werden:
-
-```powershell
-$env:PCAP2KML_DISABLE_GPU="1"
-py pcap2kml_launcher.py
-```
-
-Fuer gezielte Tests auf stabilen Rechnern kann GPU-Rendering wieder aktiviert
-werden:
-
-```powershell
-$env:PCAP2KML_ENABLE_GPU="1"
-py pcap2kml_launcher.py
-```
-
-Die Meldung `The cached device pixel ratio value was stale on window expose` ist
-eine QtWebEngine/DPI-Warnung. Die Karte invalidiert ihre Leaflet-Groesse bei
-Show/Resize erneut, damit Fensterwechsel und Remote-Desktop-Skalierung robuster
-werden.
-
-## Windows-EXE erstellen
-
-Die Anwendung kann als einfache Start-EXE gebaut werden. Die EXE ist ein
-Bootstrapper: sie prueft beim Start die Requirements, kann fehlende Pakete nach
-Bestaetigung nachinstallieren und startet danach die eigentliche PyQt-App.
-
-```powershell
-cd C:\PythonTools\PCAP2KML
-powershell -ExecutionPolicy Bypass -File .\scripts\build_exe.ps1 -InstallMissing
-```
-
-Ergebnis:
-
-```text
-dist\PCAP2KML-Player.exe
-```
-
-Ohne `-InstallMissing` bricht das Buildskript mit einer Liste fehlender Pakete ab,
-statt automatisch etwas nachzuladen.
-
-Das Buildskript nimmt `pcap2kml_player/assets` in das PyInstaller-Paket auf,
-damit die lokalen Leaflet-Dateien auch in der EXE verfuegbar sind.
-
-## Abhaengigkeiten
-
-| Paket | Zweck |
-|---|---|
-| `PyQt6` | Desktop-GUI |
-| `PyQt6-WebEngine` | eingebettete Karte |
-| `scapy` | Fallback-PCAP-Backend |
-| `pyshark` | bevorzugtes PCAP-Backend ueber TShark |
-| `asn1tools` | ASN.1-Decoding |
-| `simplekml` | KML-Erzeugung |
+Online-Kartenkacheln benoetigen Netzwerkzugriff. Ohne Netzwerk bleibt die
+Analyse der geladenen Nachrichten moeglich, Basiskarten koennen aber
+unvollstaendig erscheinen.
 
 ## Bedienung
 
@@ -462,6 +272,13 @@ damit die lokalen Leaflet-Dateien auch in der EXE verfuegbar sind.
 - `Letzte Sitzung` laedt die zuletzt erfolgreich geoeffneten Dateien erneut
 - `Laden abbrechen` stoppt einen laufenden Parse-Vorgang
 - `ASN.1-Schemas aktualisieren` aktualisiert die lokalen ETSI-Schemata
+
+### Workspaces
+
+- `Karte`: Kartenwiedergabe, Layer-Control und aktuelle Nachricht
+- `ETA Analyse`: Request-Auswahl, ETA-/Speed-Verlauf und Ereignistabelle
+- `Priorisierung`: Priorisierungsfehler mit Filter nach Schweregrad und Kreuzung
+- `Rohdaten`: Nachrichtentabelle, Filter, Merge-Sicht und Detail-Inspektor
 
 ### Filtern und Abspielen
 
@@ -499,28 +316,6 @@ damit die lokalen Leaflet-Dateien auch in der EXE verfuegbar sind.
 - [TXA/RXA-PCAP-Merge](docs/pcap_merge.md)
 - [Kartenlayer und UI-Verhalten](docs/ui_map_layers.md)
 
-## Test- und Qualitaetsstand
-
-Die aktuelle Testsuite deckt Parser, Kartenlogik, Playback, Export, Sicherheitsparser und Szenenmodell breit ab.
-
-- Aktueller Stand: `245 passed`
-  - inklusive Runtime-/Entry-Point-Tests fuer Software-OpenGL, `QT_OPENGL_DLL`
-    und den QtWebEngine-Startup-Pfad
-- Vorhandene Testbereiche:
-  - App-Memory
-  - ASN.1-Schema-Update
-  - Datenmodell
-  - NMEA-Parser
-  - PCAP-Parser
-  - Parser-Zusatzfelder
-  - KML-Export
-  - Kartenlogik / Overlay-Erzeugung
-  - Player-Controller
-  - Security-Parser
-  - Szenenmodell
-
-Direkte GUI-Interaktionstests fuer die komplette `main_window.py` sind weiterhin vergleichsweise leichtgewichtig; der Schwerpunkt liegt dort derzeit auf Compile-/Integrationsstabilitaet und modellnahen Regressionen.
-
 ## Bekannte Grenzen
 
 - Kein vollstaendiger PKI-Chain-Validator
@@ -531,8 +326,8 @@ Direkte GUI-Interaktionstests fuer die komplette `main_window.py` sind weiterhin
 
 ## Roadmap
 
-Der detaillierte Umsetzungsstand liegt in [docs/ROADMAP.md](C:/PythonTools/PCAP2KML/docs/ROADMAP.md).
+Der detaillierte Umsetzungsstand liegt in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Changelog
 
-Das projektspezifische Aenderungsprotokoll liegt in [CHANGELOG.md](C:/PythonTools/PCAP2KML/CHANGELOG.md).
+Das projektspezifische Aenderungsprotokoll liegt in [CHANGELOG.md](CHANGELOG.md).
