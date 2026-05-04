@@ -2,12 +2,16 @@
 
 Desktop-Anwendung zur Analyse, Wiedergabe und Kartendarstellung von V2X-Nachrichten aus PCAP-Dateien.
 
-Stand: 2026-04-22  
-Aktueller dokumentierter Funktionsstand: v1.7
+Stand: 2026-05-04  
+Aktueller dokumentierter Funktionsstand: v1.7, UI-Handbuch aktualisiert auf den v2.0-Workspace-Stand
 
 ## Uebersicht
 
 PCAP2KML Player ist auf ITS-G5 / ETSI-V2X-Workflows ausgelegt. Die App liest `.pcap`, `.pcapng` und `.cap`, dekodiert erkannte ITS-Nachrichten sowie NMEA/GNSS-Daten und stellt sie in einer operativen Desktop-Oberflaeche dar.
+
+![PCAP2KML Player Hauptfenster](docs/screenshots/1.png)
+
+Das bebilderte Benutzerhandbuch liegt unter [docs/benutzerhandbuch.html](docs/benutzerhandbuch.html). Es zeigt Fensteraufbau, Werkzeugleiste, Workspaces, Dashboard, Filter, Karte, Rohdaten, Detail-Inspektor, ETA-Analyse, Priorisierung und Wiedergabesteuerung anhand frisch erzeugter Screenshots aus der aktuellen EXE.
 
 Unterstuetzte Nachrichtentypen:
 
@@ -118,67 +122,28 @@ Playback-Verhalten:
 
 ## UI im aktuellen Stand
 
-Die Hauptansicht besteht aus vier Arbeitsbereichen:
+Die Hauptansicht besteht aus einer dunklen Werkzeugleiste, vier Workspace-Tabs
+und einer permanenten Statusleiste:
 
-1. Kopfbereich mit Sitzungsstatus, Dateianzahl, Nachrichtenzahl und Stationen
-2. Filterzeile fuer Nachrichtentypen und Stationen
-3. Karten- und rechte Arbeitsleiste
-4. Playback-Leiste mit Slider, Zeitanzeige und Geschwindigkeitsumschaltung
+1. `Karte` fuer Leaflet-Karte, Layer-Control, aktuelle Nachricht und Playback
+2. `ETA Analyse` fuer Request-Auswahl, ETA-/Speed-Verlauf, SREM/SSEM-Ereignisse und CSV/JSON-Export
+3. `Priorisierung` fuer Karte plus Priorisierungsfehler-Panel mit Schweregrad- und Kreuzungsfilter
+4. `Rohdaten` fuer Nachrichtentabelle, Nachrichtentyp-/Stationsfilter, Merge-Sicht und Detail-Inspektor
 
-Die rechte Arbeitsleiste ist jetzt in zwei Ebenen organisiert:
+Die Toolbar enthaelt `PCAP laden`, `Letzte Sitzung`, `Abbrechen`,
+`KML exportieren`, `Fehler exportieren`, `Diagnose exportieren`,
+`Karte neu laden`, `ASN.1-Schemas`, `Dashboard` und die Befehlspalette
+`Schnellbefehl suchen...` (`Ctrl+K`).
 
-- oben immer sichtbar: Nachrichtentabelle
-- darunter als Tabs:
-  - `Details` fuer Nachrichten-, PKI- und Identitaetshinweise
-  - `Szene` fuer Kreuzungszustand, Phasenprognose, Requests und Warnungen
-  - `ETA Analyse` fuer request-zentrierte ETA-, Speed- und SSEM-Statusbaender
-    plus Kennzahlen- und Ereignistabelle pro Fahrzeug/Request
-    inklusive Klick-Synchronisation und CSV/JSON-Export
+Die Statusleiste zeigt Sitzungs- und Laufzeitinformationen wie sichtbare
+Nachrichten, Stationen, Dauer, Kartenbackend, Leistungsmodus, RAM und Diagnose.
 
-Rechts neben der Karte befindet sich das Panel `Priorisierungsfehler`. Es zeigt
-aktuelle Timeouts, Rejected, Late Granted, ETA-Konflikte und weitere
-Priorisierungsprobleme. Klick auf einen Eintrag synchronisiert Karte,
-Nachrichtentabelle, Detailansicht und ETA-Analyse.
-
-Das Panel bietet Filter fuer `Alle`, `Nur kritisch`, `Aktuelle Kreuzung` und eine
-Kreuzungsauswahl. Kritische Fehler koennen dadurch gezielt pro Intersection
-isoliert werden, ohne die Karte mit zusaetzlichen Markern zu ueberladen.
-
-### Layout fuer kleine Bildschirme
-
-Die Toolbar enthaelt einen Layoutmodus:
-
-```text
-Auto | Desktop | Kompakt
-```
-
-`Auto` schaltet unterhalb von ca. 1320 px Fensterbreite in den Kompaktmodus. Der
-Kompaktmodus ist auf 1280x720 optimiert und priorisiert die Karte:
-
-- Kopfbereich ist einklappbar
-- Nachrichtentabelle zeigt kompakt nur `Timestamp`, `Station ID`, `Msg Type` und
-  `Speed / Heading`
-- Toolbar- und Playback-Beschriftungen werden verkuerzt
-- Priorisierungsfehler-Panel klappt ohne kritische Fehler automatisch ein
-- Kritische Priorisierungsfehler klappen das Panel wieder auf
-
-Das Szenenpanel zeigt derzeit:
-
-- Kreuzungen mit MAP-/SPAT-Revisionen
-- Signalgruppen-Zusammenfassung
-- kompakte 30s-Phasen-Timelines
-- offene und kuerzlich beantwortete Priorisierungsanforderungen
-- operative Request-Zustaende: `pending`, `acknowledged`, `granted`, `rejected`, `timeout`
-- Inline-Warnungen bei fehlender MAP-Basis, Revisionsmismatch, Timeout und Clock Skew
-- Kennzahlen wie `Msgs/s` und mittlere ETA-Abweichung
-
-Die Playback-Leiste enthaelt zusaetzlich `Nur Problemstellen`, `Fehler zurueck`
-und `Naechster Fehler`. Damit springt die Wiedergabe nur zwischen Zeitpunkten,
-an denen ein Priorisierungsproblem erstmals erkannt wird.
+Die Playback-Leiste enthaelt `Nur Fehler`, Vor/Zurueck-Spruenge, Play, Pause,
+Stop, Zeitachse, Geschwindigkeit und aktuelle Position.
 
 ### Performance-Modus und RAM-Waechter
 
-Die Toolbar enthaelt zusaetzlich den Modus `Leistung`:
+Der aktive Leistungsmodus wird in der Statusleiste angezeigt:
 
 ```text
 Normal | Schonend | Diagnose
@@ -528,6 +493,7 @@ damit die lokalen Leaflet-Dateien auch in der EXE verfuegbar sind.
 
 ## Weiterfuehrende Dokumentation
 
+- [Bebildertes Benutzerhandbuch](docs/benutzerhandbuch.html)
 - [SREM/SSEM-Priorisierungsanalyse](docs/prioritization_analysis.md)
 - [ETA-Analyse](docs/eta_analysis.md)
 - [TXA/RXA-PCAP-Merge](docs/pcap_merge.md)
@@ -558,7 +524,7 @@ Direkte GUI-Interaktionstests fuer die komplette `main_window.py` sind weiterhin
 ## Bekannte Grenzen
 
 - Kein vollstaendiger PKI-Chain-Validator
-- Noch kein GeoJSON- oder GPX-Export
+- Screenshot-Export ist weiterhin als UI-Funktion geplant; die Doku nutzt aktuell gepflegte Referenz-Screenshots unter `docs/screenshots/`
 - Noch keine Offline-Kartenkacheln; Leaflet selbst wird lokal gebuendelt
 - Keine vollwertige Frame-fuer-Frame-Navigation
 - Keine Headless-CLI

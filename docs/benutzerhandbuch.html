@@ -123,15 +123,16 @@
       margin-bottom: 28px;
     }
 
-    /* ── Screenshot placeholder ── */
+    /* ── Screenshots ── */
     .screenshot-box {
-      background: #e8eef7;
-      border: 2px dashed #9ab0c8;
+      background: var(--white);
+      border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 28px 20px;
+      padding: 14px;
       margin: 16px 0 20px;
       text-align: center;
       position: relative;
+      box-shadow: 0 2px 10px rgba(16,35,63,.08);
     }
     .screenshot-box .ss-label {
       display: inline-block;
@@ -148,104 +149,13 @@
       font-size: 13px;
       color: #42546b;
     }
-    .screenshot-box .ss-todo {
-      margin-top: 10px;
-      font-size: 12px;
-      font-weight: 700;
-      color: #b2192b;
-      background: #fff2f3;
-      border: 1px solid #f5c0c5;
-      border-radius: 6px;
-      display: inline-block;
-      padding: 4px 14px;
-    }
     .screenshot-box img {
+      display: block;
       max-width: 100%;
+      margin: 12px auto 0;
       border-radius: 8px;
       box-shadow: 0 2px 12px rgba(16,35,63,.15);
     }
-
-    /* ── UI mockup ── */
-    .ui-mock {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      overflow: hidden;
-      margin: 16px 0 20px;
-      box-shadow: 0 2px 10px rgba(16,35,63,.08);
-    }
-    .ui-mock-toolbar {
-      background: var(--white);
-      border-bottom: 1px solid var(--border);
-      padding: 8px 12px;
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    .ui-mock-btn {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 5px 12px;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--navy);
-      white-space: nowrap;
-    }
-    .ui-mock-btn.primary { background: var(--red); color: #fff; border-color: var(--red); }
-    .ui-mock-sep { width: 1px; height: 24px; background: var(--border); }
-    .ui-mock-body { padding: 14px; background: var(--bg); }
-    .ui-mock-stat-row { display: flex; gap: 12px; margin-bottom: 12px; }
-    .stat-card-m {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 10px 16px;
-      min-width: 120px;
-    }
-    .stat-card-m .sc-label { font-size: 11px; color: var(--small); font-weight: 600; }
-    .stat-card-m .sc-value { font-size: 20px; font-weight: 700; color: var(--navy); }
-    .ui-mock-filter {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 12px;
-      font-size: 12px;
-      color: var(--navy);
-      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
-    }
-    .filter-badge {
-      background: var(--blue-lt);
-      border: 1px solid #a8d4f5;
-      border-radius: 6px;
-      padding: 2px 8px;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--navy);
-    }
-    .filter-badge.active { background: var(--navy); color: #fff; }
-    .ui-mock-playbar {
-      background: var(--white);
-      border-top: 1px solid var(--border);
-      padding: 8px 14px;
-      display: flex; gap: 8px; align-items: center;
-    }
-    .pb-btn {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 4px 12px;
-      font-size: 12px; font-weight: 600; color: var(--navy);
-    }
-    .pb-btn.play { background: var(--navy); color: #fff; }
-    .pb-slider {
-      flex: 1;
-      height: 8px;
-      background: linear-gradient(to right, var(--red) 35%, #dce3ee 35%);
-      border-radius: 4px;
-    }
-    .pb-time { font-size: 12px; color: var(--muted); font-weight: 600; white-space: nowrap; }
 
     /* ── Tables ── */
     table {
@@ -349,7 +259,7 @@
 <aside class="sidebar">
   <div class="sidebar-logo">
     PCAP2KML Player
-    <span>Benutzerhandbuch v1.7</span>
+    <span>Benutzerhandbuch v2.0 UI-Stand</span>
   </div>
   <nav>
     <div class="sidebar-section">Einstieg</div>
@@ -360,11 +270,12 @@
     <div class="sidebar-section">Oberfläche</div>
     <a href="#oberflaeche">Fensteraufbau</a>
     <a href="#toolbar">Werkzeugleiste</a>
-    <a href="#overview-panel">Übersichts-Panel</a>
+    <a href="#dashboard">Statistik-Dashboard</a>
+    <a href="#overview-panel">Statusleiste</a>
     <a href="#filter">Filter-Zeile</a>
     <a href="#karte">Kartenansicht</a>
     <a href="#nachrichtenliste">Nachrichtentabelle</a>
-    <a href="#context-tabs">Kontext-Tabs</a>
+    <a href="#context-tabs">Analyse-Workspaces</a>
     <a href="#issue-panel">Priorisierungs­fehler-Panel</a>
     <a href="#wiedergabe">Wiedergabe­steuerung</a>
     <a href="#performance">Performance-Modi</a>
@@ -379,7 +290,7 @@
     <a href="#kml-export">KML exportieren</a>
     <a href="#issues-export">Fehler exportieren</a>
     <a href="#schemas">ASN.1-Schemas</a>
-    <a href="#layout">Layout anpassen</a>
+    <a href="#layout">Workspace wechseln</a>
 
     <div class="sidebar-section">Referenz</div>
     <a href="#nachrichtentypen">Nachrichtentypen</a>
@@ -478,76 +389,17 @@
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 1</div>
         <div class="ss-desc">Gesamtansicht des Hauptfensters nach dem Laden einer PCAP-Datei</div>
-        <div class="ss-todo">📷 Bitte Screenshot anfertigen: App starten → PCAP laden → Wiedergabe kurz starten → Vollbild-Screenshot</div>
-      </div>
-
-      <!-- UI Mockup -->
-      <div class="ui-mock">
-        <div class="ui-mock-toolbar">
-          <div class="ui-mock-btn primary">PCAP laden</div>
-          <div class="ui-mock-btn">Letzte Sitzung</div>
-          <div class="ui-mock-btn">Laden abbrechen</div>
-          <div class="ui-mock-sep"></div>
-          <div class="ui-mock-btn">KML exportieren</div>
-          <div class="ui-mock-btn">Fehler exportieren</div>
-          <div class="ui-mock-sep"></div>
-          <div class="ui-mock-btn">ASN.1-Schemas aktualisieren</div>
-          <div class="ui-mock-sep"></div>
-          <span style="font-size:12px;color:#42546b;">Layout:</span>
-          <div class="ui-mock-btn">Auto ▾</div>
-        </div>
-        <div class="ui-mock-body">
-          <div class="ui-mock-stat-row">
-            <div class="stat-card-m"><div class="sc-label">Dateien</div><div class="sc-value">2</div></div>
-            <div class="stat-card-m"><div class="sc-label">Nachrichten</div><div class="sc-value">4 812</div></div>
-            <div class="stat-card-m"><div class="sc-label">Stationen</div><div class="sc-value">7</div></div>
-          </div>
-          <div class="ui-mock-filter" style="margin-bottom:10px;">
-            <span style="font-size:12px;font-weight:600;">Nachrichtentyp:</span>
-            <span class="filter-badge active">CAM</span>
-            <span class="filter-badge active">DENM</span>
-            <span class="filter-badge active">SREM</span>
-            <span class="filter-badge active">SSEM</span>
-            <span class="filter-badge active">MAPEM</span>
-            <span class="filter-badge active">SPATEM</span>
-            <span class="filter-badge active">NMEA</span>
-            <span style="margin-left:12px;font-size:12px;font-weight:600;">Stationen:</span>
-            <span class="filter-badge">Station 1234</span>
-            <span class="filter-badge">Station 5678</span>
-          </div>
-          <div style="display:flex;gap:10px;height:200px;">
-            <div style="flex:7;background:#dce3ee;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#42546b;">🗺️ Interaktive Karte (Leaflet)</div>
-            <div style="flex:3;background:var(--white);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:12px;color:#42546b;">
-              <strong style="color:var(--navy);">Priorisierungsfehler</strong><br><br>
-              ⚠ 3 Fehler gefunden<br>
-              • Timeout ohne SSEM<br>
-              • Verspätetes granted<br>
-              • ETA-Sprung &gt; 5 s
-            </div>
-          </div>
-        </div>
-        <div class="ui-mock-playbar">
-          <div class="pb-btn play">▶ Play</div>
-          <div class="pb-btn">⏸ Pause</div>
-          <div class="pb-btn">⏹ Stop</div>
-          <div class="pb-btn">☑ Nur Problemstellen</div>
-          <div class="pb-btn">◀ Fehler</div>
-          <div class="pb-btn">Fehler ▶</div>
-          <div class="pb-slider"></div>
-          <span style="font-size:12px;color:#42546b;">Geschw.:</span>
-          <div class="pb-btn">1.0x ▾</div>
-          <div class="pb-time">00:32.5 / 04:17.0</div>
-        </div>
+        <img src="screenshots/1.png" alt="Gesamtansicht des PCAP2KML-Hauptfensters mit geladener PCAP-Sitzung" />
       </div>
 
       <table>
         <tr><th>Bereich</th><th>Position</th><th>Funktion</th></tr>
-        <tr><td><strong>Werkzeugleiste</strong></td><td>Ganz oben</td><td>Datei laden, exportieren, Schemas, Layout</td></tr>
-        <tr><td><strong>Übersichts-Panel</strong></td><td>Unterhalb Toolbar</td><td>Sitzungs-Statistiken (Dateien, Nachrichten, Stationen)</td></tr>
-        <tr><td><strong>Filter-Zeile</strong></td><td>Unter Übersicht</td><td>Nachrichtentypen und Stationen ein-/ausblenden</td></tr>
-        <tr><td><strong>Karte + Fehler-Panel</strong></td><td>Mitte links</td><td>Kartendarstellung und Priorisierungsfehler-Liste</td></tr>
-        <tr><td><strong>Nachrichtenliste</strong></td><td>Mitte rechts</td><td>Tabelle aller Nachrichten mit Kontext-Tabs</td></tr>
-        <tr><td><strong>Wiedergabesteuerung</strong></td><td>Unten</td><td>Play/Pause/Stop, Zeitachse, Geschwindigkeit</td></tr>
+        <tr><td><strong>Werkzeugleiste</strong></td><td>Ganz oben</td><td>Datei laden, Exporte, Diagnose, Karte, Schemas, Dashboard und Schnellbefehl</td></tr>
+        <tr><td><strong>Workspace-Tabs</strong></td><td>Unter der Toolbar</td><td><em>Karte</em>, <em>ETA Analyse</em>, <em>Priorisierung</em> und <em>Rohdaten</em></td></tr>
+        <tr><td><strong>Kartenbereich</strong></td><td>Mitte links</td><td>Leaflet-Karte mit Layer-Control, Stationen, Trajektorien und Infrastruktur-Layern</td></tr>
+        <tr><td><strong>Seitlicher Inspektor</strong></td><td>Rechts</td><td>Aktuelle Nachricht, Request-Details, Priorisierungsfehler oder Detail-Inspektor je Workspace</td></tr>
+        <tr><td><strong>Wiedergabesteuerung</strong></td><td>Unten</td><td>Problemstellenmodus, Zeitachse, Play/Pause/Stop, Geschwindigkeit</td></tr>
+        <tr><td><strong>Statusleiste</strong></td><td>Ganz unten</td><td>Sichtbare Nachrichten, Stationen, Dauer, Kartenbackend, Leistung, RAM und Diagnose</td></tr>
       </table>
     </div>
   </section>
@@ -560,7 +412,7 @@
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 2</div>
         <div class="ss-desc">Werkzeugleiste im Desktop-Layout</div>
-        <div class="ss-todo">📷 Bitte Screenshot anfertigen: Nur die Toolbar (obere ~60 px des Fensters)</div>
+        <img src="screenshots/8.png" alt="Werkzeugleiste mit Laden-, Export-, Diagnose-, Karten-, Schema-, Dashboard- und Schnellbefehl-Schaltflächen" />
       </div>
 
       <table>
@@ -570,14 +422,34 @@
         <tr><td><strong>Laden abbrechen</strong></td><td>Bricht einen laufenden Parse-Vorgang ab (aktiv während des Ladens)</td></tr>
         <tr><td><strong>KML exportieren</strong></td><td>Exportiert alle gefilterten Entitäten als KML-Dateien (eine Datei je Station)</td></tr>
         <tr><td><strong>Fehler exportieren</strong></td><td>Exportiert Priorisierungsfehler als CSV, Maschinen-CSV, JSON und Textreport</td></tr>
-        <tr><td><strong>ASN.1-Schemas aktualisieren</strong></td><td>Lädt aktuelle ASN.1-Schemadateien aus dem Git-Repository</td></tr>
-        <tr><td><strong>Layout-Auswahl</strong></td><td>Wechselt zwischen <em>Auto</em>, <em>Desktop</em> und <em>Kompakt</em>-Layout</td></tr>
-        <tr><td><strong>Performance-Modus</strong></td><td>Combo-Auswahl <em>Normal</em> · <em>Schonend</em> · <em>Diagnose</em>. Steuert Render-Budget, Trail-Window und Aktualisierungsintervall der Karte. Siehe Sektion <a href="#performance">Performance-Modi</a>.</td></tr>
+        <tr><td><strong>Diagnose exportieren</strong></td><td>Schreibt einen technischen Diagnosebericht mit Runtime-, Karten- und Sitzungsdaten</td></tr>
+        <tr><td><strong>Karte neu laden</strong></td><td>Initialisiert die aktuelle Kartenansicht erneut, ohne die PCAP-Sitzung zu verwerfen</td></tr>
+        <tr><td><strong>ASN.1-Schemas</strong></td><td>Aktualisiert die lokalen ETSI-ASN.1-Schemadateien</td></tr>
+        <tr><td><strong>Dashboard</strong></td><td>Öffnet das Statistik-Dashboard mit Überblick, Nachrichtenraten sowie Speed/Heading</td></tr>
+        <tr><td><strong>Schnellbefehl</strong></td><td>Öffnet die Befehlspalette über <kbd>Ctrl</kbd>+<kbd>K</kbd></td></tr>
       </table>
       <div class="callout info">
         <strong>Hinweis</strong>
-        Im <em>Kompakt</em>-Layout werden Schaltflächentexte automatisch verkürzt
-        (z.&nbsp;B. „KML" statt „KML exportieren"), um Platz zu sparen.
+        Die roten Hervorhebungen markieren primäre Aktionen oder den aktiven Workspace.
+        Statusinformationen wie Kartenbackend, Leistungsmodus und RAM stehen in der unteren Statusleiste.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="dashboard" class="content">
+    <div class="section">
+      <h2>Statistik-Dashboard</h2>
+      <p>
+        Die Schaltfläche <strong>Dashboard</strong> öffnet ein separates
+        Statistikfenster. Es fasst die geladene Sitzung zusammen und bietet Tabs
+        für Überblick, Nachrichtenraten sowie Speed/Heading.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">DASHBOARD</div>
+        <div class="ss-desc">Statistik-Dashboard über der geladenen Kartenansicht</div>
+        <img src="screenshots/6.png" alt="Statistik-Dashboard mit Gesamtzahl, Stationen, Nachrichtentypen, Dauer und Nachrichtenrate" />
       </div>
     </div>
   </section>
@@ -585,28 +457,32 @@
   <!-- ─────────────────────────────────────────────── -->
   <section id="overview-panel" class="content">
     <div class="section">
-      <h2>Übersichts-Panel</h2>
+      <h2>Statusleiste und Sitzungsstatus</h2>
       <p>
-        Das Übersichts-Panel unterhalb der Werkzeugleiste zeigt auf einen Blick
-        die wichtigsten Kennzahlen der geladenen Sitzung.
+        Der aktuelle UI-Stand zeigt Sitzungskennzahlen dauerhaft in der unteren
+        Statusleiste. Dort stehen geladene Nachrichten, Stationen, Dauer,
+        sichtbare Datensätze, Kartenbackend, Leistungsmodus, RAM-Anzeige und
+        der Diagnosezugang.
       </p>
 
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 3</div>
-        <div class="ss-desc">Übersichts-Panel mit Statistikkarten nach dem Laden einer Sitzung</div>
-        <div class="ss-todo">📷 Bitte Screenshot anfertigen: Nur den Header-Bereich mit den drei Stat-Karten</div>
+        <div class="ss-desc">Status- und Wiedergabebereich nach dem Laden einer Sitzung</div>
+        <img src="screenshots/9.png" alt="Wiedergabesteuerung und Statusleiste mit Nachrichten-, Stations- und Leistungsangaben" />
       </div>
 
       <table>
-        <tr><th>Karte</th><th>Bedeutung</th></tr>
-        <tr><td><strong>Dateien</strong></td><td>Anzahl geladener PCAP-Dateien</td></tr>
-        <tr><td><strong>Nachrichten</strong></td><td>Gesamtzahl dekodierter V2X-Nachrichten</td></tr>
-        <tr><td><strong>Stationen</strong></td><td>Anzahl eindeutiger Stations-IDs</td></tr>
+        <tr><th>Anzeige</th><th>Bedeutung</th></tr>
+        <tr><td><strong>Geladen</strong></td><td>Gesamtzahl dekodierter Nachrichten, Stationen und Sitzungsdauer</td></tr>
+        <tr><td><strong>Sichtbar</strong></td><td>Nachrichten und Stationen nach aktuellem Filter</td></tr>
+        <tr><td><strong>Karte</strong></td><td>Aktives Kartenbackend, z.&nbsp;B. Leaflet</td></tr>
+        <tr><td><strong>Leistung</strong></td><td>Aktiver Render-/Performance-Modus</td></tr>
+        <tr><td><strong>RAM</strong></td><td>Aktueller Speicherstatus, falls verfügbar</td></tr>
       </table>
       <p>
-        Mit der Schaltfläche <strong>„Header einklappen"</strong> lässt sich das Panel
-        ausblenden, um mehr Platz für Karte und Tabelle zu gewinnen.
-        Im eingeklappten Zustand erscheint eine einzeilige Kompaktzusammenfassung.
+        Die frühere Kopfzusammenfassung wurde durch die Workspace-Leiste und die
+        permanente Statuszeile ersetzt. Dadurch bleibt im Hauptbereich mehr Platz
+        für Karte, Analyse und Rohdaten.
       </p>
     </div>
   </section>
@@ -623,7 +499,7 @@
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 4</div>
         <div class="ss-desc">Filter-Zeile mit aktivierten Nachrichtentypen und ausgewählten Stationen</div>
-        <div class="ss-todo">📷 Bitte Screenshot anfertigen: Filter-Zeile – mehrere Checkboxen aktiviert, eine Station markiert</div>
+        <img src="screenshots/10.png" alt="Filter-Zeile mit Nachrichtentyp-Checkboxen, Stationsliste und Merge-Schalter im Rohdaten-Workspace" />
       </div>
 
       <h3>Nachrichtentyp-Filter</h3>
@@ -676,7 +552,7 @@
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 5</div>
         <div class="ss-desc">Interaktive Karte mit Fahrzeug-Markern und Trajektorien während der Wiedergabe</div>
-        <div class="ss-todo">📷 Bitte Screenshot anfertigen: Karte mit sichtbaren Markern – Wiedergabe aktiv, ca. bei 30–50 % des Fortschritts</div>
+        <img src="screenshots/5.png" alt="Leaflet-Karte mit Fahrzeug-Markern, Trajektorien und MAP/SPAT-Layern" />
       </div>
 
       <h3>Karteninteraktion</h3>
@@ -707,20 +583,20 @@
     <div class="section">
       <h2>Nachrichtentabelle</h2>
       <p>
-        Die Tabelle rechts listet alle gefilterten Nachrichten chronologisch auf.
-        Ein Klick auf eine Zeile markiert den zugehörigen Marker auf der Karte und
-        öffnet die Details im Tab <em>Details</em>.
+        Der Workspace <em>Rohdaten</em> listet alle gefilterten Nachrichten
+        chronologisch auf. Ein Klick auf eine Zeile füllt den Detail-Inspektor
+        rechts mit Basisdaten, dekodierten Feldern und Security-/PKI-Hinweisen.
       </p>
 
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 6</div>
-        <div class="ss-desc">Nachrichtentabelle mit einer markierten Zeile und ausgefülltem Details-Tab</div>
-        <div class="ss-todo">📷 Bitte Screenshot anfertigen: Tabelle – eine Zeile anklicken, sodass Detail-Tab Daten zeigt</div>
+        <div class="ss-desc">Rohdaten-Workspace mit Nachrichtentabelle und Detail-Inspektor</div>
+        <img src="screenshots/7.png" alt="Rohdaten-Workspace mit markierter Nachricht, Quellen-/Merge-Spalten und Detail-Inspektor" />
       </div>
 
       <h3>Spalten</h3>
       <table>
-        <tr><th>Spalte</th><th>Inhalt</th><th>Kompakt-Layout</th></tr>
+        <tr><th>Spalte</th><th>Inhalt</th><th>Rohdaten-Workspace</th></tr>
         <tr><td>Timestamp</td><td>Zeitstempel der Nachricht (ISO-8601)</td><td>✓ sichtbar</td></tr>
         <tr><td>Station ID</td><td>Eindeutige Stations-ID des Senders</td><td>✓ sichtbar</td></tr>
         <tr><td>Msg Type</td><td>Nachrichtentyp (CAM, DENM, …)</td><td>✓ sichtbar</td></tr>
@@ -748,25 +624,27 @@
   <!-- ─────────────────────────────────────────────── -->
   <section id="context-tabs" class="content">
     <div class="section">
-      <h2>Kontext-Tabs</h2>
+      <h2>Analyse-Workspaces und Detail-Inspektor</h2>
       <p>
-        Unterhalb der Nachrichtentabelle befinden sich drei Tabs, die je nach
-        Wiedergabeposition und ausgewählter Nachricht unterschiedliche
-        Kontextinformationen anzeigen.
+        Die frühere Kontext-Tab-Leiste ist im aktuellen UI in eigene Workspaces
+        aufgeteilt. <em>ETA Analyse</em>, <em>Priorisierung</em> und
+        <em>Rohdaten</em> teilen sich Karten- und Filterzustand, zeigen rechts
+        aber jeweils spezialisierte Inspektoren.
       </p>
 
-      <!-- Tab: Details -->
-      <h3>Tab „Details"</h3>
+      <!-- Detail-Inspektor -->
+      <h3>Detail-Inspektor</h3>
       <p>
-        Zeigt alle dekodierten Felder der zuletzt angeklickten Nachricht als
-        Feld-Wert-Tabelle. Enthält die Nachricht PKI-Sicherheitsinformationen
-        (z.&nbsp;B. Zertifikatsangaben), werden diese ebenfalls dargestellt.
+        Im Workspace <em>Rohdaten</em> zeigt der rechte Detail-Inspektor alle
+        dekodierten Felder der zuletzt angeklickten Nachricht als Feld-Wert-Tabelle.
+        Enthält die Nachricht PKI-Sicherheitsinformationen, werden diese im
+        Bereich <em>Security / PKI</em> dargestellt.
       </p>
 
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 7</div>
         <div class="ss-desc">Details-Tab mit dekodierten ASN.1-Feldern einer CAM-Nachricht</div>
-        <div class="ss-todo">📷 Bitte Screenshot anfertigen: Eine CAM-Zeile anklicken → Details-Tab zeigt Felder</div>
+        <img src="screenshots/7.png" alt="Details-Tab mit Feld-Wert-Tabelle einer CAM-Nachricht" />
       </div>
 
       <table>
@@ -780,18 +658,18 @@
         <tr><td>Zertifikat-Felder</td><td>PKI-Angaben (falls vorhanden)</td></tr>
       </table>
 
-      <!-- Tab: Szene -->
-      <h3>Tab „Szene"</h3>
+      <!-- Workspace: Priorisierung -->
+      <h3>Workspace „Priorisierung"</h3>
       <p>
-        Der Szene-Tab aggregiert MAP- und SPaT-Nachrichten zur aktuellen
-        Wiedergabeposition und zeigt den Echtzeit-Zustand aller Kreuzungen
-        sowie aktiver Priorisierungsanfragen.
+        Der Priorisierungs-Workspace aggregiert Karte, Infrastruktur-Layer und
+        Fehlerpanel zur aktuellen Wiedergabeposition. Rechts lassen sich Fehler
+        nach Schweregrad und Kreuzung filtern.
       </p>
 
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 8</div>
-        <div class="ss-desc">Szene-Tab mit Kreuzungstabelle, Signalgruppen-Prognose und Request-Liste</div>
-        <div class="ss-todo">📷 Bitte Screenshot anfertigen: Szene-Tab während der Wiedergabe (muss SPATEM/SREM-Nachrichten enthalten)</div>
+        <div class="ss-desc">Priorisierungs-Workspace mit Kartenansicht und Fehlerpanel</div>
+        <img src="screenshots/3.png" alt="Priorisierungs-Workspace mit Fehlerfilter, Fehlerliste und Kartenlayern" />
       </div>
 
       <h4>Kreuzungstabelle</h4>
@@ -845,8 +723,8 @@
 
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 9</div>
-        <div class="ss-desc">ETA-Analyse-Tab mit Restzeit-Kurve, Geschwindigkeitskurve und SREM/SSEM-Ereignislinien</div>
-        <div class="ss-todo">📷 Bitte Screenshot anfertigen: ETA-Tab anklicken – Request/Merge-Spur in Combo auswählen</div>
+        <div class="ss-desc">ETA-Analyse-Workspace mit Request-Auswahl, Kennzahlen und Ereignistabelle</div>
+        <img src="screenshots/2.png" alt="ETA-Analyse-Workspace mit Karte, Request-Details, ETA-Verlauf und Ereignistabelle" />
       </div>
 
       <h4>Graphelemente</h4>
@@ -871,14 +749,16 @@
     <div class="section">
       <h2>Priorisierungsfehler-Panel</h2>
       <p>
-        Das Panel rechts neben der Karte listet automatisch erkannte
-        Priorisierungsfehler auf. Es ist nur sichtbar, wenn Fehler vorhanden sind.
+        Das Panel im Workspace <em>Priorisierung</em> listet automatisch erkannte
+        Priorisierungsfehler auf. Die rote Badge zeigt die Anzahl der aktuell
+        passenden Fehler; wenn im aktuellen Zeitpunkt kein Fehler aktiv ist,
+        bleibt die Liste leer.
       </p>
 
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 10</div>
-        <div class="ss-desc">Priorisierungsfehler-Panel mit Fehlerliste und aktiven Filtern</div>
-        <div class="ss-todo">📷 Bitte Screenshot anfertigen: Sitzung mit SREM/SSEM laden → Panel sollte Fehler zeigen</div>
+        <div class="ss-desc">Priorisierungsfehler-Panel mit Filter für Schweregrad und Kreuzung</div>
+        <img src="screenshots/3.png" alt="Priorisierungsfehler-Panel mit Filterauswahl, Fehler-Badge und Kartenansicht" />
       </div>
 
       <h3>Fehlerfilter</h3>
@@ -897,8 +777,7 @@
       <p>
         Ein Klick auf einen Eintrag in der Fehlerliste springt die Wiedergabe
         automatisch zum Zeitpunkt des Fehlers und markiert die betroffene Nachricht
-        in der Tabelle. Alternativ können die Schaltflächen
-        <strong>„Fehler zurück"</strong> / <strong>„Nächster Fehler"</strong>
+        in der Rohdaten-Tabelle. Alternativ können die Zurück-/Weiter-Schaltflächen
         in der Wiedergabesteuerung genutzt werden.
       </p>
 
@@ -922,16 +801,16 @@
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 11</div>
         <div class="ss-desc">Wiedergabesteuerung während aktiver Wiedergabe</div>
-        <div class="ss-todo">📷 Bitte Screenshot anfertigen: Nur die Steuerleiste am unteren Rand – Wiedergabe läuft</div>
+        <img src="screenshots/9.png" alt="Wiedergabeleiste mit Problemstellenmodus, Play, Pause, Stop, Slider und Geschwindigkeit" />
       </div>
 
       <table>
         <tr><th>Element</th><th>Funktion</th></tr>
+        <tr><td><strong>Nur Fehler</strong></td><td>Wenn aktiviert, springt die Wiedergabe nur zu Zeitpunkten mit erkannten Priorisierungsfehlern</td></tr>
+        <tr><td><strong>Zurück / Weiter</strong></td><td>Springt zum vorherigen bzw. nächsten relevanten Zeitpunkt</td></tr>
         <tr><td><strong>Play</strong></td><td>Startet oder setzt die Wiedergabe fort</td></tr>
         <tr><td><strong>Pause</strong></td><td>Hält die Wiedergabe an (Position bleibt erhalten)</td></tr>
         <tr><td><strong>Stop</strong></td><td>Beendet die Wiedergabe und setzt auf den Anfang zurück</td></tr>
-        <tr><td><strong>Nur Problemstellen</strong></td><td>Wenn aktiviert, springt die Wiedergabe nur zu Zeitpunkten mit erkannten Priorisierungsfehlern</td></tr>
-        <tr><td><strong>Fehler zurück / Nächster Fehler</strong></td><td>Springt zum vorherigen bzw. nächsten Priorisierungsfehler-Zeitpunkt</td></tr>
         <tr><td><strong>Zeitachsen-Schieberegler</strong></td><td>Manuelle Positionierung (Ziehen oder Klicken)</td></tr>
         <tr><td><strong>Geschwindigkeit</strong></td><td>Wiedergabegeschwindigkeit: 0.1×, 0.5×, 1×, 2×, 5×, 10×</td></tr>
         <tr><td><strong>Zeitanzeige</strong></td><td>Aktuelle Position und Gesamtdauer im Format <code>MM:SS.t / MM:SS.t</code></td></tr>
@@ -1059,7 +938,7 @@
         <li>Schaltfläche <strong>„PCAP laden"</strong> in der Werkzeugleiste klicken.</li>
         <li>Im Dateidialog eine oder mehrere <code>.pcap</code>/<code>.pcapng</code>/<code>.cap</code>-Dateien auswählen.</li>
         <li>Auf <strong>„Öffnen"</strong> klicken. Der Ladebalken in der Statusleiste zeigt den Fortschritt.</li>
-        <li>Nach erfolgreichem Laden werden Statistiken im Übersichts-Panel und Nachrichten in der Tabelle angezeigt.</li>
+        <li>Nach erfolgreichem Laden werden Sitzungskennzahlen in der Statusleiste angezeigt; Rohdaten, Karte und Analyse-Workspaces sind gefüllt.</li>
       </ol>
 
       <h3>Methode 2: Drag &amp; Drop</h3>
@@ -1129,8 +1008,8 @@
         <li><strong>Play</strong> drücken – Fahrzeugpositionen bewegen sich auf der Karte.</li>
         <li>Geschwindigkeit anpassen: Für Überblick <strong>5×</strong>, für Detailanalyse <strong>0.5×</strong>.</li>
         <li>Zum gewünschten Zeitpunkt per Schieberegler navigieren.</li>
-        <li>Interessante Nachricht in der Tabelle anklicken → <em>Details</em>-Tab öffnet sich.</li>
-        <li>Szene-Tab für Kreuzungsstatus und Signalprognose öffnen.</li>
+        <li>Workspace <em>Rohdaten</em> öffnen und eine interessante Nachricht anklicken; der Detail-Inspektor zeigt die dekodierten Felder.</li>
+        <li>Workspace <em>ETA Analyse</em> oder <em>Priorisierung</em> für Request-Verlauf, Kreuzungsbezug und Fehlerkontext öffnen.</li>
       </ol>
 
       <div class="callout tip">
@@ -1152,9 +1031,9 @@
         <li>Im Priorisierungsfehler-Panel werden erkannte Fehler automatisch aufgelistet.</li>
         <li>Fehlerliste nach Schwere oder Kreuzung filtern (Dropdown oben im Panel).</li>
         <li>Auf einen Fehlereintrag klicken → Wiedergabe springt zum Fehlerzeitpunkt.</li>
-        <li>Im <em>Szene</em>-Tab den Request-Status und die Signalgruppen-Prognose prüfen.</li>
-        <li>Im <em>ETA-Analyse</em>-Tab den Verlauf der Restzeit und SSEM-Antworten betrachten.</li>
-        <li>Mit <strong>„Fehler zurück"</strong> / <strong>„Nächster Fehler"</strong> chronologisch durch alle Fehler navigieren.</li>
+        <li>Im Workspace <em>Priorisierung</em> Fehler-Badge, Kreuzungsfilter und Kartenkontext prüfen.</li>
+        <li>Im Workspace <em>ETA Analyse</em> den Verlauf der Restzeit und SSEM-Antworten betrachten.</li>
+        <li>Mit den Zurück-/Weiter-Schaltflächen chronologisch durch relevante Zeitpunkte navigieren.</li>
         <li>Fehler exportieren für Bericht (siehe unten).</li>
       </ol>
 
@@ -1307,24 +1186,24 @@
   <!-- ─────────────────────────────────────────────── -->
   <section id="layout" class="content">
     <div class="section">
-      <h2>Layout anpassen</h2>
+      <h2>Workspace wechseln</h2>
       <p>
-        Die Anwendung unterstützt drei Layoutmodi, die über die Dropdown-Liste
-        „Layout" in der Werkzeugleiste eingestellt werden.
+        Die Anwendung nutzt vier feste Workspaces. Der Wechsel erfolgt über die
+        Tab-Leiste direkt unter der Werkzeugleiste oder über die Befehlspalette.
       </p>
 
       <table>
-        <tr><th>Modus</th><th>Beschreibung</th></tr>
-        <tr><td><strong>Auto</strong></td><td>Wechselt automatisch basierend auf der Fensterbreite (Schwellwert: 1320 px)</td></tr>
-        <tr><td><strong>Desktop</strong></td><td>Alle Spalten sichtbar, volle Schaltflächentexte, optimiert für große Bildschirme</td></tr>
-        <tr><td><strong>Kompakt</strong></td><td>Reduzierte Spalten (nur Timestamp, Station, Typ, Speed), kürzere Labels für Laptops</td></tr>
+        <tr><th>Workspace</th><th>Beschreibung</th></tr>
+        <tr><td><strong>Karte</strong></td><td>Kartenwiedergabe, Layer-Control und aktuelle Nachricht</td></tr>
+        <tr><td><strong>ETA Analyse</strong></td><td>Request-Auswahl, ETA-/Speed-Verlauf, Ereignisse und Export</td></tr>
+        <tr><td><strong>Priorisierung</strong></td><td>Karte plus Priorisierungsfehler-Panel und Fehlerfilter</td></tr>
+        <tr><td><strong>Rohdaten</strong></td><td>Nachrichtentabelle, Filter, Merge-Sicht und Detail-Inspektor</td></tr>
       </table>
 
       <p>
-        Der Splitter zwischen Karte und Nachrichtentabelle lässt sich durch
-        Ziehen der vertikalen Trennlinie verschieben. Ebenso kann der
-        horizontale Splitter im rechten Panel (Tabelle/Kontext-Tabs)
-        angepasst werden.
+        Im aktuellen Workspace-Layout wechseln die Tabs zwischen Karte,
+        ETA-Analyse, Priorisierung und Rohdaten. Die rechte Seitenleiste passt
+        ihren Inhalt je Workspace an.
       </p>
     </div>
   </section>
