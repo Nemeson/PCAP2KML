@@ -5,6 +5,61 @@ Dieses Changelog dokumentiert den aktuell rekonstruierten Entwicklungsstand der 
 Das Format orientiert sich an Keep a Changelog.  
 Eine lueckenlose Historie vor dem dokumentierten Stand wurde nicht rueckwirkend aus Commits rekonstruiert.
 
+## [1.8.0] - 2026-05-05
+
+### Added
+
+- **C-Roads MAPEM/SPATEM Validator** nach Handbook 3.2.0 mit Regel-IDs
+  - MAP: intersectionId, revision, refPoint, laneSet, laneID, connectsTo, signalGroup, laneWidth, directionalUse, maneuvers, stopLine
+  - SPAT: signalGroup States, minEndTime/maxEndTime, likelyTime, nextTime, confidence
+  - Linking: Crosswalk-Verbindungen, BikeLane-Verbindungen, Roundabout-Erkennung
+  - Maschinenlesbarer JSON-Export mit vollstaendigem Rule-ID-Mapping
+- **XML MAP Parser** fuer Kreuzungsgeometrie-Dateien
+  - Parst XML-MAP-Dateien mit normalisierten Koordinaten
+  - Erzeugt synthetische MAPEM-Messages pro Intersection
+  - Multi-Intersection-Dateien als getrennte Stationen
+- **Rot/Gruen-Farbmodus** (Deuteranopie/Protanopie)
+  - Umschaltbar fuer Karte, ETA-Graph und alle Exportformate
+  - Palette nach ColorBrewer mit eindeutigen Hue-Differenzen
+- **Performance-Optimierungen**
+  - Bisect-Cut + Reorder + Index-Cache (rxa p95 -82%, txa p95 -69%)
+  - `_display_anchor_points` Cache nach (id(messages), max_index)
+  - Deferred Filter-Side-Effects via QTimer.singleShot(0)
+  - JS-Bridge-Latenz-Messung (_last_js_latency_ms)
+- **MAP Validation Dialog** als UI-Aktion
+  - Severity-codierte Baumansicht (Error/Warning/Info)
+  - HTML-Report mit Rule-ID-Spalte
+  - JSON-Report mit Handbook-Version und vollstaendigem Issue-Array
+- **Automatisierte UI-Doku-Erzeugung** (scripts/generate_ui_docs.py)
+  - Startet App mit Fixture-PCAP, durchklickt Workspaces, erzeugt Screenshots
+  - HTML-Referenzpruefung gegen existierende Screenshots
+- **Hilfe-Button** oeffnet bundled Benutzerhandbuch (docs/benutzerhandbuch.html)
+- **Tastatur-Navigation** in Nachrichtentabelle (Pfeiltasten aktualisieren Detail-Inspektor)
+- **Station-ID-Filter-Entprellung** mit schonender Kartenaktualisierung
+
+### Changed
+
+- `_display_anchor_points` Cache verhindert O(N)-Rescan pro Render-Tick
+- `_refresh_problem_replay_indices` und `_update_scene_for_message` laufen deferred
+- `station_ids` ist jetzt `@property` (dynamisch aus messages)
+- `Letzte Sitzung`-Button deaktiviert wenn bereits PCAP geladen
+- `Abbrechen`-Button entfernt (ParsingWorker hatte keinen effektiven Cancel)
+- PyInstaller-Skript bundlet Benutzerhandbuch (`--add-data docs\benutzerhandbuch.html;docs`)
+
+### Fixed
+
+- KML Export: 0 Dateien wegen leerem `station_ids`-Set (jetzt Property)
+- PlayButton springt nach Erreichen des Endes nicht zurueck (Bedingung `>= len()-1`)
+- Pfeilnavigation in Rohdaten aktualisiert nicht die Datentabelle (`currentItemChanged`)
+- Zweites PCAP Neuladen: Karte zeigt keine Daten im Stillstand (Session-Clear vor Set)
+- Message-Typ-Filter zeigt keine Daten wenn nicht MAPEM+SPATEM ausgewaehlt (Filter-Reset bei leerer Auswahl)
+
+### Testing
+
+- Teststand nach v1.8: **377 passed, 12 skipped**
+- Neue Tests: Validator, XML-Parser, KML-Export-Fix, Real-XML-Files (Landau, Woerth)
+- Performance-Profiling dokumentiert unter docs/profiling/
+
 ## [1.4.0] - 2026-04-19
 
 ### Added
@@ -13,7 +68,7 @@ Eine lueckenlose Historie vor dem dokumentierten Stand wurde nicht rueckwirkend 
 - Kartenlayer fuer `Inbound-Lanes`, `Outbound-Lanes`, `Connections`, `Stoplines` und `Requests`
 - SPAT-Faerbung auf Connection-Ebene statt nur auf kompletter Lane-Ebene
 - SRM/SSEM-Overlays auf Inbound-Lane, Outbound-Lane und Connection
-- Dominante vs. sekundaere Priorisierung mit visueller Abstufung
+- Dominante vs. sekundaere Prioarisierung mit visueller Abstufung
 - Seitliche Entzerrung mehrerer Priorisierungen auf derselben Connection
 - Operative Request-Zustaende im Szenenmodell:
   `pending`, `acknowledged`, `granted`, `rejected`, `timeout`

@@ -13,6 +13,7 @@ from pathlib import Path
 
 import simplekml
 
+from .color_modes import MAP_COLOR_MODE_COLORBLIND, message_kml_color, normalize_color_mode, station_kml_color
 from .data_model import MessageType, SessionData, V2xMessage
 
 logger = logging.getLogger(__name__)
@@ -45,9 +46,18 @@ STATION_COLORS = [
 _INVALID_FILENAME_CHARS = re.compile(r'[<>:"/\\|?*\s]+')
 
 
-def _get_station_color(index: int) -> str:
+def _get_station_color(index: int, color_mode: str | None = None) -> str:
     """Get a color for a station based on its index."""
+    if normalize_color_mode(color_mode) == MAP_COLOR_MODE_COLORBLIND:
+        return station_kml_color(index, color_mode)
     return STATION_COLORS[index % len(STATION_COLORS)]
+
+
+def _get_message_color(msg_type: MessageType, color_mode: str | None = None) -> str:
+    """Get a KML color for a message type while preserving the default palette."""
+    if normalize_color_mode(color_mode) == MAP_COLOR_MODE_COLORBLIND:
+        return message_kml_color(msg_type, color_mode)
+    return MSG_TYPE_COLORS.get(msg_type, "ffffffff")
 
 
 def _sanitize_station_id(station_id: str) -> str:
@@ -88,6 +98,7 @@ def export_kml(
     active_stations: set[str] | None = None,
     include_trajectory: bool = True,
     canonical: bool = False,
+    color_mode: str = "normal",
 ) -> list[Path]:
     """Export session data as KML files (one per station ID).
 
@@ -98,6 +109,7 @@ def export_kml(
         active_stations: Optional filter — only these station IDs.
         include_trajectory: Whether to include LineString trajectories.
         canonical: Export one canonical observation per soft-merge group.
+        color_mode: Visual color palette used for placemarks and trajectories.
 
     Returns:
         List of paths to created KML files.
@@ -108,9 +120,13 @@ def export_kml(
 
     # Apply filters
     types_filter = active_types or set(MsgType for MsgType in MessageType)
-    stations_filter = active_stations or session.station_ids
-
     export_messages = session.canonical_messages() if canonical else session.messages
+    stations_filter = active_stations
+    if stations_filter is None:
+        stations_filter = {msg.station_id for msg in export_messages}
+    if not stations_filter:
+        # No stations to export
+        return created_files
 
     # Group messages by station ID
     stations: dict[str, list[V2xMessage]] = {}
@@ -155,7 +171,7 @@ def export_kml(
                 coords=[(msg.longitude, msg.latitude, msg.altitude or 0)],
             )
             pnt.timestamp.when = msg.timestamp.strftime("%Y-%m-%dT%H:%M:%SZ")
-            pnt.style.iconstyle.color = MSG_TYPE_COLORS.get(msg.msg_type, "ffffffff")
+            pnt.style.iconstyle.color = _get_message_color(msg.msg_type, color_mode)
 
         # Add trajectory LineString
         if include_trajectory and len(messages) > 1:
@@ -165,7 +181,7 @@ def export_kml(
                 description=f"Path of station {station_id} ({len(messages)} points)",
                 coords=coords,
             )
-            line.style.linestyle.color = _get_station_color(station_idx)
+            line.style.linestyle.color = _get_station_color(station_idx, color_mode)
             line.style.linestyle.width = 3
             line.extrude = 1
             line.altitudemode = simplekml.AltitudeMode.clamptoground

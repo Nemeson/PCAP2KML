@@ -132,6 +132,14 @@ def test_kml_message_type_colors_are_unique():
     assert len(set(MSG_TYPE_COLORS.values())) == len(MSG_TYPE_COLORS)
 
 
+def test_export_kml_colorblind_mode_avoids_default_red_green(session, tmp_path: Path):
+    created = export_kml(session, tmp_path, color_mode="colorblind", include_trajectory=False)
+    content = "\n".join(path.read_text(encoding="utf-8") for path in created)
+    assert "ff0000ff" not in content
+    assert "ff00ff00" not in content
+    assert "ffb27200" in content
+
+
 def test_export_kml_can_use_canonical_merged_messages(tmp_path: Path):
     base = datetime(2026, 4, 18, 12, 0, 0, tzinfo=UTC)
     tx = V2xMessage(

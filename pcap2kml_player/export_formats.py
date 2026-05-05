@@ -10,6 +10,7 @@ from datetime import timezone
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+from .color_modes import message_color_hex, message_kml_color, station_color_hex
 from .data_model import MessageType, SessionData, V2xMessage
 
 logger = logging.getLogger(__name__)
@@ -44,7 +45,9 @@ def _get_filtered_messages(
     """Return the message stream respecting canonical view and filters."""
     messages = session.canonical_messages() if canonical else session.messages
     types_filter = active_types or set(MessageType)
-    stations_filter = active_stations or session.station_ids
+    stations_filter = active_stations
+    if stations_filter is None:
+        stations_filter = session.station_ids or {msg.station_id for msg in messages}
     return [msg for msg in messages if msg.msg_type in types_filter and msg.station_id in stations_filter]
 
 
@@ -60,6 +63,7 @@ def export_geojson(
     active_stations: set[str] | None = None,
     include_trajectory: bool = True,
     canonical: bool = False,
+    color_mode: str = "normal",
 ) -> list[Path]:
     """Export session data as GeoJSON files (one per station ID)."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -71,7 +75,7 @@ def export_geojson(
     for msg in messages:
         stations.setdefault(msg.station_id, []).append(msg)
 
-    for station_id, msgs in stations.items():
+    for station_index, (station_id, msgs) in enumerate(stations.items()):
         features: list[dict] = []
         for msg in msgs:
             features.append(
@@ -92,6 +96,7 @@ def export_geojson(
                         "heading": msg.heading,
                         "speed": msg.speed,
                         "details": msg.details,
+                        "style_color": message_color_hex(msg.msg_type, color_mode),
                     },
                 }
             )
@@ -107,6 +112,7 @@ def export_geojson(
                         "type": "trajectory",
                         "station_id": station_id,
                         "point_count": len(msgs),
+                        "style_color": station_color_hex(station_index, color_mode),
                     },
                 }
             )
@@ -118,6 +124,7 @@ def export_geojson(
                 "station_id": station_id,
                 "message_count": len(msgs),
                 "export_format": "geojson",
+                "color_mode": color_mode,
             },
         }
 
@@ -140,6 +147,7 @@ def export_csv(
     active_types: set[MessageType] | None = None,
     active_stations: set[str] | None = None,
     canonical: bool = False,
+    color_mode: str = "normal",
 ) -> Path:
     """Export session data as a single CSV file."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -158,6 +166,7 @@ def export_csv(
                 "heading",
                 "speed",
                 "details_json",
+                "style_color",
             ]
         )
         for msg in messages:
@@ -172,6 +181,7 @@ def export_csv(
                     msg.heading,
                     msg.speed,
                     json.dumps(msg.details, ensure_ascii=False),
+                    message_color_hex(msg.msg_type, color_mode),
                 ]
             )
 
@@ -190,6 +200,7 @@ def export_gpx(
     active_types: set[MessageType] | None = None,
     active_stations: set[str] | None = None,
     canonical: bool = False,
+    color_mode: str = "normal",
 ) -> list[Path]:
     """Export session data as GPX 1.1 files (one per station ID)."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -226,6 +237,9 @@ def export_gpx(
             name.text = f"{msg.msg_type.value} @ {msg.timestamp.strftime('%H:%M:%S')}"
             time = ET.SubElement(wpt, "{%s}time" % ns)
             time.text = msg.timestamp.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            extensions = ET.SubElement(wpt, "{%s}extensions" % ns)
+            style_color = ET.SubElement(extensions, "styleColor")
+            style_color.text = message_color_hex(msg.msg_type, color_mode)
 
         # Track for trajectory
         if len(msgs) > 1:
@@ -261,6 +275,7 @@ def export_kml_tour(
     active_types: set[MessageType] | None = None,
     active_stations: set[str] | None = None,
     canonical: bool = False,
+    color_mode: str = "normal",
 ) -> list[Path]:
     """Export session data as an animated KML Tour (one per station ID).
 
@@ -286,6 +301,8 @@ def export_kml_tour(
         # Style for point
         style = ET.SubElement(document, "Style", id="pointStyle")
         icon_style = ET.SubElement(style, "IconStyle")
+        color = ET.SubElement(icon_style, "color")
+        color.text = message_kml_color(MessageType.MAPEM, color_mode)
         icon = ET.SubElement(icon_style, "Icon")
         href = ET.SubElement(icon, "href")
         href.text = "http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png"

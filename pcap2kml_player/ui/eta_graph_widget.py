@@ -9,6 +9,7 @@ from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import QWidget
 
+from ..color_modes import MAP_COLOR_MODE_COLORBLIND, MAP_COLOR_MODE_NORMAL, normalize_color_mode
 from ..data_model import MessageType, V2xMessage
 from ..scene_model import build_scene_snapshot
 
@@ -116,8 +117,17 @@ class EtaGraphWidget(QWidget):
         self._events: list[RequestEvent] = []
         self._status_bands: list[StatusBand] = []
         self._diagnostics: list[DiagnosticItem] = []
+        self._color_mode = MAP_COLOR_MODE_NORMAL
         self.setMinimumHeight(360)
         self.setStyleSheet("background: #ffffff; border: 1px solid #d7dde8; border-radius: 12px;")
+
+    def set_color_mode(self, color_mode: str) -> None:
+        """Set the graph palette used for color-vision accessibility."""
+        normalized = normalize_color_mode(color_mode)
+        if normalized == self._color_mode:
+            return
+        self._color_mode = normalized
+        self._rebuild_series()
 
     def set_messages(self, messages: list[V2xMessage]) -> None:
         """Set the full message stream used for graph extraction."""
@@ -268,7 +278,7 @@ class EtaGraphWidget(QWidget):
                     relative_seconds=relative_seconds,
                     kind="SREM",
                     label=f"{label} | ETA {remaining_seconds:.1f}s" if eta else label,
-                    color=QColor("#2563eb"),
+                    color=_graph_color("eta", self._color_mode),
                 )
             )
             if eta is not None:
@@ -299,7 +309,7 @@ class EtaGraphWidget(QWidget):
         ]
 
         ssem_events = [msg for msg in self._messages if _matches_ssem(msg, self._selection)]
-        self._status_bands = _build_status_bands(ssem_events, self._start_time, end_time)
+        self._status_bands = _build_status_bands(ssem_events, self._start_time, end_time, self._color_mode)
         self._diagnostics = _detect_diagnostics(
             eta_points=self._eta_points,
             srem_messages=srem_messages,
@@ -308,6 +318,7 @@ class EtaGraphWidget(QWidget):
             scene=scene,
             selection=self._selection,
             start_time=self._start_time,
+            color_mode=self._color_mode,
         )
 
         self._eta_points.sort(key=lambda point: point.timestamp)
@@ -405,8 +416,8 @@ class EtaGraphWidget(QWidget):
         if not self._eta_points:
             return
         # Draw filled area under the ETA curve
-        eta_color = QColor("#2563eb")
-        fill_color = QColor("#2563eb")
+        eta_color = _graph_color("eta", self._color_mode)
+        fill_color = _graph_color("eta", self._color_mode)
         fill_color.setAlpha(30)
         points = [
             QPointF(
@@ -434,13 +445,13 @@ class EtaGraphWidget(QWidget):
                 continue
             abs_error = abs(eta_point.error_seconds)
             if abs_error <= 1.0:
-                color = QColor("#16a34a")  # excellent
+                color = _quality_color("excellent", self._color_mode)
             elif abs_error <= 2.0:
-                color = QColor("#84cc16")  # good
+                color = _quality_color("good", self._color_mode)
             elif abs_error <= 5.0:
-                color = QColor("#f59e0b")  # fair
+                color = _quality_color("fair", self._color_mode)
             else:
-                color = QColor("#dc2626")  # poor
+                color = _quality_color("poor", self._color_mode)
             # Draw error bar circle
             painter.setPen(QPen(color, 1))
             painter.setBrush(color)
@@ -451,8 +462,8 @@ class EtaGraphWidget(QWidget):
     def _draw_speed_series(self, painter: QPainter, plot: QRectF, duration: float, speed_max: float) -> None:
         if not self._speed_points:
             return
-        speed_color = QColor("#16a34a")
-        fill_color = QColor("#16a34a")
+        speed_color = _graph_color("speed", self._color_mode)
+        fill_color = _graph_color("speed", self._color_mode)
         fill_color.setAlpha(20)
         points = [
             QPointF(
@@ -477,12 +488,12 @@ class EtaGraphWidget(QWidget):
             return
         # Group diagnostics by type for better visual scanning
         painter.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
-        painter.setPen(QPen(QColor("#7f1d1d")))
+        painter.setPen(QPen(_graph_color("diagnostic", self._color_mode)))
         painter.drawText(QPointF(plot.left() - 58, diagnosis_y + 4), "Checks")
         for index, item in enumerate(self._diagnostics[:12]):
             x = _x_for_relative(item.relative_seconds, duration, plot)
             # Severity-based color: use item color but derive severity from label keywords
-            severity_color = _diagnostic_severity_color(item.label)
+            severity_color = _diagnostic_severity_color(item.label, self._color_mode)
             # Draw semi-transparent vertical span line
             span_pen = QPen(severity_color)
             span_pen.setWidth(1)
@@ -518,11 +529,11 @@ class EtaGraphWidget(QWidget):
 
     def _draw_legend(self, painter: QPainter, plot: QRectF) -> None:
         entries = [
-            ("Restzeit bis Stopline", QColor("#2563eb")),
-            ("Speed geglaettet", QColor("#16a34a")),
-            ("SREM Event", QColor("#2563eb")),
-            ("SSEM Statusband", QColor("#f59e0b")),
-            ("Diagnose", QColor("#dc2626")),
+            ("Restzeit bis Stopline", _graph_color("eta", self._color_mode)),
+            ("Speed geglaettet", _graph_color("speed", self._color_mode)),
+            ("SREM Event", _graph_color("eta", self._color_mode)),
+            ("SSEM Statusband", _graph_color("status", self._color_mode)),
+            ("Diagnose", _graph_color("diagnostic", self._color_mode)),
         ]
         x = plot.left()
         y = 22
@@ -635,7 +646,12 @@ def _smooth_speed_points(messages: list[V2xMessage], start_time: datetime, windo
     return result
 
 
-def _build_status_bands(messages: list[V2xMessage], start_time: datetime, end_time: datetime) -> list[StatusBand]:
+def _build_status_bands(
+    messages: list[V2xMessage],
+    start_time: datetime,
+    end_time: datetime,
+    color_mode: str = MAP_COLOR_MODE_NORMAL,
+) -> list[StatusBand]:
     bands: list[StatusBand] = []
     ordered = sorted(messages, key=lambda item: item.timestamp)
     for index, msg in enumerate(ordered):
@@ -651,7 +667,7 @@ def _build_status_bands(messages: list[V2xMessage], start_time: datetime, end_ti
                 _relative_seconds(next_time, start_time),
                 status,
                 f"SSEM {status}",
-                _status_color(status),
+                _status_color(status, color_mode),
             )
         )
     return bands
@@ -666,41 +682,47 @@ def _detect_diagnostics(
     scene,
     selection: EtaSelection,
     start_time: datetime,
+    color_mode: str = MAP_COLOR_MODE_NORMAL,
 ) -> list[DiagnosticItem]:
     diagnostics: list[DiagnosticItem] = []
     ordered_eta = sorted(eta_points, key=lambda point: point.timestamp)
     for previous, current in zip(ordered_eta, ordered_eta[1:]):
         jump = current.remaining_seconds - previous.remaining_seconds
         if abs(jump) > 5.0:
-            diagnostics.append(_diagnostic(current.timestamp, start_time, f"ETA-Sprung {jump:+.1f}s"))
+            diagnostics.append(_diagnostic(current.timestamp, start_time, f"ETA-Sprung {jump:+.1f}s", color_mode))
         if current.remaining_seconds > previous.remaining_seconds + 1.0:
-            diagnostics.append(_diagnostic(current.timestamp, start_time, "ETA steigt trotz Annaherung"))
+            diagnostics.append(_diagnostic(current.timestamp, start_time, "ETA steigt trotz Annaherung", color_mode))
     if srem_messages and not ssem_events:
-        diagnostics.append(_diagnostic(srem_messages[-1].timestamp, start_time, "SREM ohne SSEM-Antwort"))
+        diagnostics.append(_diagnostic(srem_messages[-1].timestamp, start_time, "SREM ohne SSEM-Antwort", color_mode))
     granted_bands = [band for band in status_bands if _is_granted_status(band.status)]
     if srem_messages and not granted_bands:
-        diagnostics.append(_diagnostic(srem_messages[-1].timestamp, start_time, "kein granted fuer Request"))
+        diagnostics.append(_diagnostic(srem_messages[-1].timestamp, start_time, "kein granted fuer Request", color_mode))
     elif srem_messages and granted_bands:
         delay = (granted_bands[0].start - srem_messages[0].timestamp).total_seconds()
         if delay > 1.0:
-            diagnostics.append(_diagnostic(granted_bands[0].start, start_time, f"granted spaet ({delay:.1f}s)"))
+            diagnostics.append(_diagnostic(granted_bands[0].start, start_time, f"granted spaet ({delay:.1f}s)", color_mode))
     for verification in scene.eta_verifications:
         if not _verification_matches(verification, selection):
             continue
         if not verification.is_accurate:
             diagnostics.append(
-                _diagnostic(verification.actual_arrival, start_time, f"ETA-Fehler {verification.delta_seconds:+.1f}s")
+                _diagnostic(
+                    verification.actual_arrival,
+                    start_time,
+                    f"ETA-Fehler {verification.delta_seconds:+.1f}s",
+                    color_mode,
+                )
             )
         if not any(
             band.start <= verification.actual_arrival and _is_granted_status(band.status) for band in granted_bands
         ):
-            diagnostics.append(_diagnostic(verification.actual_arrival, start_time, "Stopline ohne granted passiert"))
+            diagnostics.append(_diagnostic(verification.actual_arrival, start_time, "Stopline ohne granted passiert", color_mode))
     if not eta_points and srem_messages:
-        diagnostics.append(_diagnostic(srem_messages[0].timestamp, start_time, "SREM ohne verwertbare ETA"))
+        diagnostics.append(_diagnostic(srem_messages[0].timestamp, start_time, "SREM ohne verwertbare ETA", color_mode))
     return diagnostics
 
 
-def _diagnostic_severity_color(label: str) -> QColor:
+def _diagnostic_severity_color(label: str, color_mode: str = MAP_COLOR_MODE_NORMAL) -> QColor:
     """Map diagnostic label keywords to a severity QColor.
 
     Returns one of four severity colors:
@@ -711,18 +733,23 @@ def _diagnostic_severity_color(label: str) -> QColor:
     """
     token = label.lower()
     if any(keyword in token for keyword in ("ok", "good", "granted", "nominal", "valid")):
-        return QColor("#16a34a")
+        return _quality_color("excellent", color_mode)
     if any(keyword in token for keyword in ("acceptable", "ack", "tolerant", "minor", "soft")):
-        return QColor("#84cc16")
+        return _quality_color("good", color_mode)
     if any(keyword in token for keyword in ("warning", "late", "slow", "delay", "degraded", "caution")):
-        return QColor("#f59e0b")
+        return _quality_color("fair", color_mode)
     if any(keyword in token for keyword in ("error", "critical", "reject", "deny", "timeout", "expired", "missed", "fail", "fatal")):
-        return QColor("#dc2626")
-    return QColor("#dc2626")
+        return _quality_color("poor", color_mode)
+    return _quality_color("poor", color_mode)
 
 
-def _diagnostic(timestamp: datetime, start_time: datetime, label: str) -> DiagnosticItem:
-    return DiagnosticItem(timestamp, _relative_seconds(timestamp, start_time), label, QColor("#dc2626"))
+def _diagnostic(
+    timestamp: datetime,
+    start_time: datetime,
+    label: str,
+    color_mode: str = MAP_COLOR_MODE_NORMAL,
+) -> DiagnosticItem:
+    return DiagnosticItem(timestamp, _relative_seconds(timestamp, start_time), label, _graph_color("diagnostic", color_mode))
 
 
 def _verification_matches(verification, selection: EtaSelection) -> bool:
@@ -811,15 +838,51 @@ def _first_number(*values: object) -> float | None:
     return None
 
 
-def _status_color(status: str) -> QColor:
+def _graph_color(role: str, color_mode: str = MAP_COLOR_MODE_NORMAL) -> QColor:
+    if normalize_color_mode(color_mode) == MAP_COLOR_MODE_COLORBLIND:
+        colors = {
+            "eta": "#0072b2",
+            "speed": "#e69f00",
+            "status": "#56b4e9",
+            "diagnostic": "#d55e00",
+        }
+    else:
+        colors = {
+            "eta": "#2563eb",
+            "speed": "#16a34a",
+            "status": "#f59e0b",
+            "diagnostic": "#dc2626",
+        }
+    return QColor(colors.get(role, "#42546b"))
+
+
+def _quality_color(level: str, color_mode: str = MAP_COLOR_MODE_NORMAL) -> QColor:
+    if normalize_color_mode(color_mode) == MAP_COLOR_MODE_COLORBLIND:
+        colors = {
+            "excellent": "#0072b2",
+            "good": "#56b4e9",
+            "fair": "#e69f00",
+            "poor": "#d55e00",
+        }
+    else:
+        colors = {
+            "excellent": "#16a34a",
+            "good": "#84cc16",
+            "fair": "#f59e0b",
+            "poor": "#dc2626",
+        }
+    return QColor(colors.get(level, colors["poor"]))
+
+
+def _status_color(status: str, color_mode: str = MAP_COLOR_MODE_NORMAL) -> QColor:
     token = status.lower()
     if _is_granted_status(status):
-        return QColor("#16a34a")
+        return _quality_color("excellent", color_mode)
     if any(keyword in token for keyword in ("reject", "deny", "cancel", "terminated")):
-        return QColor("#dc2626")
+        return _quality_color("poor", color_mode)
     if any(keyword in token for keyword in ("ack", "process", "receive", "watch", "accept")):
-        return QColor("#eab308")
-    return QColor("#f59e0b")
+        return _quality_color("good", color_mode)
+    return _quality_color("fair", color_mode)
 
 
 def _is_granted_status(status: str) -> bool:

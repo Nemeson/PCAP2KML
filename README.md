@@ -1,13 +1,13 @@
 # PCAP2KML Player
 
-Desktop-Anwendung zur Analyse, Wiedergabe und Kartendarstellung von V2X-Nachrichten aus PCAP-Dateien.
+Desktop-Anwendung zur Analyse, Wiedergabe und Kartendarstellung von V2X-Nachrichten aus PCAP-Dateien und MAP-XML-Geometriedateien.
 
-Stand: 2026-05-04  
-Aktueller dokumentierter Funktionsstand: v1.7, UI-Handbuch aktualisiert auf den v2.0-Workspace-Stand
+Stand: 2026-05-05
+Aktueller dokumentierter Funktionsstand: v1.8
 
 ## Uebersicht
 
-PCAP2KML Player ist auf ITS-G5 / ETSI-V2X-Workflows ausgelegt. Die App liest `.pcap`, `.pcapng` und `.cap`, dekodiert erkannte ITS-Nachrichten sowie NMEA/GNSS-Daten und stellt sie in einer operativen Desktop-Oberflaeche dar.
+PCAP2KML Player ist auf ITS-G5 / ETSI-V2X-Workflows ausgelegt. Die App liest `.pcap`, `.pcapng`, `.cap` und MAP-XML-Dateien, dekodiert erkannte ITS-Nachrichten sowie NMEA/GNSS-Daten und stellt sie in einer operativen Desktop-Oberflaeche dar.
 
 ![PCAP2KML Player Hauptfenster](docs/screenshots/1.png)
 
@@ -26,13 +26,19 @@ Unterstuetzte Nachrichtentypen:
 ## Kernfunktionen
 
 - Multi-Datei-PCAP-Import mit Hintergrund-Parsing, Fortschrittsanzeige und Abbrechen
-- Drag & Drop fuer Capture-Dateien
+- MAP-XML-Import fuer Kreuzungs- und Fahrstreifengeometrien
+- Reine Karten-Session: MAP-XML ohne PCAP laden, Kreuzungen visualisieren und pruefen
+- MAP-XML-Dateien mit mehreren Kreuzungen werden als getrennte Station-/Layer-Gruppen geladen
+- C-Roads MAPEM/SPATEM-Plausibilitaetscheck nach Handbook 3.2.0 fuer MAP/SPAT-Konsistenz
+- Drag & Drop fuer Capture- und MAP-XML-Dateien
 - Persistente "Letzte Sitzung"-Funktion mit Dateiliste und Sitzungszusammenfassung
 - Interaktive Leaflet-Karte im Desktop-Fenster
 - Synchronisierte Wiedergabe mit `Play`, `Pause`, `Stop`, Scrubbing und Geschwindigkeiten von `0.1x` bis `10x`
 - Live-Filter nach Nachrichtentyp und Station-ID
+- Entprellter Station-ID-Filter mit schonender Kartenaktualisierung
+- Umschaltbarer Farbmodus fuer Rot/Gruen-Schwaeche in Karte, ETA-Graph und Exporten
 - Detailansicht pro Nachricht inklusive PKI-/Security-Felder
-- KML-Export pro Station
+- KML-Export pro Station, mit aktivem Farbmodus
 - ASN.1-Schema-Update mit Cache-Invalidierung und Integritaetspruefung
 - Szenen-Aggregation fuer MAP/SPAT/SREM/SSEM
 - 30s-Phasenprognose und Request-Korrelation
@@ -99,6 +105,7 @@ Die Kartenlogik ist inzwischen deutlich ueber Marker und einfache Trajektorien h
   Sitzungs-, Karten- und Fehlerhistorie
 - Die `ETA Analyse` enthaelt jetzt ein Fahrzeug-/Request-Dashboard mit Kennzahlen
   und chronologischer SREM/SSEM-/Diagnose-Ereignistabelle
+- Der Rot/Gruen-Farbmodus gilt auch fuer ETA-Kurven, Statusbaender und Diagnosemarker
 - ETA-Ereignisse sind interaktiv: SREM/SSEM-Zeilen springen zur Nachricht,
   Diagnosezeilen fokussieren Request und Karte
 - Die aktuelle ETA-Dashboard-Auswertung kann als CSV und JSON exportiert werden
@@ -112,6 +119,10 @@ Die Kartenlogik ist inzwischen deutlich ueber Marker und einfache Trajektorien h
 - SSEM/SSM erzeugt keine Punktmarker oder Trajektorien
 - Connections zeigen per Mouseover den aktiven MovementState und Timing-Felder
 - Timeouts werden nicht als Kartenroute dargestellt, sondern im Fehlerpanel gelistet
+- MAP-XML kann ohne PCAP als reine Karten- und Pruefsitzung geladen werden
+- Mehrere `IntersectionGeometry`-Eintraege einer XML-Datei erscheinen als einzelne `xml-map-...-I...` Stationen
+- `MAP pruefen` bewertet geladene MAPEM/SPATEM-Daten gegen zentrale C-Roads-Handbook-Regeln:
+  `intersectionId`, `revision`, `refPoint`, `laneSet`, eindeutige `laneID`, `connectsTo` und `signalGroup`
 
 Playback-Verhalten:
 
@@ -130,10 +141,11 @@ und einer permanenten Statusleiste:
 3. `Priorisierung` fuer Karte plus Priorisierungsfehler-Panel mit Schweregrad- und Kreuzungsfilter
 4. `Rohdaten` fuer Nachrichtentabelle, Nachrichtentyp-/Stationsfilter, Merge-Sicht und Detail-Inspektor
 
-Die Toolbar enthaelt `PCAP laden`, `Letzte Sitzung`, `Abbrechen`,
+Die Toolbar enthaelt `PCAP laden`, `Letzte Sitzung`,
 `KML exportieren`, `Fehler exportieren`, `Diagnose exportieren`,
-`Karte neu laden`, `ASN.1-Schemas`, `Dashboard` und die Befehlspalette
-`Schnellbefehl suchen...` (`Ctrl+K`).
+`Karte neu laden`, `ASN.1-Schemas`, `Dashboard`, `MAP pruefen`, den Farbmodus `Standard` /
+`Rot/Gruen`, die Befehlspalette
+`Schnellbefehl suchen...` (`Ctrl+K`) und `Hilfe` (oeffnet das bebilderte Handbuch).
 
 Die Statusleiste zeigt Sitzungs- und Laufzeitinformationen wie sichtbare
 Nachrichten, Stationen, Dauer, Kartenbackend, Leistungsmodus, RAM und Diagnose.
@@ -241,8 +253,8 @@ Decoderabdeckung dann eingeschraenkt sein.
 2. `PCAP2KML-Player.exe` per Doppelklick starten.
 3. Falls Windows SmartScreen oder eine Unternehmensrichtlinie nachfragt, die
    Ausfuehrung gemaess interner Freigabe bestaetigen.
-4. Mit `PCAP laden` eine oder mehrere `.pcap`, `.pcapng` oder `.cap` Dateien
-   oeffnen. Alternativ Dateien direkt per Drag & Drop ins Fenster ziehen.
+4. Mit `PCAP laden` eine oder mehrere `.pcap`, `.pcapng`, `.cap` oder `.xml`
+   Dateien oeffnen. Alternativ Dateien direkt per Drag & Drop ins Fenster ziehen.
 
 Die App merkt sich die zuletzt erfolgreich geladene Sitzung. Beim naechsten
 Start kann sie ueber `Letzte Sitzung` erneut geoeffnet werden, solange die
@@ -268,10 +280,13 @@ unvollstaendig erscheinen.
 ### Laden
 
 - `PCAP laden` oeffnet einen Dateidialog
-- `.pcap`, `.pcapng` und `.cap` koennen direkt ins Fenster gezogen werden
+- `.pcap`, `.pcapng`, `.cap` und MAP-XML-Dateien koennen direkt ins Fenster gezogen werden
+- Eine einzelne MAP-XML-Datei reicht fuer eine reine Karten-Session; PCAP-Daten sind dafuer nicht erforderlich
+- XML-Dateien mit mehreren Kreuzungen werden als getrennte Stationen in Filter, Layern und Exporten sichtbar
 - `Letzte Sitzung` laedt die zuletzt erfolgreich geoeffneten Dateien erneut
 - `Laden abbrechen` stoppt einen laufenden Parse-Vorgang
 - `ASN.1-Schemas aktualisieren` aktualisiert die lokalen ETSI-Schemata
+- `MAP pruefen` startet den C-Roads MAPEM/SPATEM-Plausibilitaetscheck fuer die aktuell sichtbaren Daten
 
 ### Workspaces
 
@@ -284,6 +299,7 @@ unvollstaendig erscheinen.
 
 - Nachrichtentypen lassen sich per Checkbox ein- und ausblenden
 - Stationen lassen sich in der Stationsliste selektieren
+- Filterwechsel werden entprellt; die Karte rendert nur den aktiven Workspace sofort und aktualisiert andere Karten erst beim Wechsel
 - Der Slider springt an beliebige Zeitpunkte
 - Die Karte aktualisiert sich waehrend des Playbacks zeitkonsistent
 - Bewegte Objekte koennen fuer ein Follow-Verhalten angeklickt werden
@@ -291,9 +307,11 @@ unvollstaendig erscheinen.
 ### Export
 
 - `KML exportieren` schreibt eine KML-Datei pro Station
+- Der aktive Rot/Gruen-Farbmodus wird fuer KML-Placemarks und Trajektorien uebernommen
 - Dateinamen werden fuer Windows sicher bereinigt
 - Kollisionen nach Sanitizing werden automatisch aufgeloest
 - Exportierte Dokumente enthalten die verwendeten ASN.1-Schemaversionen
+- GeoJSON/CSV/GPX/KML-Tour enthalten den aktiven Farbmodus als Style-Information, soweit das Zielformat dies sinnvoll abbildet
 - `Fehler exportieren` schreibt die Priorisierungsfehler als CSV und JSON:
   - `prioritization_issues.csv`
   - `prioritization_issues_machine.csv`

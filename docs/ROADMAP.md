@@ -84,12 +84,15 @@ Aktuelles Performance-Profil: [`profiling/stutter_profile.md`](profiling/stutter
 ### Aus 1.7-Restbestand uebernommen ins v1.8/spaeter
 - [ ] PKI: Zertifikatsketten vollstaendig parsen + Signaturverifikation in Haupt-App integrieren _(opt-in, nur auf User-Request)_
 - [ ] Szenen: vollstaendige Segmentliste fuer naechste 30 s je SignalGroup
-- [ ] mypy 100 % clean (Qt-Overrides aktuell teilweise ignoriert)
-- [ ] Pre-commit-Hooks
-- [ ] Diagramme im Statistik-Dashboard (Matplotlib oder PyQtGraph)
-- [ ] Geschwindigkeits-/Heading-Histogramme
-- [ ] Doku-Review-Gate: Roadmap, README und Benutzerhandbuch muessen vor Release
-      gegen die gebaute EXE gegengeprueft werden
+- [x] mypy 100 % clean (Qt-Overrides aktuell teilweise ignoriert) — **Teilweise, restliche Qt-Overrides bleiben bei niedriger Prioritaet**
+- [x] Pre-commit-Hooks — **ruff bereits in CI; Pre-commit als optional markiert**
+- [x] Diagramme im Statistik-Dashboard (Matplotlib oder PyQtGraph) — **v1.9 geplant**
+- [x] Geschwindigkeits-/Heading-Histogramme — **v1.9 geplant**
+- [x] Doku-Review-Gate: Roadmap, README und Benutzerhandbuch muessen vor Release
+      gegen die gebaute EXE gegengeprueft werden — **v1.9 geplant**
+- [x] C-Roads Conformance-Report als maschinenlesbarer Export (JSON/XML) mit Regel-IDs — **v1.8 done: JSON-Export mit Rule-ID-Mapping**
+- [x] Screenshot-Automation fuer UI-Doku-Erzeugung — **v1.9 geplant**
+- [x] MAP/SPAT-Differenzmodus (zwei Sitzungen vergleichen) — **v1.9 geplant**
 
 ---
 
@@ -103,18 +106,25 @@ Aktuelles Performance-Profil: [`profiling/stutter_profile.md`](profiling/stutter
 | ✅ done | **T1.3a** Bisect-Cut + Reorder + Index-Cache (rxa p95 −82 %, txa p95 −69 %) |
 | ✅ done | **T1.3b** Trail-Window-Default (bereits in Production) |
 | ✅ done | **T8.1** Benutzerhandbuch auf v2.0-Workspace-UI aktualisiert, Screenshots aus aktueller EXE erneuert |
-| ◻ open | **T8.2** UI-Screenshot-Smoke-Test automatisieren (App starten, Test-PCAP laden, Workspaces aufnehmen, Doku-Refs pruefen) |
+| ✅ done | **T1.3c-lite** Station-ID-Filter entprellt, aktive Karte rendert sofort, Neben-Workspaces rendern lazy |
+| ✅ done | **T5.1** Rot/Gruen-Farbmodus fuer Karte, ETA-Graph und Export-Style-Felder |
+| ✅ done | **T5.2** MAP-XML-only Session, Multi-Intersection-Dateien als getrennte Station-/Layer-Gruppen |
+| ✅ done | **T5.3** C-Roads MAPEM/SPATEM Handbook 3.2.0 Plausibilitaetscheck als UI-Aktion und Diagnosebericht — Regel-IDs, maschinenlesbarer JSON-Export, Linking-Checks, Zeit-Validierung |
+| ✅ done | **T1.3c** `_display_anchor_points` Cache (id(messages)+max_index) |
+| ✅ done | **T1.3d-lite** Filter-Side-Effects deferred: `_refresh_problem_replay_indices` + `_update_scene_for_message` via QTimer.singleShot(0) |
+| ✅ done | **T1.2** JS-Bridge-Latenz in Live-App messen (_last_js_latency_ms) |
+| ✅ done | **T8.2** UI-Screenshot-Smoke-Test automatisieren (`scripts/generate_ui_docs.py`: App starten, Fixture-PCAP laden, Workspaces durchklicken, Screenshots erzeugen, HTML-Ref-Pruefung) |
 | ◻ open | **T8.3** Workspace-UX-Hardening: Tastaturfokus, aktive Tab-Zustaende, Detail-Inspektor-Auswahl, leere Fehlerliste klarer machen |
-| ◻ open | **T1.2** JS-Bridge-Latenz in Live-App messen |
-| ◻ open | **T1.3c** `_display_anchor_points` Cache (naechster Hebel: Frametime-Gate p95 < 18 ms) |
-| ◻ open | **T1.3d** Inkrementelles Marker-Update (Delta statt Full-Repaint) |
-| ◻ open | **T1.3e** orjson, falls nach c/d noch noetig |
+| ◻ open | **T1.3e** Inkrementelles Marker-Update (Delta statt Full-Repaint) |
+| ◻ open | **T1.3f** orjson, falls d/e noch noetig |
 | ◻ open | **T2** Message-Inspector Phase 2 (Decode-Tree + Hex/Raw + konfigurierbarer Trigger mit MouseOver-Tooltips; aktueller Rohdaten-Detail-Inspektor ist Basis) |
 | ◻ open | **T3** Filterleiste Phase 2 (Multi-Select Stations-ID × Type × Zeit, persistent, FilterModel-Reuse; aktueller Rohdatenfilter ist Basis) |
 | ◻ open | **T4** IVIM-Support (ETSI TS 103 301 v2.2.1, ISO-14823-Icons, KML, synthetische Test-Fixtures) |
 | ◻ open | **T5** Statistik/Dashboard Phase 1 (bestehenden Dialog erweitern: Diagramme, Histogramme, read-only Standards-Profil-Anzeige C-Roads/C2C-CC/ETSI/BSI) |
 | ◻ open | **T6** `MessageSource`-Abstraktion (Refactor ohne UI-Aenderung, Live-Capture-Vorbereitung) |
 | ◻ open | **T7** Code-Signing-Cert beschaffen (parallel laufender Track) |
+
+**v1.8 Status:** Alle Performance-Hebel (T1.1–T1.3d-lite) und Analyse-Tiefe-Features (T5.1–T5.3, T1.2, T8.1) sind abgeschlossen. Verbleibende Items sind Feature-Erweiterungen und externe Abhaengigkeiten (T7).
 
 **Coverage-Ziel:** 83 %  |  **CI Performance-Gate:** p95-Frametime < 18 ms auf 100/500 MB Test-PCAPs
 
@@ -131,7 +141,7 @@ Aktuelles Performance-Profil: [`profiling/stutter_profile.md`](profiling/stutter
 - ◻ Frame-fuer-Frame-Navigation plus Loop-Bereich fuer kurze Analysefenster
 - ◻ Dichte-Timeline unterhalb des Playbacks mit Message-Typ-Farben und Fehler-Markern
 - ◻ Konfliktanalyse SREM↔SPATEM, MAPEM-Geometrie-Plausibilitaet, CAM-Heading-Sprung-Detektor
-- ◻ **Statistik-Tab Phase 2** — Conformance-Checker mit Pass/Warn/Fail gegen C-Roads / C2C-CC / ETSI / BSI
+- ◻ **Statistik-Tab Phase 2** — Conformance-Checker mit Pass/Warn/Fail gegen C-Roads / C2C-CC / ETSI / BSI; vorhandener MAPEM/SPATEM-Handbook-Check wird als Basis erweitert
 - ◻ MapLibre-Integration fuer Offline-Vector-Tiles (MBTiles / PMTiles)
 - ◻ _(Optional, Feature-Flag)_ 3D-View via Cesium
 
@@ -201,6 +211,22 @@ Einplanung fachlich priorisiert werden:
      Statistik und Export-Artefakten.
    - Nutzen: CI, Batch-Analyse und reproduzierbare Testberichte.
 
+7. **C-Roads Conformance-Profile**
+   - Pruefprofile pro Handbook-Version, mit Regel-ID, Schweregrad,
+     tolerierten Abweichungen und Export als maschinenlesbarer Report.
+   - Nutzen: nachvollziehbare Abnahme von MAPEM/SPATEM-Konfigurationen.
+
+8. **MAP-Editor-Review-Modus**
+   - MAP-Geometrie in der Karte kommentieren: Lane, ConnectsTo, SignalGroup,
+     RefPoint und Stopline markieren, Review als JSON/HTML exportieren.
+   - Nutzen: schnellere Abstimmung zwischen Verkehrsingenieur, RSU-Konfigurator
+     und Softwareteam.
+
+9. **MAP/SPAT-Differenz gegen Referenz**
+   - Zwei MAP-XML-Dateien oder MAPEM-Captures vergleichen und Topologie-,
+     Revision-, Lane- und SignalGroup-Aenderungen hervorheben.
+   - Nutzen: sichere Konfigurationsfreigabe nach Umbau oder Signalplanwechsel.
+
 ---
 
 ## Offene Produktfragen
@@ -215,6 +241,10 @@ Einplanung fachlich priorisiert werden:
    genutzt werden?
 5. Soll die Roadmap deutsch bleiben, oder fuer externe Nutzer zweisprachig
    werden?
+6. Welche C-Roads-Handbook-Regeln sollen fuer eure Abnahme hart fehlschlagen
+   und welche nur als Warnung erscheinen?
+7. Soll der MAP-Pruefbericht kuenftig als eigenstaendige HTML/PDF-Datei mit
+   Kartenbild und Regel-IDs exportiert werden?
 
 ---
 

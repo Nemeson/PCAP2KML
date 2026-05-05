@@ -35,6 +35,11 @@ from .scene_model import _extract_map_reference_point, build_scene_snapshot
 logger = logging.getLogger(__name__)
 PLAYBACK_TRAIL_POINTS = 8
 DISPLAY_CLUSTER_RADIUS_M = 5000.0
+
+# Cache for _display_anchor_points to avoid O(N) re-scan on every tick
+_ANCHOR_CACHE_MAX_SIZE = 8
+_ANCHOR_CACHE: dict[tuple[int, int], list[tuple[float, float]]] = {}
+
 MAP_RENDER_BUDGETS = {
     MAP_PERFORMANCE_NORMAL: {
         "markers": 1500,
@@ -57,6 +62,10 @@ MAP_RENDER_BUDGETS = {
 }
 MAP_RENDER_STALL_SECONDS = 5.0
 MAP_BOOTSTRAP_TIMEOUT_SECONDS = 6.0
+
+
+class RenderCancelled(RuntimeError):
+    """Raised when a superseded map render payload should stop early."""
 
 
 def _qt_object_deleted(obj: object) -> bool:
@@ -82,10 +91,24 @@ STATION_PALETTE = [
     "#fabed4",
     "#469990",
 ]
+COLORBLIND_STATION_PALETTE = [
+    "#0072b2",
+    "#e69f00",
+    "#56b4e9",
+    "#d55e00",
+    "#009e73",
+    "#f0e442",
+    "#cc79a7",
+    "#000000",
+]
 
 INFRASTRUCTURE_MESSAGE_COLORS = {
     MessageType.MAPEM: "#1f9d55",
     MessageType.SPATEM: "#c026d3",
+}
+COLORBLIND_INFRASTRUCTURE_MESSAGE_COLORS = {
+    MessageType.MAPEM: "#0072b2",
+    MessageType.SPATEM: "#cc79a7",
 }
 NON_STATION_MARKER_TYPES = {
     MessageType.MAPEM,
@@ -97,13 +120,25 @@ LANE_ROLE_COLORS = {
     "inbound": "#0f766e",
     "outbound": "#2563eb",
 }
+COLORBLIND_LANE_ROLE_COLORS = {
+    "inbound": "#0072b2",
+    "outbound": "#e69f00",
+}
 STOPLINE_COLOR = "#f97316"
+COLORBLIND_STOPLINE_COLOR = "#000000"
 REQUEST_STATUS_COLORS = {
     "pending": "#2563eb",
     "acknowledged": "#eab308",
     "granted": "#16a34a",
     "rejected": "#dc2626",
     "timeout": "#7f1d1d",
+}
+COLORBLIND_REQUEST_STATUS_COLORS = {
+    "pending": "#0072b2",
+    "acknowledged": "#e69f00",
+    "granted": "#56b4e9",
+    "rejected": "#d55e00",
+    "timeout": "#000000",
 }
 INFRASTRUCTURE_MESSAGE_OFFSETS = {
     MessageType.MAPEM: (0.0, 0.00003),
@@ -121,6 +156,45 @@ SPAT_PHASE_COLORS = {
     "dark": "#475569",
     "unavailable": "#64748b",
 }
+COLORBLIND_SPAT_PHASE_COLORS = {
+    "protected-Movement-Allowed": "#0072b2",
+    "permissive-Movement-Allowed": "#56b4e9",
+    "protected-clearance": "#e69f00",
+    "permissive-clearance": "#f0e442",
+    "stop-And-Remain": "#d55e00",
+    "stop-Then-Proceed": "#cc79a7",
+    "pre-Movement": "#000000",
+    "caution-Conflicting-Traffic": "#e69f00",
+    "dark": "#475569",
+    "unavailable": "#64748b",
+}
+MAP_COLOR_MODE_NORMAL = "normal"
+MAP_COLOR_MODE_COLORBLIND = "colorblind"
+MAP_COLOR_MODES = {MAP_COLOR_MODE_NORMAL, MAP_COLOR_MODE_COLORBLIND}
+
+
+def _station_palette(color_mode: str) -> list[str]:
+    return COLORBLIND_STATION_PALETTE if color_mode == MAP_COLOR_MODE_COLORBLIND else STATION_PALETTE
+
+
+def _infrastructure_colors(color_mode: str) -> dict[MessageType, str]:
+    return (
+        COLORBLIND_INFRASTRUCTURE_MESSAGE_COLORS
+        if color_mode == MAP_COLOR_MODE_COLORBLIND
+        else INFRASTRUCTURE_MESSAGE_COLORS
+    )
+
+
+def _lane_colors(color_mode: str) -> dict[str, str]:
+    return COLORBLIND_LANE_ROLE_COLORS if color_mode == MAP_COLOR_MODE_COLORBLIND else LANE_ROLE_COLORS
+
+
+def _request_status_colors(color_mode: str) -> dict[str, str]:
+    return COLORBLIND_REQUEST_STATUS_COLORS if color_mode == MAP_COLOR_MODE_COLORBLIND else REQUEST_STATUS_COLORS
+
+
+def _spat_phase_colors(color_mode: str) -> dict[str, str]:
+    return COLORBLIND_SPAT_PHASE_COLORS if color_mode == MAP_COLOR_MODE_COLORBLIND else SPAT_PHASE_COLORS
 
 
 @dataclass(frozen=True)
@@ -338,9 +412,17 @@ def _display_anchor_points(
     *,
     max_index: int | None = None,
 ) -> list[tuple[float, float]]:
-    """Return stable infrastructure points used to reject far-away display outliers."""
-    anchors: list[tuple[float, float]] = []
+    """Return stable infrastructure points used to reject far-away display outliers.
+
+    Cached by (id(messages), max_index) to avoid O(N) re-scan on every render tick.
+    """
     end_index = len(messages) if max_index is None else min(max_index + 1, len(messages))
+    cache_key = (id(messages), end_index)
+    cached = _ANCHOR_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    anchors: list[tuple[float, float]] = []
     for index, msg in enumerate(messages):
         if index >= end_index:
             break
@@ -348,6 +430,11 @@ def _display_anchor_points(
             continue
         for intersection in _iter_message_intersections(msg):
             anchors.append(_intersection_point(intersection, msg))
+
+    # Simple LRU: clear if too many entries
+    if len(_ANCHOR_CACHE) >= _ANCHOR_CACHE_MAX_SIZE:
+        _ANCHOR_CACHE.clear()
+    _ANCHOR_CACHE[cache_key] = anchors
     return anchors
 
 
@@ -477,10 +564,12 @@ def _stopline_points(lane: dict) -> list[tuple[float, float]] | None:
     return normalized_points if len(normalized_points) >= 2 else None
 
 
-def _request_overlay_style(status: str, is_dominant: bool) -> dict[str, object]:
+def _request_overlay_style(
+    status: str, is_dominant: bool, color_mode: str = MAP_COLOR_MODE_NORMAL
+) -> dict[str, object]:
     """Return line style parameters for one request overlay."""
     return {
-        "color": REQUEST_STATUS_COLORS.get(status, "#2563eb"),
+        "color": _request_status_colors(color_mode).get(status, "#2563eb"),
         "weight": 6 if is_dominant else 4,
         "opacity": 0.95 if is_dominant else 0.65,
         "dashArray": "" if is_dominant else "6 6",
@@ -557,12 +646,12 @@ def _spat_intersection_phase(intersection: dict) -> str | None:
     return None
 
 
-def _spat_color_for_intersection(intersection: dict) -> str:
+def _spat_color_for_intersection(intersection: dict, color_mode: str = MAP_COLOR_MODE_NORMAL) -> str:
     """Choose a SPAT color that reflects the dominant decoded phase when available."""
     phase = _spat_intersection_phase(intersection)
     if phase is None:
-        return INFRASTRUCTURE_MESSAGE_COLORS[MessageType.SPATEM]
-    return SPAT_PHASE_COLORS.get(phase, INFRASTRUCTURE_MESSAGE_COLORS[MessageType.SPATEM])
+        return _infrastructure_colors(color_mode)[MessageType.SPATEM]
+    return _spat_phase_colors(color_mode).get(phase, _infrastructure_colors(color_mode)[MessageType.SPATEM])
 
 
 def _spat_states_by_group(intersection: dict) -> dict[int, str]:
@@ -670,10 +759,13 @@ def _intersection_popup(msg: V2xMessage, intersection: dict | None, fallback_lab
     return " | ".join(pieces)
 
 
-def _infrastructure_overlays_for_message(msg: V2xMessage) -> list[dict[str, object]]:
+def _infrastructure_overlays_for_message(
+    msg: V2xMessage,
+    color_mode: str = MAP_COLOR_MODE_NORMAL,
+) -> list[dict[str, object]]:
     """Create renderable infrastructure overlays for MAPEM and SPATEM messages."""
     overlays: list[dict[str, object]] = []
-    base_color = INFRASTRUCTURE_MESSAGE_COLORS.get(msg.msg_type)
+    base_color = _infrastructure_colors(color_mode).get(msg.msg_type)
     layer = "map" if msg.msg_type == MessageType.MAPEM else "spat"
     if base_color is None:
         return overlays
@@ -693,7 +785,9 @@ def _infrastructure_overlays_for_message(msg: V2xMessage) -> list[dict[str, obje
 
             popup = _intersection_popup(msg, intersection, f"{msg.msg_type.value} Intersection")
             circle_color = (
-                _spat_color_for_intersection(intersection) if msg.msg_type == MessageType.SPATEM else base_color
+                _spat_color_for_intersection(intersection, color_mode)
+                if msg.msg_type == MessageType.SPATEM
+                else base_color
             )
             overlays.append(
                 {
@@ -730,7 +824,7 @@ def _infrastructure_overlays_for_message(msg: V2xMessage) -> list[dict[str, obje
                     if len(points) < 2:
                         continue
                     role = _lane_role(lane)
-                    lane_color = LANE_ROLE_COLORS.get(role, base_color)
+                    lane_color = _lane_colors(color_mode).get(role, base_color)
                     lane_layer = "map_inbound" if role == "inbound" else "map_outbound" if role == "outbound" else layer
                     overlays.append(
                         {
@@ -763,7 +857,9 @@ def _infrastructure_overlays_for_message(msg: V2xMessage) -> list[dict[str, obje
                                 "kind": "polyline",
                                 "id": f"{msg.msg_type.value}_{msg.station_id}_{index}_lane_{polyline_index}_stopline",
                                 "coords": [[lat, lon] for lat, lon in stopline_points],
-                                "color": STOPLINE_COLOR,
+                                "color": COLORBLIND_STOPLINE_COLOR
+                                if color_mode == MAP_COLOR_MODE_COLORBLIND
+                                else STOPLINE_COLOR,
                                 "popup": f"Stopline | Lane {lane_id}" if lane_id else "Stopline",
                                 "layer": "map_stoplines",
                             }
@@ -801,6 +897,8 @@ def _infrastructure_overlays_for_messages(
     messages: list[V2xMessage],
     *,
     max_index: int | None = None,
+    color_mode: str = MAP_COLOR_MODE_NORMAL,
+    cancel_check=None,
 ) -> list[dict[str, object]]:
     """Aggregate the latest MAP/SPAT context per intersection into render overlays."""
     if not messages:
@@ -816,6 +914,8 @@ def _infrastructure_overlays_for_messages(
     request_visuals = scene.request_visuals_by_intersection
 
     for index, msg in enumerate(messages):
+        if cancel_check is not None and cancel_check():
+            raise RenderCancelled()
         if index >= end_index:
             break
         if msg.msg_type not in INFRASTRUCTURE_MESSAGE_COLORS:
@@ -848,7 +948,7 @@ def _infrastructure_overlays_for_messages(
                         "lat": map_point[0],
                         "lon": map_point[1],
                         "radius": 20,
-                        "color": INFRASTRUCTURE_MESSAGE_COLORS[MessageType.MAPEM],
+                        "color": _infrastructure_colors(color_mode)[MessageType.MAPEM],
                         "popup": map_popup,
                         "layer": "map",
                     }
@@ -860,7 +960,7 @@ def _infrastructure_overlays_for_messages(
                         "lat": map_point[0],
                         "lon": map_point[1],
                         "text": map_popup,
-                        "color": INFRASTRUCTURE_MESSAGE_COLORS[MessageType.MAPEM],
+                        "color": _infrastructure_colors(color_mode)[MessageType.MAPEM],
                         "layer": "map",
                     }
                 )
@@ -883,7 +983,10 @@ def _infrastructure_overlays_for_messages(
                     continue
                 lane_id = _lane_identifier(lane)
                 role = _lane_role(lane)
-                lane_color = LANE_ROLE_COLORS.get(role, INFRASTRUCTURE_MESSAGE_COLORS[MessageType.MAPEM])
+                lane_color = _lane_colors(color_mode).get(
+                    role,
+                    _infrastructure_colors(color_mode)[MessageType.MAPEM],
+                )
                 lane_layer = "map_inbound" if role == "inbound" else "map_outbound" if role == "outbound" else "map"
                 overlays.append(
                     {
@@ -921,7 +1024,9 @@ def _infrastructure_overlays_for_messages(
                             "kind": "polyline",
                             "id": f"{key}_lane_{polyline_index}_stopline",
                             "coords": [[lat, lon] for lat, lon in stopline_points],
-                            "color": STOPLINE_COLOR,
+                            "color": COLORBLIND_STOPLINE_COLOR
+                            if color_mode == MAP_COLOR_MODE_COLORBLIND
+                            else STOPLINE_COLOR,
                             "popup": f"Stopline | Lane {lane_id}" if lane_id else "Stopline",
                             "layer": "map_stoplines",
                         }
@@ -945,12 +1050,12 @@ def _infrastructure_overlays_for_messages(
                     signal_group = _coerce_int(connection.get("signalGroup"))
                     matched_phase = spat_states.get(signal_group) if signal_group is not None else None
                     connection_color = (
-                        SPAT_PHASE_COLORS.get(
+                        _spat_phase_colors(color_mode).get(
                             matched_phase,
-                            INFRASTRUCTURE_MESSAGE_COLORS[MessageType.MAPEM],
+                            _infrastructure_colors(color_mode)[MessageType.MAPEM],
                         )
                         if matched_phase is not None
-                        else INFRASTRUCTURE_MESSAGE_COLORS[MessageType.MAPEM]
+                        else _infrastructure_colors(color_mode)[MessageType.MAPEM]
                     )
                     popup_parts = ["MAPEM Connection"]
                     if lane_id:
@@ -988,7 +1093,11 @@ def _infrastructure_overlays_for_messages(
                         and visual.out_lane == target_lane_id
                     ]
                     for request_visual in matching_requests:
-                        style = _request_overlay_style(request_visual.status.value, request_visual.is_dominant)
+                        style = _request_overlay_style(
+                            request_visual.status.value,
+                            request_visual.is_dominant,
+                            color_mode,
+                        )
                         request_coords = _offset_polyline(
                             connection_points,
                             _request_overlay_offset_m(request_visual.display_rank),
@@ -1027,7 +1136,11 @@ def _infrastructure_overlays_for_messages(
                     or visual.out_lane == _coerce_int(lane.get("laneId", lane.get("laneID", lane.get("id"))))
                 ]
                 for request_visual in lane_requests:
-                    style = _request_overlay_style(request_visual.status.value, request_visual.is_dominant)
+                    style = _request_overlay_style(
+                        request_visual.status.value,
+                        request_visual.is_dominant,
+                        color_mode,
+                    )
                     request_coords = _offset_polyline(
                         points,
                         _request_overlay_offset_m(request_visual.display_rank),
@@ -1069,7 +1182,7 @@ def _infrastructure_overlays_for_messages(
             spat_msg, spat_intersection = spat_entry
             spat_point = _intersection_point(spat_intersection, spat_msg)
             spat_popup = _intersection_popup(spat_msg, spat_intersection, "SPATEM Intersection")
-            spat_color = _spat_color_for_intersection(spat_intersection)
+            spat_color = _spat_color_for_intersection(spat_intersection, color_mode)
             if SHOW_INFRASTRUCTURE_POINT_OVERLAYS:
                 overlays.append(
                     {
@@ -1841,9 +1954,7 @@ def _message_index(messages: list[V2xMessage]) -> tuple[list[float], list[int]]:
     if cached is not None and cached[0] == len(messages):
         return cached[1], cached[2]
     timestamps = [m.timestamp.timestamp() for m in messages]
-    infra_indices = [
-        i for i, m in enumerate(messages) if m.msg_type in INFRASTRUCTURE_MESSAGE_COLORS
-    ]
+    infra_indices = [i for i, m in enumerate(messages) if m.msg_type in INFRASTRUCTURE_MESSAGE_COLORS]
     _MESSAGE_INDEX_CACHE[cache_key] = (len(messages), timestamps, infra_indices)
     if len(_MESSAGE_INDEX_CACHE) > _MESSAGE_INDEX_CACHE_MAX:
         _MESSAGE_INDEX_CACHE.pop(next(iter(_MESSAGE_INDEX_CACHE)))
@@ -1860,11 +1971,15 @@ def _compute_render_payload(
     clear_first: bool,
     performance_mode: str,
     station_color_map: dict[str, str],
+    color_mode: str = MAP_COLOR_MODE_NORMAL,
+    cancel_check=None,
 ) -> dict[str, object]:
     station_coords: dict[str, list] = {}
     markers_by_id: dict[str, dict[str, object]] = {}
     budget = MAP_RENDER_BUDGETS.get(performance_mode, MAP_RENDER_BUDGETS[MAP_PERFORMANCE_NORMAL])
     end_index = len(messages) if max_index is None else min(max_index + 1, len(messages))
+    if cancel_check is not None and cancel_check():
+        raise RenderCancelled()
     display_anchors = _display_anchor_points(messages, max_index=max_index)
 
     timestamps, infra_indices = _message_index(messages)
@@ -1874,10 +1989,15 @@ def _compute_render_payload(
         window_start_index = 0
 
     def _process(index: int) -> None:
+        if cancel_check is not None and cancel_check():
+            raise RenderCancelled()
         msg = messages[index]
         if not _has_display_position(msg) or not _is_near_display_anchors(msg, display_anchors):
             return
-        color = INFRASTRUCTURE_MESSAGE_COLORS.get(msg.msg_type, station_color_map.get(msg.station_id, "#3388ff"))
+        if msg.msg_type in INFRASTRUCTURE_MESSAGE_COLORS:
+            color = _infrastructure_colors(color_mode).get(msg.msg_type, "#3388ff")
+        else:
+            color = station_color_map.get(msg.station_id, "#3388ff")
         marker_lat, marker_lon = _marker_position_for_message(msg)
         if msg.msg_type not in NON_STATION_MARKER_TYPES:
             marker_id_raw = _marker_id_for_message(msg)
@@ -1906,7 +2026,14 @@ def _compute_render_payload(
             _process(index)
 
     infrastructure_payload: list[dict[str, object]] = []
-    for overlay in _infrastructure_overlays_for_messages(messages, max_index=max_index):
+    for overlay in _infrastructure_overlays_for_messages(
+        messages,
+        max_index=max_index,
+        color_mode=color_mode,
+        cancel_check=cancel_check,
+    ):
+        if cancel_check is not None and cancel_check():
+            raise RenderCancelled()
         if performance_mode != MAP_PERFORMANCE_NORMAL and overlay["kind"] == "label":
             continue
         if performance_mode == MAP_PERFORMANCE_DIAGNOSTIC and overlay.get("layer") not in {
@@ -1982,6 +2109,10 @@ def _compute_render_payload(
         )
 
     marker_payload = list(markers_by_id.values())
+    pre_budget_marker_count = len(marker_payload)
+    pre_budget_infrastructure_count = len(infrastructure_payload)
+    pre_budget_trajectory_count = len(trajectories_payload)
+    pre_budget_trajectory_points = sum(len(t["coords"]) for t in trajectories_payload)
     if len(marker_payload) > int(budget["markers"]):
         marker_payload = marker_payload[-int(budget["markers"]) :]
     if len(infrastructure_payload) > int(budget["infrastructure"]):
@@ -2009,13 +2140,22 @@ def _compute_render_payload(
         "markers": marker_payload,
         "infrastructure": infrastructure_payload,
         "trajectories": trajectories_payload,
+        "_telemetry": {
+            "budget_dropped_markers": max(0, pre_budget_marker_count - len(marker_payload)),
+            "budget_dropped_infrastructure": max(0, pre_budget_infrastructure_count - len(infrastructure_payload)),
+            "budget_dropped_trajectories": max(0, pre_budget_trajectory_count - len(trajectories_payload)),
+            "budget_dropped_trajectory_points": max(
+                0,
+                pre_budget_trajectory_points - sum(len(t["coords"]) for t in trajectories_payload),
+            ),
+        },
     }
 
 
 class RenderPayloadWorker(QThread):
     """Compute map render payloads in a background thread."""
 
-    payload_ready = pyqtSignal(str, float)
+    payload_ready = pyqtSignal(str, object, int)
 
     def __init__(
         self,
@@ -2027,6 +2167,8 @@ class RenderPayloadWorker(QThread):
         clear_first: bool,
         performance_mode: str,
         station_color_map: dict[str, str],
+        color_mode: str,
+        generation: int,
         *,
         parent: QObject | None = None,
     ):
@@ -2039,6 +2181,8 @@ class RenderPayloadWorker(QThread):
         self._clear_first = clear_first
         self._performance_mode = performance_mode
         self._station_color_map = dict(station_color_map)
+        self._color_mode = color_mode
+        self._generation = generation
         self._cancelled = False
 
     def cancel(self) -> None:
@@ -2057,11 +2201,35 @@ class RenderPayloadWorker(QThread):
                 clear_first=self._clear_first,
                 performance_mode=self._performance_mode,
                 station_color_map=self._station_color_map,
+                color_mode=self._color_mode,
+                cancel_check=lambda: self._cancelled,
             )
             if self._cancelled:
                 return
+            telemetry_payload = dict(payload.pop("_telemetry", {}))
             payload_json = json.dumps(payload)
-            self.payload_ready.emit(payload_json, time.time())
+            telemetry = MapRenderTelemetry(
+                timestamp=time.time(),
+                performance_mode=self._performance_mode,
+                source_message_count=len(self._messages),
+                visible_message_count=(
+                    min(self._max_index + 1, len(self._messages))
+                    if self._max_index is not None
+                    else len(self._messages)
+                ),
+                marker_count=len(payload.get("markers", [])),
+                infrastructure_count=len(payload.get("infrastructure", [])),
+                trajectory_count=len(payload.get("trajectories", [])),
+                trajectory_point_count=sum(len(t.get("coords", [])) for t in payload.get("trajectories", [])),
+                payload_bytes=len(payload_json.encode("utf-8")),
+                budget_dropped_markers=int(telemetry_payload.get("budget_dropped_markers", 0) or 0),
+                budget_dropped_infrastructure=int(telemetry_payload.get("budget_dropped_infrastructure", 0) or 0),
+                budget_dropped_trajectories=int(telemetry_payload.get("budget_dropped_trajectories", 0) or 0),
+                budget_dropped_trajectory_points=int(telemetry_payload.get("budget_dropped_trajectory_points", 0) or 0),
+            )
+            self.payload_ready.emit(payload_json, telemetry, self._generation)
+        except RenderCancelled:
+            return
         except Exception:
             logger.exception("RenderPayloadWorker crashed")
 
@@ -2094,6 +2262,7 @@ class MapWidget(QWebEngineView):
 
         self._station_color_map: dict[str, str] = {}
         self._station_index = 0
+        self._color_mode = MAP_COLOR_MODE_NORMAL
         self._follow_station_id: str | None = None
         self._performance_mode = MAP_PERFORMANCE_NORMAL
         self._page_ready = False
@@ -2102,6 +2271,7 @@ class MapWidget(QWebEngineView):
         self._queued_render_payload_script: str | None = None
         self._render_payload_started_at: float | None = None
         self._render_payload_stall_generation = 0
+        self._render_generation = 0
         self._bootstrap_generation = 0
         self._bootstrap_probe_succeeded = False
         self._ever_bootstrapped = False
@@ -2114,6 +2284,7 @@ class MapWidget(QWebEngineView):
         self._render_stall_count = 0
         self._first_stall_at: float | None = None
         self._render_worker: RenderPayloadWorker | None = None
+        self._retired_render_workers: list[RenderPayloadWorker] = []
         self._resize_end_timer: QTimer | None = None
 
         self._bridge.message_clicked.connect(self._on_marker_clicked)
@@ -2164,17 +2335,37 @@ class MapWidget(QWebEngineView):
             worker.cancel()
             worker.wait(500)
         self.__dict__["_render_worker"] = None
+        for old_worker in list(self.__dict__.get("_retired_render_workers", [])):
+            if old_worker.isRunning():
+                old_worker.cancel()
+                old_worker.wait(200)
+            old_worker.deleteLater()
+        self.__dict__["_retired_render_workers"] = []
 
     def _get_station_color(self, station_id: str) -> str:
         """Assign a color to a station ID, creating a new one if needed."""
         if station_id not in self._station_color_map:
-            self._station_color_map[station_id] = STATION_PALETTE[self._station_index % len(STATION_PALETTE)]
+            palette = _station_palette(self.__dict__.get("_color_mode", MAP_COLOR_MODE_NORMAL))
+            self._station_color_map[station_id] = palette[self._station_index % len(palette)]
             self._station_index += 1
         return self._station_color_map[station_id]
 
     def _color_for_message(self, msg: V2xMessage) -> str:
         """Pick a marker color, with dedicated infrastructure colors for MAP/SPAT."""
-        return INFRASTRUCTURE_MESSAGE_COLORS.get(msg.msg_type, self._get_station_color(msg.station_id))
+        return _infrastructure_colors(self.__dict__.get("_color_mode", MAP_COLOR_MODE_NORMAL)).get(
+            msg.msg_type,
+            self._get_station_color(msg.station_id),
+        )
+
+    def set_color_mode(self, mode: str) -> None:
+        """Set map color palette for normal or red/green-weak viewing."""
+        if mode not in MAP_COLOR_MODES:
+            mode = MAP_COLOR_MODE_NORMAL
+        if mode == self.__dict__.get("_color_mode", MAP_COLOR_MODE_NORMAL):
+            return
+        self._color_mode = mode
+        self._station_color_map.clear()
+        self._station_index = 0
 
     def set_performance_mode(self, mode: str) -> None:
         """Set the map rendering detail level used for future payloads."""
@@ -2276,8 +2467,18 @@ class MapWidget(QWebEngineView):
         render_worker = self.__dict__.get("_render_worker")
         if render_worker is not None and render_worker.isRunning():
             render_worker.cancel()
-            render_worker.wait(500)
+            retired = self.__dict__.setdefault("_retired_render_workers", [])
+            retired.append(render_worker)
+            render_worker.finished.connect(lambda worker=render_worker: self._cleanup_retired_render_worker(worker))
+        elif render_worker is not None:
+            render_worker.deleteLater()
 
+        for msg in messages:
+            if msg.msg_type not in NON_STATION_MARKER_TYPES:
+                self._get_station_color(msg.station_id)
+
+        self._render_generation = int(self.__dict__.get("_render_generation", 0)) + 1
+        generation = self._render_generation
         self._render_worker = RenderPayloadWorker(
             messages,
             max_index=max_index,
@@ -2287,13 +2488,24 @@ class MapWidget(QWebEngineView):
             clear_first=clear_first,
             performance_mode=self.__dict__.get("_performance_mode", MAP_PERFORMANCE_NORMAL),
             station_color_map=self._station_color_map,
+            color_mode=self.__dict__.get("_color_mode", MAP_COLOR_MODE_NORMAL),
+            generation=generation,
         )
         self._render_worker.payload_ready.connect(self._on_worker_payload_ready, Qt.ConnectionType.QueuedConnection)
         self._render_worker.start()
 
-    def _on_worker_payload_ready(self, payload_json: str, _compute_time: float) -> None:
+    def _cleanup_retired_render_worker(self, worker: RenderPayloadWorker) -> None:
+        retired = self.__dict__.get("_retired_render_workers", [])
+        if worker in retired:
+            retired.remove(worker)
+        worker.deleteLater()
+
+    def _on_worker_payload_ready(self, payload_json: str, telemetry: MapRenderTelemetry, generation: int) -> None:
         if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
             return
+        if generation != self.__dict__.get("_render_generation", 0):
+            return
+        self._record_render_telemetry(telemetry)
         self._run_js(f"applyRenderPayload({payload_json})")
 
     def _trim_trajectory_payload(
@@ -2373,9 +2585,14 @@ class MapWidget(QWebEngineView):
         """Save the current map view state before the widget is hidden."""
         super().hideEvent(event)
         try:
-            self._execute_js("getMapCenterZoom()", lambda result: self.store_view_state(
-                {"lat": result[0], "lon": result[1], "zoom": result[2]} if isinstance(result, list) and len(result) == 3 else None
-            ))
+            self._execute_js(
+                "getMapCenterZoom()",
+                lambda result: self.store_view_state(
+                    {"lat": result[0], "lon": result[1], "zoom": result[2]}
+                    if isinstance(result, list) and len(result) == 3
+                    else None
+                ),
+            )
         except Exception:
             pass
 
@@ -2596,13 +2813,22 @@ class MapWidget(QWebEngineView):
         """Run JavaScript, using a completion callback when Qt supports it."""
         if self.__dict__.get("_disposed", False) or _qt_object_deleted(self):
             return
+        # T1.2 — JS bridge latency measurement
+        t0 = time.monotonic()
+
+        def _timed_callback(result=None) -> None:
+            latency_ms = (time.monotonic() - t0) * 1000
+            self._last_js_latency_ms = latency_ms
+            if callback is not None:
+                callback(result)
+
         try:
             page = self.page()
             if callback is None:
                 page.runJavaScript(script, 0)
                 return
             try:
-                page.runJavaScript(script, 0, callback)
+                page.runJavaScript(script, 0, _timed_callback)
             except TypeError:
                 page.runJavaScript(script, 0)
         except RuntimeError as exc:

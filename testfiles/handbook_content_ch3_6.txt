@@ -1,0 +1,1317 @@
+40
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+re fe re n c e p o in t
+m e r g e p o in t
+Figure 10 Merging egress lanes at an intersection
+3.3.4.7 Regional extension attribute “nodeLink”
+When a lane is merging into or diverging from another lane it is not always possible to match the common
+nodes of the two lanes mathematically perfect, as described in section 3.3.4.4. In this case it is essential to
+have additional linking information so that the receiving traffic participant is able to interpret the messages.
+This link can be established through the data field nodeLink which can optionally be added to an individual
+node. The nodeLink is simply a list of all the nodes (represented through their ID and lane ID) the respective
+node is linked to. Figure 11 shows a clear merging situation where node L7-2 and L9-3 are linked together.
+Figure 11 "nodeLink" attribute example
+3.3.5 ConnectsTo
+Refers to mapData.intersections.laneSet.connectsTo
+This data frame contains a list of connection [DF_Connection] data frames. This list of connections describes
+which lanes can be reached from this respective lane through an allowed manoeuvre.
+• Each ingress lane of an intersection must be connected to an egress or ingress lane of the current
+intersection.
+• All egress lanes of the intersection must be described.
+• Pedestrian lanes are defined as bi-directional lanes, the connectsTo connects to the corresponding
+pedestrian lane at the other side of the road.
+Of the parameters available for each connection, especially the data frames ‘connectingLane
+[DF_ConnectingLane] and ‘signalGroup’ [DE_SignalGroupID] are important for receiving vehicles.
+As the name says, connectingLane provides relevant information on the “destination lane” of this connection
+such as the lane ID and the corresponding manoeuvre. SignalGroupID provides the ID of the signal group
+described in the corresponding SPATEM that applies to this specific connection.
+3.3.5.1 mapData.intersections.laneSet.connectsTo.connectingLane.maneuver
+The data element ‘maneuver’ [DE_AllowedManeuvers] in connectingLane is used instead of the data element
+‘maneuvers’ in genericLane since it allows to also provide the information which lane connection the
+manoeuvre applies to instead of only listing the possible manoeuvres of a lane. Side effect is that with this
+encoding also the angle for the manoeuvre is transmitted without additional data elements (through the
+relative location of the lanes towards one-another). A detailed description how to configure different types of
+lane connections is given in section 4.2.
+3.3.5.2 MapData.intersections.laneSet.connectsTo.signalGroup
+The data element signalGroupId is required at least for every connection which is controlled by a traffic light.
+This ID provides the functional essential link to SPATEM. Through this link the vehicles can identify which signal
+phase information in SPATEM applies to the respective connection. Therefore, it is essential that every given
+‘signalGroup’ / ‘intersectionReferenceID’ tuple in the MAPEM is also contained in the SPATEM.
+It is important to note, that there is not necessarily a 1:1 relation between physical signal heads on the street
+and connections/signalGroup e.g. if a connection is controlled by 2 signals, their combined state shall be
+reflected in the eventState (see section 5.7.3).
+One exception to this combination of states is a situation when multiple user classes share a lane, and each
+user class is served with separate signals (e.g., public transport). In such a case, a lane may have multiple
+(overlapping) connections, each with a unique signalGroup and the userClass restriction set.
+3.4 RestrictionList
+Refers to mapData.restrictionList
+The ‘restrictionList’ [DF_RestrictionClassList] is used to assign a list of typical user classes, for instance public
+transport vehicles. A RestrictionClassList consists of one or multiple RestrictionClassAssignments. A restriction
+[DF_RestrictionClassAssignment] is used to assign (or bind) a single RestrictionClassID data element to a list of
+all user classes to which it applies. The established index is then used in the ConnectTo data frame (as part of
+41
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+the lane object), to qualify to whom a SignalgroupID applies when it is sent within the SPAT message. For
+instance, when a SignalGroup is a public transport signal, a restriction can be set to assign only public transport
+vehicles to the connection (with a particular SignalGroup). Note: only RestrictionClassIDs which are defined in
+the RestrictionClassList can be provided. The use of this data element is optional as it is not possible to provide
+all applicable combinations.
+42
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4. MAPEM basic interpretation of the
+message
+With the MAPEM, it is possible to represent the topology of an intersection. The topology defines what road
+users like vehicles, pedestrians or bicycles are allowed to do when crossing this intersection. This chapter
+explains how the road topology shall be designed for vehicle, crosswalk and bicycle lanes in the context of the
+C-Roads profile.
+4.1 Basic composition of an intersection
+This chapter describes the use of all data frames and data elements of the MapData (MAPEM) data structure.
+The reference example of an intersection layout (see Figure 12) is used to detail the configurations in the
+following paragraphs. This intersection has 3 arms, 2 ingress and 1 egress lane on the south and west arms, 1
+ingress and 2 egress lanes on the north arm. The green areas represent the centre median strip, for example
+grass.
+Figure 12 Intersection layout
+43
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.1.1 The conflict area
+The conflict area is a key aspect for the implementation of an intersection geometry. This section will therefore
+provide a sharpened definition of the conflict areato support traffic engineers to implement the intersection
+layout.
+A ‘conflict area’ is the area of the intersection where paths of road users arriving from different lanes cross or
+overlap. The conflict area is limited by the first nodes of ingress/egress vehicle lanes, first nodes of crosswalk
+lanes and stop lines of bicycle lanes. In some cases, additional stop lines within the conflict area exist. Such an
+example is shown in Figure 13 below.
+Figure 13 Conflict area for an intersection with additional stop line for a bicycle lane
+44
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.1.2 Reference point
+The reference point is crucial for every intersection layout. It is the fix point of origin for the entire intersection
+topology represented in MAPEM, meaning that all other location information in the message is given in
+coordinates relative to the reference point. Therefore, the accuracy and precision of the reference point is a
+significant factor for the accuracy of all topology information.
+C-Roads’ specifications require that the reference point is located roughly at the centre of the conflict area.
+This may seem quite vague but is sufficient and intentional [C-Roads MP].
+For receiving vehicles (and also for testing purposes) it is important to have the reference point located within
+the conflict area (for a clear, topological relation to the actual intersection). Positioning of the reference point
+precisely at the conflict area’s centre however is not necessary. The reference point itself doesn’t need to be
+measured exactly. It could be calculated from another, exactly measured point nearby (e.g., at the border of
+the conflict area) as long as the overall accuracy requirements for the topology information are still fulfilled.
+For more details on the corresponding data field in MAPEM, see section 3.2.4.
+Figure 14 Reference point of the intersection
+45
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.1.3 Lanes
+The laneSet [DF_LaneList] data frame (see 3.3) contains the properties of all the lanes of an intersection. Figure
+15 shows all vehicle lanes, lane ID numbers, and allowed movements of the intersection. LaneIDs shall be
+unique within the intersection and may be unique within the MAPEM. LaneIDs typically are numbered
+continuously starting at 1, but other methods are permitted (incl. skipping one number) as long as no
+additional meaning is put on the number which cannot be guaranteed.
+Figure 15 Intersection vehicle lanes
+46
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+Each lane is part of an approach. There are two kinds of approaches, ingress approaches and egress
+approaches. The allocation of a lane to an approach is indicated through the approachID (see 3.3.1). Ingress
+and egress approaches of the same arm have the same ApproachID. The intersection approaches are shown
+in Figure 16.
+Figure 16 Intersection approaches
+47
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.1.4 NodeList
+One of the properties of a lane is the nodeList [DF_NodeListXY]: a sequence of signed offset node point values
+for determining the Xs and Ys to build a path for the centreline of the lane (see 3.3.4). Note that the sequence
+order differs for an ingress and egress lane as both lanes should always start at the conflict area. An ingress
+lane starts from the stop bar. An egress lane starts at the end of the conflict area. See Figure 17 for a
+visualisation.
+Figure 17 Node configuration
+48
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+The data frame nodes [DF_NodeSetXY] contains a list of nodes [DF_NodeXY]. As shows in Figure 18, the first
+node of a lane is described as an offset from the RefPoint [DF_Position3D] while the other nodes are described
+as a delta from the previous node. As described in other paragraphs nodes are provided with varying intervals
+(deltas) subject to other requirements. The standards also offer other options to represent the absolute
+position of the nodes, however the option to use the offsets was chosen since it reduces the required amount
+of data is far below the data required for other options. As defined by the standards, offset is positive to the
+East (X) and to the North (Y) directions.
+Figure 18 Node offsets from the reference point
+4.1.5 overLays
+To describe situations where road space is shared by multiple user types, the sharedWith data element shall
+be preferred by default. However, if for whatever reason overlapping lanes for different user types is required,
+overLays can be defined as an alternative. When multiple lanes overlay each other, when for example a train
+path overlays a motor vehicle lane, the lane property overLays [DF_OverlayLaneList] can be provided. This is
+a list of the unique lane ID numbers that have any lane object of which the spatial path runs on top of the
+current lane that is described.
+49
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.2 Intersection lane connections
+The relation between an ingress lane and all egress lanes that can be reached starting from that ingress lane
+is implemented through connections. Connections between lanes are configured using the ‘connectsTo’ data
+frame. This paragraph describes cases on how to configure the ‘connectTo’ data frames of an intersection.
+4.2.1 Connection 1:1
+A vehicle manoeuvre in an intersection is conducted by the following actions. A vehicle approaches the
+intersection driving along the ingress lane, enters the conflict area, and leaves the intersection using the egress
+lane. Figure 19 shows the allowed manoeuvre for lane “6”. There is one allowed manoeuvre due to the
+“connectsTo” link from lane “6” to lane “62” (left). The first node (L6-01) of the ingress lane (the stop bar) is
+connected to the first node (L62-01) of the egress lane “62”.
+Figure 19 Connection from a single lane of an ingress approach to a single lane of an egress approach
+50
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+The data frame “ConnectionTrajectory-addGrpC” defines the trajectory for travelling e.g. through the conflict
+area of an intersection. The trajectory is defined by two or more nodes. In the example in Figure 20, the first
+node position of the trajectory (T6-1) is matching to the first node of the ingress lane towards the conflict zone
+(L6-1), and the ending node (T6-7) and the first node of the connected egress share the same position (L62-1).
+Figure 20 ConnectionTrajectory
+51
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.2.2 Connection 1:2
+This example in Figure 21 shows how to connect a single lane of an ingress approach to two lanes of an egress
+approach.
+Figure 21 Connection from a single lane of an ingress approach to two lanes of an egress approach
+A single lane of an ingress approach has to be connected to all lanes of its egress approach which are reachable
+from the lane through allowed manoeuvres. In this case lane number 6 of ingress approach 2 has to be
+connected to both lane number 61 and lane number 62 of egress approach 3.
+52
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.2.3 Connection 2:2
+This example in Figure 22 shows how to connect two lanes of an ingress approach to two lanes of an egress
+approach.
+Figure 22 Connection from two lanes of an ingress approach to two lanes of an egress approach
+When the number of lanes of an ingress approach are connected to the equal number of lanes of its egress
+approach, only the allowed connections are described, i.e. one connection should be made for each ingress-
+egress combination. In this case lane number 5 of ingress approach 2 has to be connected to lane number 62
+of egress approach 3. And lane number 6 of ingress approach 2 has to be connected to lane number 61 of
+egress approach 3. In case both lanes 5 and 6 merge into a single egress lane then two connections must be
+used.
+53
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.2.4 Connection 2:3
+This final example in Figure 23 shows how to connect two lanes of an ingress approach to three lanes of an
+egress approach. Typically, extra lanes add only connections to the most left lane (for the case of right hand
+driving). However, this strongly depends on road markings and turning lanes – and thereby on the manoeuvres
+allowed at an intersection.
+Figure 23 Connection from two lanes of an ingress approach to three lanes of an egress approach
+The above case is a combination of the examples in the previous two sections. Lane number 5 of ingress
+approach 2 has to be connected to lane number 63 of egress approach 3. And lane number 6 of ingress
+approach 2 has to be connected to both lane number 61 and lane number 62 of egress approach 3.
+54
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.2.5 Unsignalized bypass
+It is recommended to handle unsignalized bypass of an intersection with the use of an ingress lane. An example
+is provided in Figure 24. The first node of the ingress lane 15 is placed at the merge point between ingress lane
+15 and egress lane 17, and the last node of ingress lane 15 located at the merge point between ingress lane
+15 and ingress lane 16. Lane 15 has the same ApproachID as lane 16, as the purpose of approach IDs is to
+group ingress and egress lanes.
+Figure 24 Unsignalized bypass
+An alternative is to use a connection for ingress lanes which are bypassing the conflict area and ending in an
+egress lane without signalization. This approach however clearly provides less information about the actual
+road topology.
+55
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+An unsignalized bypass can also include a crosswalk. An example is provided in Figure 25. This conflict area is
+interpreted similar to a signalized intersection. This means that lane 15 and lane 18 are ingress and egress
+lanes that should be connected through a connection.
+Figure 25 Unsignalised bypass with crosswalk
+56
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.3 Intersection lanes
+4.3.1 Node placement requirements
+The example in the figure below visualizes the node placement requirements for non-straight lanes. Accurate
+node placement is important to assure correct orientation of the linear relative to the actual orientation of
+the road so that vehicle systems can better understand and match themselves to the road topology.
+The first node is placed at the edge of the conflict area. The second node is placed after the first node when
+the error is larger than the maximum perpendicular distance to the lane centre
+(pMaxPerpendDistLaneCenter), or when either a node attribute needs to be indicated or when a segment
+attribute needs be enabled/disabled.
+Additional nodes are placed until the maximum number of nodes per lane (pMaxNoOfNodesPerLane) is
+reached, until the minimal ingress lane length (pMinIngressLaneLength/pMinIngressLaneLengthHighSpeed) is
+reached or other use case specific functional requirements are satisfied.
+Lane length, centre line accuracy and use case requirements (e.g. node attributes) shall prevail over the
+maximum number of nodes, however the not more nodes shall be used than is necessary to minimise the size
+of the MAPEM.
+Figure 26 Node placement requirements
+57
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+The angle between the linear connection of two node points and the corresponding tangent to the lane centre
+shall not be greater than pLaneAngleDeviation. In more formal wording: let 𝑎 be the vector representing the
+linear connection of two node points, and 𝑝 be the vector representing the shortest distance of vector 𝑎 to
+the center of the lane (that is, 𝑝 is perpendicular to the tangent of the center line of the lane at the foot of the
+dropped perpendicular). Then for |𝑝|> 0 it shall always hold that
+cos−1(1− 𝑎∗𝑝 )≤ pLaneAngleDeviation. This situation is illustrated in the figure below.
+|𝑎|∗|𝑝|
+Figure 27 Lane angle deviation
+58
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+The vector of the shortest distance p can also be 0, for example when. 𝑎 crosses the lane center. For |𝑝|= 0
+the angle α between 𝑎 and the tangent to the lane center at the intersection point with the lane center shall
+be less than pLaneAngleDeviation. This is illustrated in the figure below.
+Figure 28 Lane angle at intersection
+59
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+When the nodes are placed exactly on the lane centre of the road, the tangent is drawn at the node. Again,
+the angle α between 𝑎 and the tangent to the lane center at the node point shall be less than
+pLaneAngleDeviation. This is shown in the figure below.
+Figure 29 Lane angle at node
+Lastly, it is possible that 𝑎 and the tangent to the lane center at the vector of the shortest distance p are
+parallel to each other. In this case the angle α = 0 (there is no angle), and the requirement is fulfilled. This is
+illustrated shown in the figure below.
+Figure 30 Lane angle is 0
+60
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.3.2 Fan outs
+In many cases the road fans out at an intersection to allow separate lanes for left and/or right turns. In this
+case new lanes arise.
+Before getting into the details, it is important to be aware of a certain particularity in MAPEM. Same as all
+other characteristics of nodes and lanes, the merging and diverging of lanes is described from the perspective
+of the intersection’s centre i.e., independently of the driving direction. This is described in more detail in
+section 3.3.4.3.
+For the modelling of fan outs, the lane(s) extended upstream of the fan out must be the one(s) for through
+traffic; this is the lane with the black nodes in Figure 31 while the other lane merges into this ‘main’ lane.
+Typically, this will be the straight direction, but exceptions are possible where the through traffic takes a turn.
+For a T-junction, the major road must be selected as the through direction. If the left and right directions are
+equal roads, one of them can be chosen, examples for such situations can be found in the subsections of this
+chapter. All lanes that fan out must have the same approachID.
+taperToLe
+enabled rst point
+taperToLe
+disabled
+mergePoint
+nodeLink used
+rst point
+taperToLe
+Enabled
+taperToLe
+disabled
+Figure 31 Example of a fan out
+In MAPEM, the node where two lanes merge or diverge (i.e., where the fan out “starts”) is indicated with an
+additional attribute “mergePoint” or “divergePoint”. To support vehicles in identifying, which lanes are
+merging, the nodeLink is used for the merge- or divergePoints in all affected lanes. In addition, a segment
+attribute for tapering is used in the area, where the physical lane has not yet reached its full width. The
+following sections provide some more explanations how to use these attributes for fan outs.
+These sections focus on vehicle lanes. For the description how to model bicycle lanes that merge into or
+diverge from shared lanes, see section 4.8.7.
+61
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.3.2.1 Ingress lane fan out
+The following example shows the Ring 2 in Hamburg Germany (53°32’47.5”N 9°57’11.4”E), where the vehicle
+lane diverges into two lanes right in front of an intersection. In this example the two new lanes become a left
+turn and right turn lane respectively. Thus, it is not clear which lane is the “through” lane and which lane is
+the diverging lane. It is recommended to model such situations with three separate lanes. This means that the
+lane on which the vehicles approach the fan out situation ends at the merging point. From this point onwards
+two new lanes exist (starting with a mergePoint). For the three mergePoints in the three lanes, also the
+nodeLink is set. For more details how to use the mergePoint attribute, see section 3.3.4.4, for more details
+how to use nodeLink see section 3.3.4.7.
+Figure 32 Ring 2 in Hamburg, diverging ingress lanes at an intersection
+62
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+With two coexisting lanes the vehicles can safely manage this fan out situation. This modelling of a fan out is
+shown in Figure 33. In that example, an ingress lane fans out into two lanes for going straight. This can be
+found for example at the Heußweg in Hamburg, Germany (53°34’25.1”N 9°56’56.2”E). Behind the intersection
+both lanes coexist and move forward as straight lanes. Within this scenario variations are possible.
+L17 12
+Node.id = 12
+mergePoint
+L21 4 nodeLink = lane , node 3 ,
+Node.id = 4 lane 21, node 4
+mergePoint
+nodeLink = lane , node 3 ,
+lane 17, node 12
+17
+21
+L 3
+Node.id = 3
+mergePoint
+nodeLink = lane 17, node 12 ,
+lane 21, node 4
+Figure 33 Modelling of a fan out with three individual lanes
+63
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.3.2.2 Egress lane fan out
+This scenario describes two merging egress lanes, where it is not clear which lane is the through lane. Here
+the opposite scenario to the merging ingress lanes applies. This scenario is taken from the St. Pauli Hafenstraße
+in Hamburg Germany (53°32’46.0”N 9°5 ’07.9”E) as shown in Figure 34.
+This kind of merging egress lanes can be modelled in the same way as described before for the ingress lanes.
+The two individual lanes end at the merge point where a third lane (the “merged lane”) begins.
+Figure 34 St. Pauli Hafenstraße in Hamburg, merging egress lanes
+64
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+LNmn 2 1
+o d e
+e rg
+o d e
+.id = 1
+e P o in t
+Lin k = la n
+la n
+2
+e 4
+e 1
+, n o
+9 , n
+do ed 3 ,
+e 1 1
+LNmn 4 3
+o d e
+e rg
+o d e
+.id = 3
+e P o in t
+Lin k = la n e 2 , n o
+la n e 1 9 , n
+4
+1 9
+L 1 9 1 1
+N o d e .id = 1 1
+m e rg e P o in t
+n o d e Lin k = la n e
+la n e
+d e 1 ,
+o d e 1 1
+4 , n o d e 3
+2 , n o d e 1
+,
+4.3.2.3 Width of merging/diverging lanes
+The width of a lane is defined as the distance from one side to the other side. This implies that only vehicles
+having a total width smaller than or equal to the width of the road can use it. This seems obvious but is
+especially relevant for merging and diverging lanes. It is essential that the merging/diverging lane does not
+shrink (narrow) towards a merging/diverging point. This is something worth keeping in mind during the design
+process of an intersection. Figure 35 shows a merging lane with its width.
+Figure 35 “dWidth” attribute example
+65
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.4 Adjacent intersection lane connections
+Intersections that are within a short distance of each other can be provided with a single MAPEM. To achieve
+this the basic principles for egress and ingress lanes remain:
+• An egress lane must be provided for all outbound lanes;
+• Egress lanes of one intersection shall not overlap ingress lanes of an adjacent intersection (minimum
+egress lane lengths must be respected and as a consequence the pMinIngressLaneLength cannot be
+achieved);
+• If the adjacent intersection is not V2X-equipped (or not transmitting MAPEM and SPATEM for any other
+reason), still the last node of any lane in MAPEM of the intersection at hand shall be distanced at least
+pMinEgressLaneLength (see [C-Roads MP], here: v2.0.6) from the adjacent intersection’s conflict area.
+Figure 36 shows the configuration of one MAPEM with two intersections (A and B) within a short distance of
+each other. The use of the remoteIntersection data element is discouraged to ensure that ‘complete’
+intersection topologies are provided i.e., with both ingress and egress lanes for all intersections within the
+MAPEM. As the figure shows, the last nodes of the respective egress and ingress lanes overlap. In addition,
+nodeLink can be applied as described in section 3.3.4.7.
+Figure 36 example with multiple intersections in one MAPEM
+66
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.5 Restriction user type for connections
+Figure 37 describes an intersection where a regular ingress vehicle lane (15) for motorised traffic connects to
+a lane restricted to bus use (12) and a regular vehicle lane (14). The connection that connects lanes 15 and 12
+shall have a RestrictionClassID, which corresponds to a restriction defined in the RestrictionClassList.
+‘Restriction’ means that the connection can be used by the indicated user types only (i.e., it rules out the not
+indicated user types). In this example the restriction user type should be set to equippedTransit. For further
+details how to use RestrictionClassList, see 3.4.
+Figure 37: Combined vehicle and bus lane
+67
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.6 Crosswalk lane connections
+4.6.1 Crosswalk lane connections basic scenario
+Crosswalks are described by means of lanes on both sides of the street and connections that define the
+crossing itself. The lanes end at a curb stone or stop bar, that way these two lanes create a small waiting area
+for pedestrians. Figure 38 shows how this is achieved for a basic scenario. Note that pedestrian lanes are
+bidirectional and have the same approachID which is also the same approachID as the vehicle lanes they cross.
+The signalGroupID assigned to the connections depends on the traffic control configuration. In the example
+below both directions are controlled by different signal groups.
+Figure 38 Crosswalk lane connection basic example
+68
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.6.2 Crosswalk safe island lane
+More complex crosswalk scenario may include a safety island halfway of the crossing. Figure 39 shows such
+an example. The safety island is described by means of two non-parallel lanes with an overlapping node which
+connects the two lanes by means of the mergePoint attribute (see section 3.3.4.4). In addition, nodeLink can
+be used to link the two lanes (see section 3.3.4.7). The first node of each lane is placed at the curb stone, which
+is also the implicit stop line. As connections are unidirectional, each lane has one connection with a
+signalGroupID set. In the example below each crossing is controlled by one signalGroupID which therefore
+applies to two connections. Other cases may exist, for example when the outer signals and inner signals
+respectively have the same signalGroupID, or all connections have a unique signalGroupID.
+Figure 39 Crosswalk lane connection safety island example
+69
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.6.3 Crosswalk walk basic scenario with RestrictionUserType
+visualDisabilities
+When a crosswalk scenario includes a connection for people with visual disabilities, for example to provide a
+larger clearance time, the RestrictionUserType visualDisabilities can be used. The two connections (one
+representing the visual signal and one representing the signal for people with visual disabilities) each have
+their own signalGroupID and share the same approachID. The same concept applies for other connections
+specified for disabilities, where a RestrictionUserType should be provided. See Figure 40.
+Figure 40 Usage of RestrictionUserType visualDisabilities
+70
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.7 Public transport lane
+Figure 41 shows the nodes of lanes 7, 9 and 49. Lane 7 and lane 9 start at the stopline of the intersection. The
+bus lane 49 starts at a divergePoint that applies to both lanes 49 and 9.
+Figure 41 Public transport lane example
+71
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.8 Bicycle lane configurations
+Different configurations for bike lanes exist, including different types of lane markings, lane sharing rules and
+longitudinal configuration changes. Typically, three different road layouts can be distinguished:
+• Lanes shared by vehicles and cyclists, without dedicated bicycle pavement or road markings that
+demarcate the bicycle lane. For these configurations the sharedWith (cyclistVehicleTraffic) data element
+should be used.
+• Lanes shared by vehicle and cyclist, with dedicated bicycle pavement or road markings with
+discontinuous lane markings that demarcate the bicycle lane. For these configurations the
+segmentAttributeXY adjacentBikeLaneOnLeft/adjacentBikeLaneOnRight should be used in addition to
+the sharedWith (cyclistVehicleTraffic) data element.
+• Lanes with dedicated space reserved for cyclists, typically demarcated by a continuous white line and/or
+coloured pavement. For these configurations the bicycle lanes should be provided as individual lanes.
+The adjacent vehice lane should have the segmentAttributeXY
+adjacentBikeLaneOnLeft/adjacentBikeLaneOnRight set.
+• Infrastructures with bicycle facilities physically separated from vehicle lanes. For these configurations
+the cycling facilities are provided as unique bikeLanes.
+Bicycle lanes that are signalised separately from vehicle lanes should always be provided as separate lanes, to
+allow for the provision of separate connections and signal groups.
+4.8.1 Bicycle lane with discontinuous lane markings
+Bicycle lanes with discontinuous lane marking, where lane-sharing is present, should be modelled by the lane
+that is also used for other vehicles. The element sharedWith should contain cyclistVehicleTraffic (7) and the
+laneType should be set to vehicle. The segment attribute adjacentBikeLaneOnLeft / adjacentBikeLaneOnRight
+should be used.
+Figure 42 Bicycle lane with discontinuous lane marking and lane-sharing
+72
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.8.2 Bicycle lane with continuous lane marking
+Bicycle lanes with continuous lane marking are described as physically separated bicycle lanes but with the
+addition of the segmentAttributeXY adjacentBikeLaneOnLeft / adjacentBikeLaneOnRight used at the adjacent
+vehicle lane. The bicycle lane is modelled as a separate lane. This is shown in Figure 43.
+Figure 43 Bicycle lane with continuous lane marking
+73
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.8.3 Separated bicycle lanes
+Figure 45 shows an example of a physically separated cycling lane. In this example the bicycle lane and the
+vehicle lane are provided as separate lanes.
+Figure 44 Separated bicycle lanes
+74
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.8.4 More complex bicycle facilities
+Figure 45 shows an example of a more complex intersection with bidirectional bicycle lanes from multiple
+directions. The link between lanes 24 and 86 is modelled by means of the mergePoint and divergePoint
+attribute which should both be provided. Additionally, to set the ApproachID for these bicycle lanes, all bicycle
+lanes that are in the same quadrant of the intersection are grouped and assigned the same (ingress)
+ApproachID. This approach ID is unique within this intersection, thus simplifying the identification of
+associated bicycle lanes. In this example, bicycle lanes 24 and 86 share the same ApproachID.
+Figure 45 More complex bicycle facilities
+75
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.8.5 Bicycle box
+A bicycle box must be modelled using the bikeBoxInFront segmentAttribute. In the example in Figure 46 this
+attribute is enabled at node L11-01 and disabled at node L11-02. The attribute ‘bikeBoxInFront’ implies the
+presence of a second stop line which is for motorised traffic only.
+Figure 46 Bicycle box
+4.8.6 Bicycle street
+A bicycle street is a street designed as a bike route were bicycles have priority over other traffic, but on which
+cars are also allowed. The car use is limited by the character and the layout of the bicycle street e.g., visible by
+red pavement. In this case the laneType should be set to bike, sharedWIth should indicate which other road
+users are using the lane, and the attribute sharedBikeLane should be enabled in the segmentAttributeXY.
+76
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.8.7 Bike lane separates from shared lane
+When a bike lane separates from a shared lane the point of separation is modelled as a mergePoint (ingress
+lane). See the example in Figure 47. Between the mergePoint and the conflict area a separate lane is placed,
+therefore it represents a mergePoint between three different lanes: lane 12, lane 9 and lane 85. Lane 12 is a
+vehicle lane shared with cyclist traffic, Lane 9 is a vehicle lane and lane 85 is a bike lane.
+Figure 47: Bike lane seperates from shared lane
+77
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.8.8 Cycle movement in two stages
+In Figure 48 left turn cyclists make use of an additional bike box. This bicycle box is modelled as a separate
+bike lane (87), which has a connection leading to it and away from it. Each connection is restricted to bicycle
+use and has the applicable SignalGroup assigned to it which depends on the local configuration. The bike lane
+should have the same ingressApproachID as the lanes on the east arm of the intersection.
+Figure 48 Multiple signals with bikebox
+78
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.9 Multiple intersections
+Some large or very complex intersections should be modelled as multiple individual intersections. Such
+examples and explanations are provided in this chapter – for exceptionally large intersections and for multiple
+intersections including bicycle lanes.
+4.9.1 Exceptionally large intersections
+In case of exceptionally large intersections or configurations that logically consist of multiple intersections, the
+IntersectionGeometry can be created by distinguishing independent conflict areas. These are defined as:
+• A conflict area having own stop lines and signal heads for all conflicting directions.
+• A conflict area that – theoretically – can be controlled independently from other conflict areas safely.
+• A conflict area does not share the conflict matrix with another conflict area.
+One motivation for creating one IntersectionGeometry for each independent conflict area is the limited array
+size of several data elements (e.g., lanes) as defined by the standards. Note that MapData aims to objectively
+describe the IntersectionGeometry as it can be observed. How the conflict areas are controlled functionally
+and how they are consequently grouped, is a different perspective that is not needed by road users. This
+guideline also applies to the examples provided in chapter 9.3 of the German guidance for MAP creation [OCA
+DiMAP Leitfaden].
+The figures below provide several examples of larger intersections or junctions that are divided into multiple
+IntersectionGeometry objects.
+Figure 49 Multiple intersections example 1
+79
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+F ig u r e 2 2 M u lt ip le in t e r s e c t io n s e x a m p le 1
+Note that thFisig euxraem 2p3l e M counlttipalien si nttweors tercatfifoicn sli gehxta mcopnlter o2l lers, each one controlling two intersections (in red and green)
+Note: this example contains two Traffic Light Controllers, each controlling two intersections (those in red and in green).
+Figure 50 Multiple intersections example 2
+Figure 51 Multiple intersections example 3
+80
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+F ig u r e 2 4 M u lt ip le in t e r s e c t io n s e x a m p le 3
+Figure 52 Multiple intersections example 4
+81
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+F ig u r e 2 5 M u lt ip le in t e r s e c t io n s e x a m p le 4
+4.9.2 Multiple intersection with bicycle lanes
+The example in Figure 53 shows a complex intersection with a separate bike lane for the left turn. Bike traffic
+needs to cross the vehicle lanes, which constitutes a separate conflict area that is controlled with traffic lights.
+Hence, this situation is handled as two separate intersections. Ingress lane 22 is connected through a
+connection with egress lane 23 and 26 for intersection one, which turn into ingress lane 24 and 27 which are
+connected through a connection with lane 25 and lane 28. This scenario is peculiar in several ways and right-
+of-way and traffic rules are interpreted differently in different regions. The example below is intended to be
+illustrative and present one alternative way to describe the situation using the MAPEM data structure. In case
+of a similar scenario without additional signalling, other implementation solutions in MAPEM may be needed,
+depending on the applicable traffic regulations.
+Figure 53 Multiple intersection with bicycle lanes
+82
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.10 Roundabouts
+4.10.1 Unsignalized roundabouts
+In case a roundabout is present within the minimum lane length of 300 meters, the lane leading up to the
+roundabout shall be shortened till the edge of the roundabout. This corresponds to the guidelines and
+requirements for adjacent intersections as described in section 4.4.
+4.10.2 Signalized roundabouts
+There are two cases of signalized roundabouts that need to be differentiated. In the first case, only the inbound
+lanes to the roundabout are signalized. In the second case, also the lanes on the roundabout itself are
+signalized. Those two cases are described in the following sections.
+4.10.2.1 Signalized Roundabouts – only on inbound lanes
+Some roundabouts are configured such that only the inbound lanes are signalized, but the lanes on the
+roundabout itself are not.
+This basically means that the roundabout represents one large intersection and should be represented in
+MAPEM as such. There are different options for the egress lanes – either the lanes within the roundabout are
+represented as egress lanes or only the outbound lanes of the lanes leading away from the roundabout. In the
+latter case, the roundabout itself represents the conflict area. Figure 54 and Figure 55 show both options.
+Figure 54 Signalized roundabout, only inbound lanes signalized, egress lanes on outbound roads
+83
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+5
+13
+31
+12
+7
+39
+27
+9
+17
+1
+4
+22
+Figure 55 Signalized roundabout, only inbound lanes signalized, egress lanes in roundabout
+Which modelling is better suited in the specific situation depends on the signalling scheme and the allowed
+paths along which the vehicles may travel. In case of questions with regards to a specific example, you can
+always contact C-Roads and the authors of this guideline.
+84
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+5
+13
+27
+31
+39
+32
+12
+7
+9
+17
+35
+22
+21
+27
+1
+4
+4.10.2.2 Fully signalized roundabout
+The following Figure 56 shows a fully signalized roundabout i.e., also the lanes within the roundabout are
+signalized.
+Figure 56 Fully signalized roundabout
+Such a roundabout shall be modelled as multiple intersections just as described in chapter 4.9. Same as for
+the example 1 provided there, such a roundabout is considered as a collection of independent conflict areas
+for the purpose of representation in MAPEM. In the example shown in the figure above, this results in four
+individual intersections represented in MAPEM (if it fits by size, they can all be put into one individual MAPEM).
+This guideline also applies to the examples provided in chapter 9.4 of the German guidance for MAP creation
+[OCA DiMAP Leitfaden].
+85
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+1
+5
+13
+2
+27
+17
+31
+32
+39
+Intersec onID 7
+4
+45
+7
+12
+4
+Intersec onID 3
+Intersec onID 51
+1
+17
+9
+Intersec
+35
+22
+5
+41
+onID 27
+21
+11
+27
+6
+1
+4
+13
+4.11 Stop lines and do not block segments
+The first node of an ingress lane, which is signalised and/or not a diverge or merge point, shall be the node
+that shall not be passed by a vehicle when unless movement is not allowed (from regulations, typically this is
+the stop line on the street). As an intersection may include sub-intersections with lanes which are not
+signalised, for example when secondary side roads are included in the topology description, it cannot be
+assumed unambiguously that the first node of each ingress lane is a stop line. If the implied presence / absence
+of stop bars turns out to cause problems, it is recommended that the stopLine NodeAttribute shall be set to
+the first node of all signalised ingress lanes.
+Additional stop lines may be present in the case of bike boxes (see 4.8.5) and do-not-block areas. Do-not-block
+areas shall be described as shown in the figure below by enabling and disabling the corresponding segment
+attribute. The presence of a stopLine is implied by the definition of the doNotBlock-segment (or
+bikeBoxInFront) at the node where the segment is disabled, therefore it is not required to also set the stopLine
+NodeAttribute. For more details on the data elements in mapData, see section 3.3.4.3.
+Figure 57 Double stop line example
+86
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.12 Inclusion of non-priority roads
+Generally, it is recommended not to include non-priority roads in the MAPEM implementation. In many cases,
+vehicles wouldn’t make use of the intersection information while traveling on the non-priority road anyway
+since they encounter a situation where they have to give way before reaching the signalized intersection.
+If the traffic light controller needs information on side roads around the intersection (e.g., due to the presence
+of sensors, to estimate traffic demand or estimate time of arrival of priority vehicles), corresponding MAPEMs
+with a full representation of the side roads can be used internally at the controller. For V2X transmission the
+smaller MAPEM without the side roads should be used.
+There might however be situations where a transmission of MAPEM including some side roads is needed e.g.,
+when public transport vehicles travel on such side roads and should make a request to the traffic light via V2X.
+If the vehicles don’t have an internal map containing the information where to start the request, they need
+the MAPEM including side roads. To still make sure that other individual traffic vehicles can differentiate the
+lanes on minor roads from other ingress lanes (e.g., to avoid showing time to green on the side road when the
+driver should still give way to the main road), an implementation as shown in Figure 58 should be used.
+The side road should be assigned to the same approach ID as the ingress lanes on the main road. The ingress
+on the main road is separated into two lanes. For an explanation how to link two such lanes, see sections
+3.3.4.4 and 3.3.4.7. The minor road is then included to this ingress by adding a connection of lane 23 to lane
+17 without any signal group indication.
+Figure 58 Inclusion of non-priority road in MAPEM using connections
+Through this implementation (an ingress lane that connects to another ingress lane of the same intersection),
+receiving vehicles can deduce that lane 23 in this example represents a minor road and can control the
+information given to the driver or vehicle systems accordingly.
+87
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.13 Dynamic lane configuration
+4.13.1 Different connections allowed depending on the time of day
+Figure 59 Dynamic lane example, different connections depending on the time of day
+Dynamic lanes in an intersection are configured as overlaying lanes of the same physical lane such as lane 16
+and lane 18 in the example shown above. In Figure 59, lane 16 and its connection are shown in red and lane
+18 and its connection are shown in yellow. During the morning peak on weekdays, i.e. from 06:30 to 10:30,
+the left turn is allowed and the straight turn is not allowed. During all other times, the left turn is not allowed
+and the straight turn is allowed. All lanes are present in MAPEM at all times. For vehicles to be able to identify
+which representation of a lane in MAPEM is the currently valid one, the “enabledLanes” data field in SPATEM
+is used. This is a set of lane IDs for all the lanes that have the “isVehicleRevocableLane” bit set and that are
+valid at the time of transmission of the SPATEM. If a lane has the “isVehicleRevocableLane” bit set but its ID
+doesn’t appear in the “enabledLanes” in SPATEM, it is not considered to be part of the current intersection
+topology.
+Through this mechanism, whenever the topology is changed, the MAPEM can remain unchanged and only the
+SPATEM needs to be updated.
+4.13.2 Lanes changing driving direction depending on the time of day
+The same principle as described in the previous section can be used when a lane heads in one driving direction at certain
+times of the day (e.g., inbound to a city in the morning hours) and in the other driving direction at other times of the day (e.g.,
+outbound of a city in the evening). See Figure 60 for a better understanding of the example. As in the example before, for
+every lane that can change directions, two lanes with identical node sets but different IDs are created.
+Figure 60 Lanes changing direction (lane lane 34 ingress, 20 egress, at other times of day 6 ingress, 66 egress)
+88
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+Lane 15
+egressApproach 2
+15
+9
+7
+11
+71
+6
+161
+65
+5
+Lane 6
+egressApproach 5
+Lane 1 Lane 5
+ingressApproach 7 ingressApproach 7
+isRevocableLane 1
+Connects to lane 15 Lane 16
+ingressApproach 7
+isRevocableLane 1
+connectsTo Lane 6
+SPATEM enabledLaneList 16
+Lane 6
+egressApproach 5
+isRevocableLane 1
+Lane 15 11 6 65
+egressApproach 2
+15
+9
+7
+Lane 1 Lane 5
+ingressApproach 7 ingressApproach 7
+isRevocableLane 1
+Connects to lane 15 71 11 6 5 Lane 16
+ingressApproach 7
+isRevocableLane 1
+connectsTo Lane 6
+SPATEM enabledLaneList 1
+L i c n a o g n n r e n e e s 1 s c 1 A ts p To pr L o a a n c e h 6 1 2, 71 11 3646 65 L i i c L e i n s s a o a g R g R n n n e r r e e n e e e v v s e s o 3 o 6 s s c c 4 A c A t 6 a a s p p b T b p p o le l r r e o L L o L a a a a a n n c c n h e e h e 1 5 2 1 1 0 L i c n a o g n n r e n e e s 1 s c 1 A ts p To pr L o a a n c e h 6 1 2, 71 11 6364 65 L i i c L e i n s s a o a g R g R n n n e r r e e n e e e v v s e s o 3 o 6 s s c c 4 A c A t 6 a a s p p b T b p p o le l r r e o L L o L a a a a a n n c c n h e e h e 1 5 2 1 1 0
+62 62
+9 9
+7 7
+L e is a g R n r e e e v s o 2 sA c 0 a p b p l r e o L a a c n h e 3 1 L in a g n r e e s 5 sApproach 7 L e is a g R n r e e e v s o 2 sA c 0 a p b p l r e o L a a c n h e 3 1 L in a g n r e e s 5 sApproach 7
+71 206 5 L i i c n s a o R g n n e r e n e v e s o 6 s c c A t a s p b To p le r L o L a a a n n c e h e 1 6 7 6 71 620 5 L i i c n s a o R g n n e r e n e v e s o 6 s c c A t a s p b To p le r L o L a a a n n c e h e 1 6 7 6
+S en PA a T b E l M edLaneList 20, 34 S en PA a T b E l M edLaneList 6,66
+For the example in the figure, all these overlapping lanes (6, 20, 34 and 66) are always present in MAPEM. As
+described before, for all these lanes the lane attribute “isVehicleRevocableLane” shall be set. The mechanism
+is the same as described in the previous section.
+4.13.3 Bascule bridge / foldable bridge
+The mechanism described for dynamic lane configuration is also applicable for foldable bridges (i.e., bridges
+where the bridge itself is folded or lifted to make space for passing ships). Such a bridge can for example be
+found in Hamburg (Mahatma-Gandhi-Brücke). In such scenarios, the corresponding part of the intersection is
+not available for driving anymore. This information should also be provided in MAPEM. For example, in
+situations when an emergency vehicle approaches from behind this can be helpful. At normal intersections
+the vehicles could then, if necessary, enter the conflict area to give way. This is not possible if that part of the
+road is currently not available for driving at all. Of course, vehicle sensors of automated vehicles should detect
+that there is no road, but having the information in advance in the messages is helpful in this situation.
+As stated before, here also the “isVehicleRevocableLane” and the “enabledLanes” data elements can be used.
+Typically, a traffic light is located before the bridge, i.e., the egress lanes can be placed on or behind the bridge.
+These egress lanes should have the “isVehicleRevocableLane” bit set. As long as the bridge allows passage, the
+lane ID shall be indicated in the “enabledLanes” list in SPATEM. As soon as the bridge rises or folds, this lane
+ID shall be removed from the list. For better understanding, a schematic drawing is shown in Figure 61 below.
+Figure 61 Bascule bridge schematic (dashed blue line indicates that the bridge is not available for driving)
+89
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+Lan e 2
+isRevo cableLane = 1
+1 7
+7
+2
+3
+SPATEM
+enabledLaneList 2,7
+Lan e 7
+isRevo cableLane = 1
+Lan e 2
+isRevo cableLane = 1
+1 7
+2
+SPATEM
+enabledLaneList
+7
+3
+Lan e 7
+isRevo cableLane = 1
+4.14 SpeedLimit
+The laneDataAttribute speedLimit can be used to indicate a temporary speedlimit change at an intersection.
+The new speedLimit provided persists with the provided values for all nodes unless changed again. Note that
+changes must be provided based on the order of the nodes i.e., inside out from the intersection. Therefore, the
+refSpeed is the regulatory speedlimit, and the speedLimit provided as a laneDataAttribute is the dSpeed, so
+that the speedLimit has to be provided only once.
+Figure 62 SpeedLimits
+90
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+4.15 Toll stations
+In Figure 63 Toll station example
+below an example is provided of how to map a toll plaza using MAPEM. The lanes towards the tolling station
+are handled as a regular “fan-out” situation, with a mergePoint at the last nodes of ingress lanes 2 and 3. The
+ingress lanes are linked to the egress lanes using a connection at the tolling station. At the first node of the
+ingress and egress lanes the SegmentAttribute whiteLine is enabled, meaning that there are no lane changes
+allowed until the whiteLine SegmentAttribute is disabled. Remember that segment attributes are
+enabled/disabled looking from conflict area outwards.
+Figure 63 Toll station example
+91
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+5. SPATEM special usage of data frames and
+elements
+For a holistic view on all data structures in SPATEM, both the standard and the profile document are of high
+importance. The following table provides the detailed references where to find the relevant information for
+all SPATEM data structures in the ISO standard, the C-Roads profile as well as in the handbook at hand.
+For the references to ISO, only those referring to annex G of the standard are mandatory and shall be complied
+to. References to chapter 6 are only of informative nature. Requirements in the C-Roads profile always
+supersede what is written in chapter 6 of the standard.
+Layer Data element / data frame in Spat ISO 19091 C-Roads profile Handbook
+spat 6.7, 6.7.1 SPATEM, level 0 5, 6.5
++ timestamp SPATEM, level 0.1
++ name SPATEM, level 0.2
++ intersections (list of G.8.2.9 SPATEM, level 0.3 5.1
+IntersectionState)
+SPATEM, level 1.0
+++ name SPATEM, level 1.1
+++ id 6.7.3 SPATEM, level 1.2 5.2
++++ region SPATEM, level 1.2.1
++++ id SPATEM, level 1.2.2
+++ revision G.8.2.9 SPATEM, level 1.3 5.3
+++ status 6.7.4 SPATEM, level 1.4 5.4
+++ moy SPATEM, level 1.5 5.5
+++ timestamp 6.7.5 SPATEM, level 1.6 5.6
+++ enabledList (list of LaneID) SPATEM, level 1.7
+++ states (list of MovementState) 6.7.7 SPATEM, level 1.8 5.7
+SPATEM, level 2.0
++++ movementName SPATEM, level 2.1
++++ signalGroup 6.7.6 SPATEM, level 2.2 5.7.1
++++ state-time-speed (list of 6.7.8, 6.7.9, SPATEM, level 2.3 5.7.2
+MovementEvent) (specialLanes),
+SPATEM, level 4.0 5.7.4
+6.7.13 , 6.7.14,
+6.7.15
+++++ eventState SPATEM, level 4.1 5.7.3
+6.3
+6.4
+++++ timing SPATEM, level 4.2 5.7.4
+6.2
+92
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+Layer Data element / data frame in Spat ISO 19091 C-Roads profile Handbook
++++++ startTime SPATEM, level 4.2.1
++++++ minEndTime 6.7.11 SPATEM, level 4.2.2 0
++++++ maxEndTime 6.7.12 SPATEM, level 4.2.3 5.7.4.2
++++++ likelyTime SPATEM, level 4.2.4 5.7.4.3
++++++ confidence SPATEM, level 4.2.5
++++++ nextTime SPATEM, level 4.2.6
+++++ speeds (list of AdvisorySpeed) 6.7.18, 6.7.19 SPATEM, level 4.3
+SPATEM, level 5.0
++++++ type SPATEM, level 5.1
++++++ speed SPATEM, level 5.2
++++++ confidence SPATEM, level 5.3
++++++ distance SPATEM, level 5.4
++++++ class SPATEM, level 5.5
++++++ regional SPATEM, level 5.6
+++++ regional G.5.1.6, G.7.7 SPATEM, level 4.4
++++++ stateChangeReason G.5.1.6, G.5.3.3 SPATEM, level 4.4.1
++++ maneuverAssistList (list of G.8.2.3 SPATEM, level 2.4 5.7.5
+ConnectionManeuverAssist)
+SPATEM, level 6.0
+++++ connectionID SPATEM, level 6.1
+++++ queueLength 6.7.20 SPATEM, level 6.2 0
+++++ availableStorageLength 6.7.21 SPATEM, level 6.3 0
+++++ waitOnStop 6.7.22 SPATEM, level 6.4
+++++ pedBicycleDetect 6.7.16 SPATEM, level 6.5
+++++ regional G.5.1.1, G.7.2 SPATEM, level 6.6
++++++ itsStationPosition G.5.1.1, G.5.2.1 SPATEM, level 6.6.1
+++++++ stationID
+++++++ laneID
+++++++ nodeXY
+++++++ timeReference G.5.3.6
++++ regional SPATEM, level 2.5
+++ maneuverAssistList (list of G.8.2.3 SPATEM, level 1.9
+ConnectionManeuverAssist)
+++++ connectionID
+++++ queueLength 6.7.20
+93
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+Layer Data element / data frame in Spat ISO 19091 C-Roads profile Handbook
+++++ availableStorageLength 6.7.21
+++++ waitOnStop 6.7.22
+++++ pedBicycleDetect 6.7.16
+++++ regional G.5.1.1, G.7.2
++++++ itsStationPosition G.5.1.1, G.5.2.1
+++ regional G.8.2.9, G.5.1.3, SPATEM, level 1.10
+G.7.4
++++ activePrioritizations SPATEM, level
+1.10.1
+SPATEM, level 3.0
+++++ stationID SPATEM, level 3.1
+++++ priorState SPATEM, level 3.2
+++++ signalGroup SPATEM, level 3.3
++ regional SPATEM, level 0.4
+5.1 Intersections
+Refers to signalPhaseAndTimingMessage.intersections
+Same as in MAPEM, SPATEM may contain information for more than one intersection. Information pertaining
+to a single intersection is collected in one data frame of type intersectionState.
+5.2 Id
+Refers to signalPhaseAndTimingMessage.intersections.id
+As explained for MAPEM, for vehicles it is important that corresponding MAPEM and SPATEM have the same
+intersection ID since this ID is the only option for vehicles to identify which MAPEM and SPATEM belong
+together.
+5.3 Revision
+Refers to signalPhaseAndTimingMessage.intersections.revision
+As stated earlier, for vehicles to check the consistency of SPATEM and MAPEM, it is important that the revision
+contained in both messages is identical.
+94
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+5.4 Status
+Refers to signalPhaseAndTimingMessage.intersections.status
+The data element ‘status’ [DE_IntersectionStatusObject] provides information about the operational status of
+the signal light controller. The data element allows to activate more than one of the defined statuses at a time.
+It needs to be ensured that no inconsistent or contradicting status are active. The rules how these statuses
+shall be used are defined in the C-Roads message profile [C-Roads MP].
+5.5 Moy
+Refers to signalPhaseAndTimingMessagen.intersections.moy
+The SPATEM contains information about phase state changes in the format of 1/10th of a second within the
+hour. The data element moy (MinuteOfTheYear) shall refer to the point in time when these phase change
+details where determined. That way the receiving vehicle can evaluate, which hour the phase change will
+actually occur – e.g., in case the phase change occurs in the next hour. For a better understanding see also
+section 5.7.4 on timing.
+5.6 Timestamp
+Refers to signalPhaseAndTimingMessagen.intersections.timestamp
+In contrast to the general time stamp of the SPATEM, the timing information “timestamp” and “moy” in every
+intersection state do not necessarily refer to the message generation time. Instead, they specify the point in
+time, when the information for the respective intersection was generated (i.e., the point in time when the
+time change details where determined). That way, these time stamps serve as a basis for the evaluation of the
+time change details.
+5.7 States
+Refers to signalPhaseAndTimingMessage.intersections.states
+The data frame ‘states’ [DF_IntersectionStateList] contains the key content of every SPATEM. For every
+intersection contained in MAPEM, this list contains one corresponding intersection state providing all relevant
+signalling information.
+Details how to encode the different signal phases of an intersection are given in the following subsections.
+When working with the ISO standard it is important to know, that all sections in the standard regarding this
+and the following data elements have the prefix “Broadcast manoeuvre”. They do however not refer to the
+data elements having the term “manoeuvre” in their name! This prefix merely reflects that each signal state
+is linked to a specific connection and thus to a specific vehicle manoeuvre.
+5.7.1 SignalGroup
+Refers to signalPhaseAndTimingMessage.intersections.states.signalgroup
+Every signal group indicated in one of the messages (MAPEM or SPATEM) also has to be present in the other.
+95
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+A signal group, which is present in SPATEM but not in MAPEM is of no use, because the information cannot be
+mapped to a corresponding connection. A signal group present in MAPEM but not in SPATEM is of no use
+because there is no corresponding phase state information.
+Additionally, a signal group being present in only one of the two messages could be interpreted on vehicle
+side as a sign for general inconsistency between both messages, which then leads to the vehicle discarding
+them completely.
+In message generation, it should be avoided to create multiple signal groups which always provide the same
+movement state information (duplicates). Multiple ingress lanes observing the same (identical) traffic light(s)
+should have the same signalGroup. This is to avoid sending multiple signalGroups with the very same content
+all the time. If some signal groups have the same states at some hours of the day and differ during other times
+(e.g., night-time vs. rush hour), there is however no need to build different SPATEMs and MAPEMs for the
+different times of day. In such cases, “part-time duplicate” movement states are acceptable.
+5.7.2 State-time-speed
+Refers to signalPhaseAndTimingMessage.intersections.states.state-time-speed
+The state-time-speed component provides the essential information on the signal phases and phase changes
+for a signal group.
+According to profiling, the movement phase states shall be sorted in order of their appearance at the traffic
+light. The reasoning for this is to make the structure of the message as intuitive as possible. Additionally, it
+eases interpretation on vehicle side, the vehicle doesn’t have to parse through all available movement states
+for one signal group but can read them from the message according to its function’s needs one by one in the
+correct order.
+For applications such as GLOSA it is important to not only know the current phase but also the next phase and
+its duration in order to give proper advice to the driver. In short: the vehicle needs to know the time-to-green
+or time-to-red (depending on the current phase).
+In some countries there are transitions between two phases (e.g., yellow or red-yellow). In that case, in sum
+three MovementPhaseStates shall be included in SPATEM (current phase, transition and next phase). This is
+also the reason why the two terms ‘phase’ and ‘transition’ have been introduced, to make this distinction
+clearer and allow for generic requirements applicable in all countries.
+It is important to note that the event states don’t necessarily provide a 1:1 representation of the physical
+traffic lights but rather of the applicable traffic rules as indicated by the traffic lights. One reason for this is
+that some phase states are country-dependent (e.g., green blinking or yellow blinking). In general, the vehicle
+needs to know the rules it needs to apply to and not the physical representation – which could have different
+meanings depending on the country.
+The following sections provide more detailed information on how to represent the different signal states and
+the corresponding timing information.
+5.7.3 EventState
+Refers to signalPhaseAndTimingMessage.intersections.states.state-time-speed.eventState
+The MovementPhaseState contains the information about the allowed driver actions at a given time and for a
+given manoeuvre (see section 3.3.5.1). Road users and vehicle systems need to know the applicable
+permissions and not the actual presentation or colour of the physical traffic lights, i.e., the applicable traffic
+96
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+rules are of relevance. This is the basic principle underlying the requirements on eventState defined in the C-
+Roads message profile.
+The movement phase states are not named after specific signal colours but have denominations that are more
+abstract. The reason for this abstraction is, that the colour states (red, yellow, green, dark, flashing red,
+flashing green, arrows, public transport signals …) have different meanings in different regions. For example,
+Austria has a flashing green light which doesn’t exist in Germany, but which has a similar regulatory meaning
+as the German yellow light.
+Furthermore, the abstract definition of movement permissions allows you to encode applicable traffic rules
+resulting from a combination of traffic lights or a combination of traffic lights and static signs.
+The movement phase states are directly linked to the connections between ingress and egress lanes (see
+section 0), so the allowed driver actions can be assigned to the manoeuvres.
+The MovementPhaseState can have only one state at a time, to make sure there is no ambiguity. Nine different
+states of permissions (driver actions) have been identified to be required to reflect all the different phase
+states that might occur. Not all of the states are used in all regions, in all phase cycles or all operating modes.
+The following sections explain every movement phase state and its implications for the vehicle actions
+individually.
+5.7.3.1 General states
+Unavailable (0)
+This movement phase state indicates that the actual phase is not known or that there is an error. It doesn’t
+offer additional gain for receiving vehicles (for them it is not known what traffic rules apply on reception of
+this state.
+Dark (1)
+The state "dark" has no unique related vehicle action and provides no valuable information to the driver or
+the vehicle, and therefore shall not be used according to the profile.
+In cases when e.g., for a right turn there is a signal group with only two phases, which after “yellow” changes
+to dark, the “general” signal group’s state applies and shall be used in form of a combined, virtual signal group.
+For other cases see the recommended approach in section 6.5.
+5.7.3.2 States for stop
+The following states describe the movement states which are represented in most cases by red lights:
+Stop-Then-Proceed (2)
+In most European countries this movement phase state corresponds to the meaning of a stop sign and rarely
+applies for a functioning traffic light-controlled intersection.
+Vehicle action: Stop before the stop line and do not proceed unless it is safe
+Stop-And-Remain (3)
+This movement phase state represents a “classic” red light.
+Vehicle action: Stop before the stop line and do not proceed
+97
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+Pre-Movement (4)
+This movement phase states represents the phase where the traffic light prepares from a stop state to a go
+state.
+Vehicle action:
+• Stop before the stop line and do not proceed
+• Pending green, prepare to proceed (e.g., start engine)
+5.7.3.3 States for go
+The following states describe the movement states which are represented in most cases by green lights.
+Permissive-Movement-Allowed (5)
+This movement phase state indicates that vehicles are allowed to proceed into the conflict area, but conflicting
+traffic may be present in the conflict area or when leaving the conflict area. This includes not only conflicting
+vehicle traffic but also cases where pedestrians have green lights on crosswalks that cross the path of the
+vehicles.
+Vehicle action:
+• Proceed with caution (don’t enter a congested area), pay attention to possible conflicting traffic
+• Must yield to all conflicting traffic
+Protected-Movement-Allowed (6)
+The movement is protected in the sense that all conflicting traffic shall not enter the intersection (i.e., they
+are shown red lights). This includes also pedestrian crosswalks which intersect with the vehicle’s path.
+Vehicle action
+• Proceed, if the way is clear in the indicated direction (don’t enter a congested area)
+5.7.3.4 Intermediate states to stop
+The following states describe the movement states which are represented in many cases by yellow / amber lights. These
+are the states where the traffic light controller prepares to change from a “go-” state to a “stop-” state and vehicles are not
+allowed to cross the stop bar if it is possible for them to stop without danger before the stop bar.
+Permissive-clearance (7)
+This movement phase state may follow state 5 (permissive movement allowed) before changing to a stop
+state. It indicates that for vehicles clearing the intersection, conflicting traffic may be present in the conflict
+area or when leaving the conflict area.
+Vehicle action:
+• Prepare to stop before the stop bar, proceed if unable to stop before the stop bar
+• Clear intersection with caution, pay attention to possible conflicting traffic
+• Must yield to all conflicting traffic
+98
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+Protected-clearance (8)
+This movement phase state may follow state 6 (protected movement allowed) before changing to a stop state.
+It indicates that for vehicles clearing the intersection, the movement is protected in the sense that all
+conflicting traffic shall not enter the intersection (i.e., they are shown red lights).
+Vehicle action:
+• Prepare to stop before the stop bar, proceed if unable to stop before the stop bar
+• Clear intersection
+5.7.3.5 States in “standby mode” or partially signalled intersections
+Caution-Conflicting-Traffic (9)
+This movement phase states corresponds to the meaning of a give way sign and may also be relevant for traffic
+light controllers in standby mode or for partially signalled intersections. It signals, that conflicting traffic might
+be present when entering the conflict area.
+This movement phase state could for example be used for signal groups on minor roads if the traffic light
+controller is in standby mode.
+Vehicle action: Proceed with caution
+Differentiation towards state (2) “stop-then-proceed": it is not mandatory to stop before proceeding.
+5.7.4 Timing
+Refers to signalPhaseAndTimingMessage.intersections.states.state-time-speed.timing
+The timing information [DF_TimeChangeDetails] for the phase changes consists of three timing entries and
+one confidence entry.
+Every timing information entry is provided in a data structure called TimeMark. It provides an absolute time
+of the signal change instead of relative durations.
+The instance of a signal change is provided in a resolution of 1/10th of a second within the current full hour in UTC format.
+For better understanding see the following table with some exemplary time conversions:
+Current time Current time (TimeMark) Time of signal phase Time of signal phase change
+(UTC) change (UTC) (TimeMark)
+15h:15m:35s (35 + 15 * 60) * 10 = 9,350 15h:17m:40s (40 + 17 * 60) * 10 = 10,600
+16h:59m:20s (20 + 59 * 60) * 10 = 35,600 17h:06m:30s (30 + 6 * 60) * 10 = 3,900
+For receiving vehicles this means, that the provided information on the time of change is to be interpreted in
+relation to the data element spat.intersections.moy (minute of the year). If the time mark for the current time
+is larger than the time mark of the signal phase change, this indicates, that the time of the signal change is in
+the following full hour (see the second row of the table).
+The timing information for the phase changes is the actual added value of SPATEM. Therefore, the timing
+information is required to be present for all instances of MovementEvents containing the
+MovementPhaseStates for reds, greens and yellows other than flashing-yellow (for vehicles this is relevant for
+example to determine the time to green or to adapt the speed for upcoming red signals).
+99
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+For the other MovementPhaseStates (dark, unavailable, flashing-yellow) the indication of timing information
+is not reasonable (in most cases this timing isn’t known by the infrastructure).
+Timing information consists of more than one entry. Namely the components “minEndTime”, “maxEndTime”
+and “likelyTime” are available. Their purpose is described in the following sections.
+5.7.4.1 MinEndTime
+Refers to signalPhaseAndTimingMessage.intersections.states.state-time-speed.timing.minEndTime
+As the name already indicates, minEndTime shall represent the earliest time possible at which the signal phase
+state can change. Except for forces majeures (such as any kind of failure) the transmitted minEndTime shall
+take into account unpredictable events such as pedestrian or public transport requests and shall not move to
+an earlier point in time over several SPATEMs.
+For actuated traffic light controllers this might mean that minEndTime simply reflects the current time plus
+the system time needed for a signal change. This may appear as a non-information but correctly reflects reality,
+and a correct reflection of the real situation shall always be provided to vehicles for them to be able to make
+appropriate decisions. The “unknown” value is not allowed to use according to the profile. The current time
+plus the time it takes the traffic light controller to change the physical light is always true as minEndTime.
+Therefore, an “unknown” value is not needed and shall not be used.
+In actuated traffic light controllers, all the listed data elements for the time change details are estimated by
+the infrastructure. There is no exact ground of truth against which the accuracy of the information can be
+checked. Therefore, there is no requirement on accuracy for this information.
+Traffic light controllers operating fixed time know the exact time of change, so it is useful to require a certain
+accuracy in those cases. It is set to the allowed deviation of the system clock to the reference time. The chosen
+ground of truth is the displayed traffic light since this was the most comprehensible and objective phrasing.
+For testing purposes, the electrical controller output to the lights should be used as ground truth.
+5.7.4.2 MaxEndTime
+Refers to signalPhaseAndTimingMessage.intersections.states.state-time-speed.timing.maxEndTime
+The data element maxEndTime consistutes the counterpart for minEndTime by providing the latest point in
+time possible at which the respective phase state could change. For some actuated traffic lights, this might
+not be known (e.g., when the phase changes only on pedestrian request). For that case, “out of range” is
+always true as maximum end time and should be indicated – the C-Roads profile defines a dedicated value
+for that purpose.
+Same as for minEndTime the goal is to provide a correct representation of reality to receiving vehicles.
+For traffic light controllers operating fixed time-the profile states that minEndTime and maxEndTime shall be
+equal, thus indicating to receiving vehicles, that the time of change is known exactly.
+5.7.4.3 LikelyTime
+Refers to signalPhaseAndTimingMessage.intersections.states.state-time-speed.timing.likelyTime
+Together with a comprehensible confidence indication, the likelyTime can provide a tendency for the most
+likely time of change. Especially in cases when minEndTime and maxEndTime differ more than just a few
+seconds, this can be of value for vehicle applications. For traffic lights that are only triggered by human
+100
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+interaction (e.g., pedestrians), likelyTime can be made equal to maxEndTime. This is also why the value
+‘unknown’ shall not be used for likelyTime.
+All requirements refer to the operation mode and not to the intersection in general, since the operation mode
+of an intersection might change over time (e.g., depending on the time of day).
+5.7.5 ManeuverAssistList
+Refers to signalPhaseAndTimingMessage.intersections.states.maneuverAssistList
+This list of maneuver assists [DF_ConnectionManeuverAssist] can be used to provide information on the length
+of the queue on a lane in front of a traffic light. This information can help receiving vehicles in the calculation
+of advisory speed.
+In addition, the itsStationPosition can be provided with a maneuver assist. It can be used to provide individual
+feedback to one specific C-ITS station. Currently, no specific use case has been identified for such individual
+feedback, in addition, this requires more complex processes. Therefore, it is recommended, not to use this
+data element.
+101
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+6. SPATEM basic interpretation of the
+message
+The “signal, phase and timing message” conveys information about the current status and signal phase state
+of one or more signalized intersections.
+This chapter describes how the data structures in SPATEM can – along with the corresponding reference to
+MAPEM – be used to convey detailed information about the current and future signal phases as well as other
+dynamic information for the intersection. For the interrelation between the two messages MAPEM and
+SPATEM, see chapter 2.2.
+6.1 Linking between SPATEM and MAPEM
+As described before, the MAPEM provides receiving vehicles the information on the intersection topology,
+including all lanes, how they are connected and which manoeuvres are possible.
+The SPATEM is mainly linked to the MAPEM through their common intersection reference ID (see section
+3.2.2) and revision (see section 3.2.3) so that vehicles can identify which SPATEM belongs to which MAPEM.
+Another link between the two messages is the signal group identifier (see section 3.3.5.2). Every connection
+in MAPEM managed by a traffic light has a signal group id assigned. In turn, every movement state in SPATEM
+also has a unique signal group ID assigned. This way, the signal group identifier links MAPEM and SPATEM for
+a specific manoeuvre. For each signal group, SPATEM provides information about the phase states and their
+timing.
+This way receiving vehicles can map the phase state information in SPATEM to the corresponding connection
+of lanes in MAPEM and therefore to its own intended manoeuvre.
+It is important to ensure that every signal group ID in MAPEM is described in the corresponding SPATEM. Also
+the other way round, signal group ids described in SPATEM should also occur in MAPEM.
+6.2 Representation of the time of signal change
+The SPATEM also provides information about the time when the phases will change. This is not done in relative
+numbers saying, “The signal will change in 15 s.” but rather in absolute time, saying “The signal will change at
+17h:03m:20s.” The time format for this information is quite complex and is described in detail in section 5.7.4.
+According to the current specifications, the time of signal change is represented by three elements: the
+minimum end time, the maximum end time and the likely time. The formal definition and interplay of these
+three elements is given in [ISO/TS 19091] and the C-Roads message profile [C-Roads MP]. This section at hand
+provides some explanations for the requirements on minEndTime, maxEndTime and likelyTime as provided by
+C-Roads.
+These requirements state that the minEndTime should not decrease and the maxEndTime should not increase
+(i.e., they should represent the true minimum and maximum. Figure 64 shows an exemplary sequence where
+this is fulfilled. In this graphic, the x-axis indicates the time of day that passes. Also shown on the x-axis are the
+active signal phases for an exemplary signal group at the respective time of day. The y-axis also indicates the
+time of day, but it shows the time of day as indicated through the data elements in SPATEM respectively (i.e.,
+what time of day is indicated by minEndTime, maxEndTime and likelyTime respectively). In addition, the true
+time of change is indicated as a dashed line. The diagonal black line indicates where the current time of day
+and the time indicated in the messages coincide (i.e., x=y). The vertical black line is a simple optical support to
+102
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+see the actual time of change. For a better understanding of the influence of the timing data on vehicle
+behaviour, there is a second y-axis on the right indicating the distance of an approaching vehicle to the stop
+line. All subsequent figures are set up in this same manner.
+Caution: The speed control assumed here is strongly simplified and does not reflect a realistic implementation
+in the vehicle. It shall just help for a better understanding.
+In this first figure all time indications adhere to the afore mentioned requirements. The vehicle/driver can
+adapt the speed accordingly and pass the intersection on green without having to stop.
+Figure 64 Regular time change details in compliance with the requirements
+In Figure 65 also a time to green example is shown. In this example however, the maxEndTime is increased at
+a certain point – which is noncompliant with the requirements. Additionally, the actual time of change occurs
+later than the initially indicated maximum end time. As shown exemplarily in the figure, this can cause vehicles
+to stop in front of the red light instead of driving slowly enough from the beginning to pass the intersection
+without having to stop (be it by speed indication to the driver or through automated path planning).
+103
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+Figure 65 Prohibited increase of maxEndTime leading to an unnecessary stop
+The third example in Figure 66 shows an example where the minEndTime is decreased and the actual time of
+change occurs before the initially indicated minEndTime. For this example, a “time to red” scenario is used
+(see signal phase as indicated on the x-axis). The vehicle behaviour here strongly depends on the driver or the
+applied automated longitudinal vehicle control. Machines (i.e., automated driving functions) might behave
+more conservatively and slow down instead of speeding up to still make the traffic light. Some human drivers
+however may be inclined to speed up to still make it at green – maybe some automated vehicles would do the
+same. This could result in quite inhomogeneous behaviour on the road and possibly dangerous situations.
+104
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+Figure 66 Prohibited decrease of minEndTime leading to potential inhomogeneous behaviour in traffic
+Examples like these are the reason for the requirements as indicated in the C-Roads Message Profile [C-Roads
+MP], here: v2.0.6.
+105
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+6.3 Handling of multiple signal heads for one connection
+On some intersections, two physical signal heads apply to one connection – e.g., for right turn where there is
+a separate signal group with a green arrow. There is no 1:1 relation between signal heads and connections in
+such a situation. The combined state of the of the signal heads is reflected in the eventState. In other words,
+since every connection in the MAP can only have one signal group, a combined, virtual signal group shall be
+transmitted in the SPATEM for those connections.
+The figure below represents a situation where the main signal shows a red light, and the lens dedicated to the
+right turn shows a green light. In this situation the eventState/SignalGroupState for the maneuver straight/left
+is StopAndRemain (3). The maneuver right turn is permissiveMoevementAllowed (5) or
+protectedMovementAllowed (6).
+Figure 67: Multiple signals for single lane 1 – scenario 1
+106
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+Figure 68: Multiple signals for single lane 1 – scenario 2
+In Figure 69 below, a different situation is depicted. The main signal shows a red light, and the lens dedicated
+to the right turn is turned off. In this situation the eventState/SignalGroupState for both the maneuvre
+straight/left and the manuever right turn is StopAndRemain(3).
+Figure 69: Multiple signals for single lane – scenario 3
+107
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+In a situation where the additional lens is a warning signal for a maneuver right turn, as shown below, there
+shall be no individual states send out for this warning signal. As in the previous examples the eventState is
+determined by the combination of the main signal and the warning signal. The amber warning lens is merely
+an alert for the situation but does not influence the eventState that is permissiveMovementAllowed (5).
+Figure 70: Multiple signals for single lane – scenario 4
+6.4 Handling of signal heads in combination with metal
+sign “green arrow”
+In Germany there is the special case of a metal sign with a green arrow see Figure 71.
+Figure 71 Metal sign "green arrow" as used in some places in Germany
+This green arrow is sometimes placed next to a full signal head (i.e., instead of a separate signal head for the
+right turn). According to the traffic regulation, such a situation shall be represented in the SPATEM as follows:
+• When the main signal shows a red light, the movement “stop-then-proceed” (2) shall be used for the
+right turn. In this situation, vehicles shall stop at the stop line and may then proceed (if they are first in
+the queue).
+108
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation
+• When the main signal shows a green light, the movement “permissive movement allowed” (5) shall be
+used for the right turn. In this situation, vehicles can turn right but should still pay attention to
+pedestrians that might be crossing the egress lane.
+6.5 Active but unlit traffic signals
+The data element ‘eventState’ (of type DE_MovementPhaseState) shall be set to represent the actual allowed
+movement state permissions according to the applicable traffic rules as indicated by the traffic lights. Road
+users and vehicle systems need to know the applicable permissions and not the actual presentation or colour
+of the physical traffic lights. This principle is also discussed in the previous sections.
+The C-Roads message profiles states that: “Traffic light controllers may have some traffic signals with an active
+state for which the signals are blank (unlit). For these signals the eventState shall not be set to dark (1) nor
+shall the right-of-way-rules as indicated by road signs and road markings be translated into an eventState”.
+The latter may have the undesirable side-effect that vehicle systems and end-user applications may interpret
+and graphically present the information as a colour state (because the intersectionStatusObject indicates that
+the traffic light controller is actively operation all the traffic signals). The recommended approach is to enable
+and disable the applicable signalGroupID which can be achieved by applying the EnabledLaneList concept in
+SPATEM. Concretely it means that the lane that is controlled by the signal is duplicated i.e., both lanes have
+an identical NodeSet, while both lanes have the LaneAttribute isRevocableLane set. One lane has a connection
+with a signalGroupID and should be enabled when the signal is lit, whereas the other lane has a connection
+without a signalGroupID and should be enabled when the signal is unlit.
+The example in Figure 72 shows a situation with traffic signals at the centre of the intersection which are lit
+for the left turn manoeuvre and unlit for the straight manoeuvre (coming from the right on the picture).
+Following the recommended approach, the lane associated to this traffic signal shall be duplicated and
+enabled/disabled as described above.
+109
+c-roads. eu C-ITS European handbook for MAPEM and SPATEM creation

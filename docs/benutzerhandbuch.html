@@ -283,6 +283,7 @@
 
     <div class="sidebar-section">Arbeitsabläufe</div>
     <a href="#pcap-laden">PCAP-Datei laden</a>
+    <a href="#map-pruefen">MAP pruefen</a>
     <a href="#filter-anwenden">Filter anwenden</a>
     <a href="#wiedergabe-workflow">Wiedergabe nutzen</a>
     <a href="#fehler-analysieren">Fehler analysieren</a>
@@ -309,12 +310,12 @@
   <div class="hero">
     <div class="hero-badge">SWARCO ITS · V2X Analyse</div>
     <h1>PCAP2KML Player</h1>
-    <p>Datenorientierte V2X-Analyse: PCAP-Dateien laden, Nachrichten auf einer interaktiven Karte visualisieren, Priorisierungsfehler diagnostizieren und Ergebnisse als KML oder CSV exportieren.</p>
+    <p>Datenorientierte V2X-Analyse: PCAP- und MAP-XML-Dateien laden, Nachrichten auf einer interaktiven Karte visualisieren, Priorisierungsfehler diagnostizieren und Ergebnisse als KML oder CSV exportieren.</p>
     <div class="hero-meta">
       <div class="hero-meta-item"><strong>Version</strong>1.7.0</div>
       <div class="hero-meta-item"><strong>Plattform</strong>Windows 10/11</div>
       <div class="hero-meta-item"><strong>Ausfuehrung</strong>PCAP2KML-Player.exe</div>
-      <div class="hero-meta-item"><strong>Formate</strong>.pcap · .pcapng · .cap</div>
+      <div class="hero-meta-item"><strong>Formate</strong>.pcap · .pcapng · .cap · .xml</div>
       <div class="hero-meta-item"><strong>Stand</strong>2026-05-04</div>
     </div>
   </div>
@@ -325,8 +326,9 @@
       <h2>Übersicht</h2>
       <p>
         PCAP2KML Player ist eine Desktop-Anwendung zur Analyse von V2X-Nachrichten (Vehicle-to-Everything)
-        aus PCAP-Mitschnittdateien. Die Anwendung dekodiert ITS-PDUs nach ETSI-Standard, stellt alle
-        Nachrichten auf einer interaktiven Karte dar und ermöglicht eine zeitgesteuerte Wiedergabe.
+        aus PCAP-Mitschnittdateien und MAP-XML-Geometriedateien. Die Anwendung dekodiert ITS-PDUs
+        nach ETSI-Standard, stellt alle Nachrichten auf einer interaktiven Karte dar und ermöglicht
+        eine zeitgesteuerte Wiedergabe.
       </p>
       <p>Typische Einsatzbereiche:</p>
       <table>
@@ -348,7 +350,7 @@
         <tr><th>Komponente</th><th>Mindestanforderung</th></tr>
         <tr><td>Betriebssystem</td><td>Windows 10 oder Windows 11</td></tr>
         <tr><td>Programmdatei</td><td><code>PCAP2KML-Player.exe</code></td></tr>
-        <tr><td>Speicherplatz</td><td>Ausreichend Platz fuer PCAP-Dateien, Exporte und Diagnoseberichte</td></tr>
+        <tr><td>Speicherplatz</td><td>Ausreichend Platz fuer PCAP-/XML-Dateien, Exporte und Diagnoseberichte</td></tr>
         <tr><td>RAM</td><td>4 GB empfohlen (große Captures)</td></tr>
         <tr><td>Internetverbindung</td><td>Für Online-Kartenkacheln und optionale Schema-Updates</td></tr>
         <tr><td>Optional</td><td>Wireshark / TShark fuer erweiterte Decoderabdeckung</td></tr>
@@ -370,7 +372,7 @@
         <li>Den bereitgestellten Programmordner lokal ablegen, z.&nbsp;B. im Programme- oder Projektordner.</li>
         <li><code style="font-family:monospace;background:#f0f4fa;padding:2px 6px;border-radius:4px;">PCAP2KML-Player.exe</code> per Doppelklick starten.</li>
         <li>Falls Windows SmartScreen oder eine Unternehmensrichtlinie nachfragt, die Ausfuehrung gemaess interner Freigabe bestaetigen.</li>
-        <li>Mit <strong>PCAP laden</strong> eine oder mehrere Capture-Dateien auswaehlen oder Dateien per Drag &amp; Drop in das Fenster ziehen.</li>
+        <li>Mit <strong>PCAP laden</strong> eine oder mehrere Capture- oder MAP-XML-Dateien auswaehlen oder Dateien per Drag &amp; Drop in das Fenster ziehen.</li>
       </ol>
       <div class="callout tip">
         <strong>Tipp</strong>
@@ -394,7 +396,7 @@
 
       <table>
         <tr><th>Bereich</th><th>Position</th><th>Funktion</th></tr>
-        <tr><td><strong>Werkzeugleiste</strong></td><td>Ganz oben</td><td>Datei laden, Exporte, Diagnose, Karte, Schemas, Dashboard und Schnellbefehl</td></tr>
+        <tr><td><strong>Werkzeugleiste</strong></td><td>Ganz oben</td><td>Datei laden, Exporte, Diagnose, Karte, Schemas, Dashboard, Farbmodus und Schnellbefehl</td></tr>
         <tr><td><strong>Workspace-Tabs</strong></td><td>Unter der Toolbar</td><td><em>Karte</em>, <em>ETA Analyse</em>, <em>Priorisierung</em> und <em>Rohdaten</em></td></tr>
         <tr><td><strong>Kartenbereich</strong></td><td>Mitte links</td><td>Leaflet-Karte mit Layer-Control, Stationen, Trajektorien und Infrastruktur-Layern</td></tr>
         <tr><td><strong>Seitlicher Inspektor</strong></td><td>Rechts</td><td>Aktuelle Nachricht, Request-Details, Priorisierungsfehler oder Detail-Inspektor je Workspace</td></tr>
@@ -417,7 +419,7 @@
 
       <table>
         <tr><th>Schaltfläche</th><th>Funktion</th></tr>
-        <tr><td><strong>PCAP laden</strong></td><td>Öffnet den Dateidialog zur Auswahl einer oder mehrerer <code>.pcap</code>/<code>.pcapng</code>/<code>.cap</code>-Dateien</td></tr>
+        <tr><td><strong>PCAP laden</strong></td><td>Öffnet den Dateidialog zur Auswahl einer oder mehrerer <code>.pcap</code>/<code>.pcapng</code>/<code>.cap</code>- oder MAP-<code>.xml</code>-Dateien</td></tr>
         <tr><td><strong>Letzte Sitzung</strong></td><td>Lädt die zuletzt verwendeten PCAP-Dateien erneut (persistiert über Sitzungen)</td></tr>
         <tr><td><strong>Laden abbrechen</strong></td><td>Bricht einen laufenden Parse-Vorgang ab (aktiv während des Ladens)</td></tr>
         <tr><td><strong>KML exportieren</strong></td><td>Exportiert alle gefilterten Entitäten als KML-Dateien (eine Datei je Station)</td></tr>
@@ -426,12 +428,14 @@
         <tr><td><strong>Karte neu laden</strong></td><td>Initialisiert die aktuelle Kartenansicht erneut, ohne die PCAP-Sitzung zu verwerfen</td></tr>
         <tr><td><strong>ASN.1-Schemas</strong></td><td>Aktualisiert die lokalen ETSI-ASN.1-Schemadateien</td></tr>
         <tr><td><strong>Dashboard</strong></td><td>Öffnet das Statistik-Dashboard mit Überblick, Nachrichtenraten sowie Speed/Heading</td></tr>
+        <tr><td><strong>MAP pruefen</strong></td><td>Prueft geladene MAPEM/SPATEM-Daten gegen zentrale Regeln aus dem C-Roads MAPEM/SPATEM Handbook 3.2.0</td></tr>
+        <tr><td><strong>Farben</strong></td><td>Schaltet Karte, ETA-Graph und Exporte zwischen Standardfarben und einem Modus fuer Rot/Gruen-Schwaeche um</td></tr>
         <tr><td><strong>Schnellbefehl</strong></td><td>Öffnet die Befehlspalette über <kbd>Ctrl</kbd>+<kbd>K</kbd></td></tr>
       </table>
       <div class="callout info">
         <strong>Hinweis</strong>
         Die roten Hervorhebungen markieren primäre Aktionen oder den aktiven Workspace.
-        Statusinformationen wie Kartenbackend, Leistungsmodus und RAM stehen in der unteren Statusleiste.
+        Statusinformationen wie Kartenbackend, Leistungsmodus, Farbmodus und RAM stehen in der unteren Statusleiste.
       </div>
     </div>
   </section>
@@ -461,7 +465,7 @@
       <p>
         Der aktuelle UI-Stand zeigt Sitzungskennzahlen dauerhaft in der unteren
         Statusleiste. Dort stehen geladene Nachrichten, Stationen, Dauer,
-        sichtbare Datensätze, Kartenbackend, Leistungsmodus, RAM-Anzeige und
+        sichtbare Datensätze, Kartenbackend, Leistungsmodus, Farbmodus, RAM-Anzeige und
         der Diagnosezugang.
       </p>
 
@@ -477,6 +481,7 @@
         <tr><td><strong>Sichtbar</strong></td><td>Nachrichten und Stationen nach aktuellem Filter</td></tr>
         <tr><td><strong>Karte</strong></td><td>Aktives Kartenbackend, z.&nbsp;B. Leaflet</td></tr>
         <tr><td><strong>Leistung</strong></td><td>Aktiver Render-/Performance-Modus</td></tr>
+        <tr><td><strong>Farben</strong></td><td>Aktiver Standard- oder Rot/Gruen-Farbmodus</td></tr>
         <tr><td><strong>RAM</strong></td><td>Aktueller Speicherstatus, falls verfügbar</td></tr>
       </table>
       <p>
@@ -522,6 +527,8 @@
         Die Stationsliste zeigt alle in der Sitzung enthaltenen Stations-IDs.
         Durch Klick (Mehrfachauswahl mit <kbd>Ctrl</kbd>+Klick oder <kbd>Shift</kbd>+Klick)
         werden nur die gewählten Stationen angezeigt. Keine Auswahl = alle Stationen aktiv.
+        Schnelle Auswahlwechsel werden gebuendelt, damit die Karte nicht fuer jeden einzelnen Klick
+        neu aufgebaut werden muss.
       </p>
 
       <h3>Gemergte Sicht</h3>
@@ -957,11 +964,48 @@
         Doppel-Darstellungen zu vermeiden.
       </div>
 
+      <h3>MAP-XML als reine Karten-Session</h3>
+      <ol class="steps">
+        <li>Eine oder mehrere MAP-<code>.xml</code>-Dateien ueber <strong>PCAP laden</strong> oder per Drag &amp; Drop oeffnen.</li>
+        <li>Die Anwendung erzeugt daraus synthetische MAPEM-Nachrichten; PCAP-Daten sind dafuer nicht erforderlich.</li>
+        <li>Enthaelt eine XML-Datei mehrere Kreuzungen, erscheinen diese als getrennte Stationen und Layer-Gruppen.</li>
+        <li>Im Workspace <em>Karte</em> Fahrstreifen, Referenzpunkte, Connections und Stoplines pruefen.</li>
+      </ol>
+
       <h3>Laden abbrechen</h3>
       <p>
         Ein laufender Parse-Vorgang kann jederzeit mit <strong>„Laden abbrechen"</strong>
         unterbrochen werden. Bereits geparste Pakete werden verworfen.
       </p>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="map-pruefen" class="content">
+    <div class="section">
+      <h2>Arbeitsablauf: MAP pruefen</h2>
+
+      <ol class="steps">
+        <li>MAP-XML oder eine PCAP-Sitzung mit MAPEM/SPATEM laden.</li>
+        <li>Optional per Station-ID oder Nachrichtentyp auf eine Kreuzung fokussieren.</li>
+        <li><strong>MAP pruefen</strong> in der Werkzeugleiste oder <kbd>Ctrl</kbd>+<kbd>K</kbd> und <em>C-Roads MAP/SPAT pruefen</em> waehlen.</li>
+        <li>Der Dialog zeigt Fehler, Warnungen und Hinweise; Details stehen auch im Diagnosebericht.</li>
+      </ol>
+
+      <h3>Gepruefte C-Roads-Punkte</h3>
+      <table>
+        <tr><th>Bereich</th><th>Pruefung</th></tr>
+        <tr><td>Intersection</td><td>Numerische <code>intersectionId</code>, vorhandene <code>revision</code> und gueltiger <code>refPoint</code></td></tr>
+        <tr><td>LaneSet</td><td>Nicht leer, eindeutige <code>laneID</code>, mindestens zwei NodeList-Punkte je Lane</td></tr>
+        <tr><td>Connections</td><td><code>connectsTo</code> verweist auf bekannte Lanes; <code>signalGroup</code> ist vorhanden</td></tr>
+        <tr><td>SPATEM</td><td>Intersection-State, Revision, Signalgruppen und Event-State sind auswertbar</td></tr>
+        <tr><td>MAP/SPAT-Abgleich</td><td>Revisionen je Kreuzung stimmen ueberein; MAP-Signalgruppen sind in SPATEM auffindbar</td></tr>
+      </table>
+
+      <div class="callout info">
+        <strong>Hinweis</strong>
+        In einer reinen MAP-Session ohne SPATEM meldet der Check fehlende SPATEM-Daten als Hinweis, nicht als Fehler.
+      </div>
     </div>
   </section>
 
@@ -973,7 +1017,7 @@
       <h3>Nachrichtentypen filtern</h3>
       <ol class="steps">
         <li>In der Filter-Zeile die gewünschten Typ-Checkboxen aktivieren oder deaktivieren.</li>
-        <li>Karte, Tabelle und Wiedergabe aktualisieren sich sofort.</li>
+        <li>Tabelle und Wiedergabe aktualisieren sich nach kurzer Entprellung; die aktive Karte rendert sofort, andere Karten erst beim Workspace-Wechsel.</li>
       </ol>
 
       <h3>Auf einzelne Station fokussieren</h3>
@@ -1056,7 +1100,7 @@
         <li>PCAP mit SREM/SSEM und CAM laden.</li>
         <li>Tab <strong>„ETA Analyse"</strong> klicken.</li>
         <li>Im Dropdown <strong>„Request/Merge-Spur"</strong> die gewünschte Station oder Merge-ID auswählen.</li>
-        <li>Graph zeigt: blaue ETA-Kurve (Restzeit), grüne Geschwindigkeitskurve, vertikale SREM-Linien, farbige SSEM-Bänder.</li>
+        <li>Graph zeigt: ETA-Kurve, Geschwindigkeitskurve, vertikale SREM-Linien und farbige SSEM-Baender; der Rot/Gruen-Farbmodus wird hier ebenfalls angewendet.</li>
         <li>Diagnosemarker identifizieren Problemstellen (ETA-Sprünge, fehlendes granted usw.).</li>
         <li>Wiedergabe parallel laufen lassen – die Cursor-Position im Graphen bewegt sich mit.</li>
       </ol>
@@ -1080,6 +1124,7 @@
         <li>Schaltfläche <strong>„KML exportieren"</strong> klicken.</li>
         <li>Zielordner im Dialog auswählen.</li>
         <li>Die Anwendung erzeugt pro Station eine KML-Datei (<code>station_&lt;ID&gt;.kml</code>).</li>
+        <li>Der aktuell gewaehlte Farbmodus wird fuer Placemarks und Trajektorien uebernommen.</li>
         <li>Die Dateien können direkt in <strong>Google Earth</strong> oder <strong>QGIS</strong> geöffnet werden.</li>
       </ol>
 
@@ -1088,7 +1133,7 @@
         <tr><th>Element</th><th>Beschreibung</th></tr>
         <tr><td>Placemarks</td><td>Jede Nachricht als georeferenzierter Punkt mit Zeitstempel und Typ</td></tr>
         <tr><td>LineString-Trajektorie</td><td>Verbindet alle Positionen einer Station als Linie</td></tr>
-        <tr><td>Farben</td><td>Stationsspezifische Farben für Trajektorien; typbezogene Farben für Placemarks</td></tr>
+        <tr><td>Farben</td><td>Stationsspezifische Farben für Trajektorien; typbezogene Farben für Placemarks; optional Rot/Gruen-schwache Palette</td></tr>
         <tr><td>ASN.1-Provenienz</td><td>Verwendete Schema-Versionen im KML-Dokumentkopf</td></tr>
       </table>
 

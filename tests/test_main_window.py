@@ -86,6 +86,12 @@ class _FakeTable:
     def selectRow(self, row: int) -> None:
         self.selected_rows.append(row)
 
+    def setCurrentItem(self, item: object) -> None:
+        self._current_item = item
+
+    def currentItem(self) -> object | None:
+        return getattr(self, "_current_item", None)
+
     def scrollToItem(self, item: object, _hint: object) -> None:
         for (row, _column), candidate in self._items.items():
             if candidate is item:

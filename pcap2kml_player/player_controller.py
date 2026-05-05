@@ -84,7 +84,7 @@ class PlayerController(QObject):
         """Start or resume playback."""
         if not self._messages:
             return
-        if self._current_index >= len(self._messages):
+        if self._current_index >= len(self._messages) - 1:
             self._current_index = 0
             self._playback_time_seconds = 0.0
         if self._focus_replay_enabled:

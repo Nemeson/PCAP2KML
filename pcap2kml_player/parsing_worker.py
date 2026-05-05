@@ -8,6 +8,7 @@ from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
 from .data_model import SessionData
 from .pcap_parser import ParseCancelled, parse_pcap
+from .xml_map_parser import parse_map_xml
 
 
 class ParsingWorker(QObject):
@@ -38,12 +39,15 @@ class ParsingWorker(QObject):
                     self.progress.emit(overall, name)
 
                 try:
-                    parse_pcap(
-                        path,
-                        session,
-                        progress_callback=_progress,
-                        cancel_check=self._cancel_check_fn,
-                    )
+                    if Path(path).suffix.lower() == ".xml":
+                        parse_map_xml(path, session)
+                    else:
+                        parse_pcap(
+                            path,
+                            session,
+                            progress_callback=_progress,
+                            cancel_check=self._cancel_check_fn,
+                        )
                     self.progress.emit(int(((index + 1) / total) * 100), filename)
                 except (FileNotFoundError, ValueError) as exc:
                     errors.append(f"{filename}: {exc}")

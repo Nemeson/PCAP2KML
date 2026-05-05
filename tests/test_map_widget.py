@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pcap2kml_player.data_model import MessageType, V2xMessage
 from pcap2kml_player.map_widget import (
     LEAFLET_HTML,
+    MAP_COLOR_MODE_COLORBLIND,
     MAP_PERFORMANCE_DIAGNOSTIC,
     MAP_PERFORMANCE_NORMAL,
     MAP_PERFORMANCE_SAVER,
@@ -24,6 +25,7 @@ from pcap2kml_player.map_widget import (
     _marker_id_for_message,
     _marker_position_for_message,
     _payload_bounds,
+    _request_overlay_style,
     _spat_color_for_intersection,
 )
 
@@ -175,6 +177,23 @@ def test_spat_color_for_intersection_uses_decoded_phase_state():
     }
 
     assert _spat_color_for_intersection(intersection) == "#16a34a"
+
+
+def test_colorblind_mode_uses_non_red_green_phase_and_request_colors():
+    intersection = {
+        "states": [
+            {
+                "signalGroup": 3,
+                "stateTimeSpeed": [
+                    {"eventState": "stop-And-Remain"},
+                ],
+            }
+        ]
+    }
+
+    assert _spat_color_for_intersection(intersection, MAP_COLOR_MODE_COLORBLIND) == "#d55e00"
+    assert _request_overlay_style("granted", True, MAP_COLOR_MODE_COLORBLIND)["color"] == "#56b4e9"
+    assert _request_overlay_style("rejected", True, MAP_COLOR_MODE_COLORBLIND)["color"] == "#d55e00"
 
 
 def test_infrastructure_overlays_create_spat_label_and_phase_color():
