@@ -68,7 +68,7 @@ Die Desktop-App kombiniert PyQt6 mit einer optimierten QtWebEngine/Leaflet-Umgeb
 *   *Optional*: Wireshark / TShark für eine erweiterte PCAP-Dekodierung (beschleunigt das Parsing signifikant).
 
 ### Installation & Start
-Der freie Download der Demo-Version ist unter folgendem Link verfügbar: [C-ITS-Inspector.exe](https://drive.google.com/file/d/1BpXOxkYoDc9JKxWVKQ2O_8Tvo6AIM-BO/view?usp=sharing)
+Der freie Download der Demo-Version ist unter folgendem Link verfügbar: [C-ITS-Inspector.exe](https://drive.google.com/file/d/1lfbzzQe5kERKEV3OtPAnIj6QgiCBxyYq/view?usp=sharing)
 
 1.  Klonen Sie das Repository oder entpacken Sie das Release-Paket.
 2.  Installieren Sie die Abhängigkeiten:
