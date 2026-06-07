@@ -1,0 +1,1826 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>C-ITS Inspector – Benutzerhandbuch</title>
+  <style>
+    :root {
+      --navy:   #10233f;
+      --red:    #b2192b;
+      --red-lt: #fff2f3;
+      --blue-lt:#eaf5ff;
+      --border: #d7dde8;
+      --bg:     #f5f7fb;
+      --white:  #ffffff;
+      --muted:  #5a6b81;
+      --small:  #667891;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      font-size: 14px;
+      background: var(--bg);
+      color: var(--navy);
+      line-height: 1.6;
+    }
+
+    /* ── Sidebar nav ── */
+    .sidebar {
+      position: fixed;
+      top: 0; left: 0;
+      width: 240px;
+      height: 100vh;
+      background: var(--navy);
+      color: #c8d4e8;
+      overflow-y: auto;
+      padding: 0 0 24px 0;
+      z-index: 100;
+    }
+    .sidebar-logo {
+      background: var(--red);
+      padding: 18px 20px;
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: 0.03em;
+    }
+    .sidebar-logo span { display: block; font-size: 11px; font-weight: 400; opacity: .8; margin-top: 2px; }
+    .sidebar nav { padding: 12px 0; }
+    .sidebar nav a {
+      display: block;
+      padding: 8px 20px;
+      color: #c8d4e8;
+      text-decoration: none;
+      font-size: 13px;
+      border-left: 3px solid transparent;
+      transition: background .15s, border-color .15s;
+    }
+    .sidebar nav a:hover { background: rgba(255,255,255,.07); color: #fff; }
+    .sidebar nav a.active { border-left-color: var(--red); color: #fff; background: rgba(255,255,255,.05); }
+    .sidebar-section {
+      padding: 14px 20px 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: #6a829c;
+    }
+
+    /* ── Main content ── */
+    .main {
+      margin-left: 240px;
+      padding: 0 0 80px 0;
+    }
+
+    /* ── Hero banner ── */
+    .hero {
+      background: var(--navy);
+      color: #fff;
+      padding: 48px 56px 40px;
+      border-bottom: 4px solid var(--red);
+    }
+    .hero-badge {
+      display: inline-block;
+      background: var(--red);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      padding: 3px 10px;
+      border-radius: 4px;
+      margin-bottom: 14px;
+    }
+    .hero h1 { font-size: 32px; font-weight: 700; line-height: 1.2; }
+    .hero p  { margin-top: 10px; color: #9ab0c8; max-width: 640px; font-size: 15px; }
+    .hero-meta { margin-top: 24px; display: flex; gap: 32px; }
+    .hero-meta-item { font-size: 12px; color: #7891aa; }
+    .hero-meta-item strong { display: block; color: #dce8f5; font-size: 14px; font-weight: 600; }
+
+    /* ── Content sections ── */
+    .content { padding: 40px 56px; max-width: 1000px; }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--red);
+    }
+    h3 { font-size: 16px; font-weight: 700; color: var(--navy); margin: 24px 0 10px; }
+    h4 { font-size: 14px; font-weight: 700; color: var(--navy); margin: 16px 0 6px; }
+    p  { margin-bottom: 12px; color: #2a3f5a; }
+
+    /* ── Section divider ── */
+    .section {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 32px 36px;
+      margin-bottom: 28px;
+    }
+
+    /* ── Screenshots ── */
+    .screenshot-box {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      margin: 16px 0 20px;
+      text-align: center;
+      position: relative;
+      box-shadow: 0 2px 10px rgba(16,35,63,.08);
+    }
+    .screenshot-box .ss-label {
+      display: inline-block;
+      background: var(--red);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      padding: 3px 10px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+    .screenshot-box .ss-desc {
+      font-size: 13px;
+      color: #42546b;
+    }
+    .screenshot-box img {
+      display: block;
+      max-width: 100%;
+      margin: 12px auto 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 12px rgba(16,35,63,.15);
+    }
+
+    /* ── Tables ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 16px;
+      font-size: 13px;
+    }
+    th {
+      background: var(--navy);
+      color: #fff;
+      text-align: left;
+      padding: 9px 12px;
+      font-weight: 700;
+    }
+    td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    tr:nth-child(even) td { background: var(--blue-lt); }
+    tr:last-child td { border-bottom: none; }
+
+    /* ── Callout boxes ── */
+    .callout {
+      border-left: 4px solid;
+      border-radius: 0 8px 8px 0;
+      padding: 12px 16px;
+      margin: 14px 0;
+      font-size: 13px;
+    }
+    .callout.tip    { border-color: #2da44e; background: #eafbee; color: #1a5c30; }
+    .callout.warn   { border-color: #e3a000; background: #fef9ec; color: #7a4f00; }
+    .callout.info   { border-color: #0969da; background: #dff0ff; color: #0550ae; }
+    .callout.danger { border-color: var(--red); background: var(--red-lt); color: #7a0a15; }
+    .callout strong { display: block; margin-bottom: 4px; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; }
+
+    /* ── Step list ── */
+    .steps { counter-reset: step-counter; list-style: none; padding: 0; margin: 14px 0; }
+    .steps li {
+      counter-increment: step-counter;
+      position: relative;
+      padding: 10px 14px 10px 52px;
+      margin-bottom: 8px;
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 13px;
+    }
+    .steps li::before {
+      content: counter(step-counter);
+      position: absolute;
+      left: 14px;
+      top: 50%; transform: translateY(-50%);
+      background: var(--navy);
+      color: #fff;
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      font-weight: 700; font-size: 12px;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ── Key badge ── */
+    kbd {
+      background: var(--navy);
+      color: #fff;
+      border-radius: 5px;
+      padding: 2px 7px;
+      font-size: 12px;
+      font-family: monospace;
+    }
+
+    /* ── Badge ── */
+    .badge {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge-cam    { background: #dff0ff; color: #0550ae; }
+    .badge-denm   { background: #ffe0e0; color: #7a0a15; }
+    .badge-srem   { background: #fff3d6; color: #7a4f00; }
+    .badge-ssem   { background: #e0f9f9; color: #006666; }
+    .badge-mapem  { background: #e2f9e2; color: #1a5c30; }
+    .badge-spatem { background: #f5e0ff; color: #5a0080; }
+    .badge-nmea   { background: #f0e8d8; color: #5a3a00; }
+
+    /* ── Anchor targets ── */
+    section { scroll-margin-top: 20px; }
+
+    /* ── Print ── */
+    @media print {
+      .sidebar { display: none; }
+      .main { margin-left: 0; }
+      .hero { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════
+     SIDEBAR
+══════════════════════════════════════════════════════════ -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    C-ITS Inspector
+    <span>Benutzerhandbuch v2.0 UI-Stand</span>
+  </div>
+  <nav>
+    <div class="sidebar-section">Einstieg</div>
+    <a href="#uebersicht">Übersicht</a>
+    <a href="#voraussetzungen">Systemvoraussetzungen</a>
+    <a href="#start">Anwendung starten</a>
+
+    <div class="sidebar-section">Oberfläche</div>
+    <a href="#aktuelle-funktionen">Aktuelle Funktionen</a>
+    <a href="#oberflaeche">Fensteraufbau</a>
+    <a href="#toolbar">Werkzeugleiste</a>
+    <a href="#dashboard">Statistik-Dashboard</a>
+    <a href="#overview-panel">Statusleiste</a>
+    <a href="#filter">Filter-Zeile</a>
+    <a href="#karte">Kartenansicht</a>
+    <a href="#nachrichtenliste">Nachrichtentabelle</a>
+    <a href="#context-tabs">Zweistufige Workspaces</a>
+    <a href="#spat-quality-workspace">Signalzustandsanalyse</a>
+    <a href="#inspector">Detail-Inspektor</a>
+    <a href="#issue-panel">Priorisierungs­fehler-Panel</a>
+    <a href="#wiedergabe">Wiedergabe­steuerung</a>
+    <a href="#performance">Performance-Modi</a>
+    <a href="#map-stabilitaet">Map-Stabilität</a>
+
+    <div class="sidebar-section">Arbeitsabläufe</div>
+    <a href="#pcap-laden">PCAP-Datei laden</a>
+    <a href="#map-pruefen">MAP pruefen</a>
+    <a href="#filter-anwenden">Filter anwenden</a>
+    <a href="#wiedergabe-workflow">Wiedergabe nutzen</a>
+    <a href="#fehler-analysieren">Fehler analysieren</a>
+    <a href="#eta-analyse">ETA-Analyse</a>
+    <a href="#spat-analyse-workflow">Signalzustandsanalyse nutzen</a>
+    <a href="#kml-export">KML exportieren</a>
+    <a href="#issues-export">Fehler exportieren</a>
+    <a href="#schemas">ASN.1-Schemas</a>
+    <a href="#layout">Workspace wechseln</a>
+
+    <div class="sidebar-section">Referenz</div>
+    <a href="#nachrichtentypen">Nachrichtentypen</a>
+    <a href="#fehlercodes">Fehlercodes</a>
+    <a href="#lizenzierung">Lizenzierung & Demo-Modus</a>
+    <a href="#glossar">Glossar</a>
+    <a href="#fehlerbehebung">Fehlerbehebung</a>
+  </nav>
+</aside>
+
+<!-- ══════════════════════════════════════════════════════════
+     MAIN CONTENT
+══════════════════════════════════════════════════════════ -->
+<div class="main">
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-badge">SWARCO ITS · V2X Analyse</div>
+    <h1>C-ITS Inspector</h1>
+    <p>Datenorientierte V2X-Analyse: PCAP- und MAP-XML-Dateien laden, Nachrichten auf einer interaktiven Karte visualisieren, Priorisierungsfehler diagnostizieren und Ergebnisse als KML oder CSV exportieren.</p>
+    <div class="hero-meta">
+      <div class="hero-meta-item"><strong>Version</strong>2026.0607</div>
+      <div class="hero-meta-item"><strong>Plattform</strong>Windows 10/11</div>
+      <div class="hero-meta-item"><strong>Ausfuehrung</strong>C-ITS-Inspector.exe</div>
+      <div class="hero-meta-item"><strong>Formate</strong>.pcap · .pcapng · .cap · .xml</div>
+      <div class="hero-meta-item"><strong>Stand</strong>2026-06-07</div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="uebersicht" class="content">
+    <div class="section">
+      <h2>Übersicht</h2>
+      <p>
+        C-ITS Inspector ist eine Desktop-Anwendung zur Analyse von V2X-Nachrichten (Vehicle-to-Everything)
+        aus PCAP-Mitschnittdateien und MAP-XML-Geometriedateien. Die Anwendung dekodiert ITS-PDUs
+        nach ETSI-Standard, stellt alle Nachrichten auf einer interaktiven Karte dar und ermöglicht
+        eine zeitgesteuerte Wiedergabe.
+      </p>
+      <p>Typische Einsatzbereiche:</p>
+      <table>
+        <tr><th>Aufgabe</th><th>Funktion</th></tr>
+        <tr><td>Feldtest-Auswertung</td><td>Fahrzeugpositionen und -trajektorien visuell nachvollziehen</td></tr>
+        <tr><td>Priorisierungsdiagnose</td><td>SREM/SSEM-Fehler (verspätetes <em>granted</em>, fehlende SSEM) automatisch erkennen</td></tr>
+        <tr><td>Kreuzungsanalyse</td><td>MAP+SPaT-Phasenprognose im zeitlichen Verlauf betrachten</td></tr>
+        <tr><td>ETA-Diagnose</td><td>Restzeit bis Haltelinie und SREM-Verlauf grafisch analysieren</td></tr>
+        <tr><td>Datenexport</td><td>KML für Google Earth/QGIS sowie CSV/JSON für Weiterverarbeitung</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="aktuelle-funktionen" class="content">
+    <div class="section">
+      <h2>Aktuelle Funktionen und Screenshots</h2>
+      <p>
+        Dieser Abschnitt dokumentiert den aktuellen UI-Stand vom 14.05.2026.
+        Die vollstaendige Markdown-Sammlung fuer eine spaetere Praesentation liegt
+        unter <code>docs/aktuelle_funktionen_screenshots.md</code>.
+      </p>
+      <table>
+        <tr><th>Bereich</th><th>Aktuelle Funktion</th></tr>
+        <tr><td>Karte</td><td>Leaflet-Karte mit Layer-Schaltern, Stationen, Trajektorien, Infrastruktur-Layern, Playback und Statusleiste</td></tr>
+        <tr><td>Schnellbefehl</td><td>Befehlspalette fuer Workspaces, Exporte, Dashboard, MAP/SPAT-Pruefung, Farbmodus und Playback</td></tr>
+        <tr><td>ETA Analyse</td><td>Request-Auswahl, Kennzahlen, ETA-/Speed-Zeitachse, SREM/SSEM-Ereignisse und CSV/JSON-Export</td></tr>
+        <tr><td>Priorisierung</td><td>Fehlerfilter, Kreuzungsfilter, Fehlerzaehler und Detailbereich fuer priorisierungsrelevante Ereignisse</td></tr>
+        <tr><td>Rohdaten</td><td>Nachrichtentabelle mit Quelle, Merge-Spalte, Stations-/Zeitfilter, Detail-Inspektor und Security/PKI-Bereich</td></tr>
+        <tr><td>MAP/SPAT-Pruefung</td><td>C-Roads-orientierte Validierung mit Severity, Code, Rule, Intersection, Lane, Beschreibung und JSON/HTML-Export</td></tr>
+        <tr><td>Karten-Ausschnitte</td><td>Praesentationsgeeignete Analysebilder aus PCAP- und MAP-XML-Beispieldaten, maximal auf den jeweiligen Knotenpunkt gezoomt</td></tr>
+      </table>
+
+      <div class="screenshot-box">
+        <div class="ss-label">AKTUELLER SCREENSHOT 1</div>
+        <div class="ss-desc">Karten-Workspace mit OSM-Karte, V2X-Layern und Statusleiste</div>
+        <img src="screenshots/current-functions-2026-05-28/01-hauptfenster-karte.png" alt="Aktueller Karten-Workspace mit Leaflet-Karte, Layer-Control und Wiedergabeleiste" />
+      </div>
+
+      <div class="screenshot-box">
+        <div class="ss-label">AKTUELLER SCREENSHOT 2</div>
+        <div class="ss-desc">Schnellbefehl-Palette mit Workspace-Shortcuts und Aktionen</div>
+        <img src="screenshots/current-functions-2026-05-28/02-schnellbefehl-palette.png" alt="Schnellbefehl-Palette mit Workspaces und Aktionen" />
+      </div>
+
+      <div class="screenshot-box">
+        <div class="ss-label">AKTUELLER SCREENSHOT 3</div>
+        <div class="ss-desc">ETA-Analyse mit Request-Auswahl, Kennzahlen und Ereignistabelle</div>
+        <img src="screenshots/current-functions-2026-05-28/04-eta-analyse.png" alt="ETA-Analyse-Workspace mit Karte, Request-Details, Zeitachse und Ereignistabelle" />
+      </div>
+
+      <div class="screenshot-box">
+        <div class="ss-label">AKTUELLER SCREENSHOT 4</div>
+        <div class="ss-desc">Rohdaten-Workspace mit Tabelle und Detail-Inspektor</div>
+        <img src="screenshots/current-functions-2026-05-28/06-rohdaten-inspektor.png" alt="Rohdaten-Workspace mit Nachrichtentabelle und Detail-Inspektor" />
+      </div>
+
+      <h3>Karten-Ausschnitte aus Beispieldaten</h3>
+      <p>
+        Fuer Analyse und Praesentation sind reine Kartenausschnitte oft besser
+        geeignet als Vollfenster-Screenshots. Die folgenden Bilder zeigen echte
+        Beispieldaten bei maximaler Zoomstufe auf den jeweiligen Knotenpunkt.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">AKTUELLER SCREENSHOT 7</div>
+        <div class="ss-desc">PCAP-Beispieldaten, Zoom 19 auf MAPEM-Knotenpunkt 52.427970 / 13.526802</div>
+        <img src="screenshots/current-functions-2026-05-28/08-pcap-kartenausschnitt-trajektorien.png" alt="PCAP-Kartenausschnitt mit Trajektorien, Stationen und Infrastruktur-Layern" />
+      </div>
+
+      <div class="screenshot-box">
+        <div class="ss-label">AKTUELLER SCREENSHOT 6</div>
+        <div class="ss-desc">MAP-XML-Beispieldaten, Zoom 19 auf Knotenpunkt 49.2034845 / 8.1241752</div>
+        <img src="screenshots/current-functions-2026-05-28/09-map-xml-kartenausschnitt-landau.png" alt="MAP-XML-Kartenausschnitt mit Fahrspur- und Kreuzungsgeometrie" />
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="voraussetzungen" class="content">
+    <div class="section">
+      <h2>Systemvoraussetzungen</h2>
+      <table>
+        <tr><th>Komponente</th><th>Mindestanforderung</th></tr>
+        <tr><td>Betriebssystem</td><td>Windows 10 oder Windows 11</td></tr>
+        <tr><td>Programmdatei</td><td><code>C-ITS-Inspector.exe</code></td></tr>
+        <tr><td>Speicherplatz</td><td>Ausreichend Platz fuer PCAP-/XML-Dateien, Exporte und Diagnoseberichte</td></tr>
+        <tr><td>RAM</td><td>4 GB empfohlen (große Captures)</td></tr>
+        <tr><td>Internetverbindung</td><td>Für Online-Kartenkacheln und optionale Schema-Updates</td></tr>
+        <tr><td>Optional</td><td>Wireshark / TShark fuer erweiterte Decoderabdeckung</td></tr>
+      </table>
+      <div class="callout warn">
+        <strong>Hinweis</strong>
+        Fuer die normale EXE-Nutzung muessen Python, PyQt oder Python-Pakete
+        nicht separat installiert werden. Die App bringt die benoetigte Laufzeit
+        im bereitgestellten EXE-Paket mit.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="start" class="content">
+    <div class="section">
+      <h2>Anwendung starten</h2>
+      <ol class="steps">
+        <li>Den bereitgestellten Programmordner lokal ablegen, z.&nbsp;B. im Programme- oder Projektordner.</li>
+        <li><code style="font-family:monospace;background:#f0f4fa;padding:2px 6px;border-radius:4px;">C-ITS-Inspector.exe</code> per Doppelklick starten.</li>
+        <li>Falls Windows SmartScreen oder eine Unternehmensrichtlinie nachfragt, die Ausfuehrung gemaess interner Freigabe bestaetigen.</li>
+        <li>Mit <strong>Importieren</strong> eine oder mehrere Capture- oder MAP-XML-Dateien auswaehlen oder Dateien per Drag &amp; Drop in das Fenster ziehen.</li>
+      </ol>
+      <div class="callout tip">
+        <strong>Tipp</strong>
+        Die Funktion <strong>Letzte Sitzung</strong> oeffnet die zuletzt erfolgreich
+        geladenen Dateien erneut, sofern sie noch am gleichen Speicherort liegen.
+      </div>
+      <div class="callout info">
+        <strong>Wireshark-Start-Hinweis</strong>
+        Beim ersten Start der App erscheint ein Hinweisfenster, das darauf aufmerksam macht, dass das Parsen von PCAP-Dateien erheblich schneller erfolgt, wenn Wireshark (bzw. tshark) im Hintergrund ge&ouml;ffnet oder im System-Pfad installiert ist. Dieses Hinweisfenster enth&auml;lt ein Kontrollk&auml;stchen (&bdquo;Diesen Hinweis nicht mehr anzeigen&ldquo;). Wird dieses aktiviert, bleibt das Hinweisfenster bei k&uuml;nftigen Starts deaktiviert.
+      </div>
+
+      <div class="screenshot-box">
+        <div class="ss-label">START-HINWEIS SCREENSHOT</div>
+        <div class="ss-desc">Hinweisdialog beim Programmstart zur Wireshark-Optimierung</div>
+        <img src="screenshots/current-functions-2026-05-28/10-wireshark-start-hinweis.png" alt="Wireshark-Start-Hinweis Dialog mit Checkbox und OK-Schaltfläche" />
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="oberflaeche" class="content">
+    <div class="section">
+      <h2>Fensteraufbau</h2>
+      <p>Das Hauptfenster gliedert sich in sechs funktionale Bereiche:</p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 1</div>
+        <div class="ss-desc">Gesamtansicht des Hauptfensters nach dem Laden einer PCAP-Datei</div>
+        <img src="screenshots/current-functions-2026-05-28/01-hauptfenster-karte.png" alt="Gesamtansicht des C-ITS Inspector-Hauptfensters mit geladener PCAP-Sitzung" />
+      </div>
+
+      <table>
+        <tr><th>Bereich</th><th>Position</th><th>Funktion</th></tr>
+        <tr><td><strong>Werkzeugleiste</strong></td><td>Ganz oben</td><td>Datei laden, Exporte, Diagnose, Karte, Schemas, Dashboard, Farbmodus und Schnellbefehl</td></tr>
+        <tr><td><strong>Workspace-Tabs</strong></td><td>Unter der Toolbar</td><td><em>Karte</em>, <em>ETA Analyse</em>, <em>Priorisierung</em> und <em>Rohdaten</em></td></tr>
+        <tr><td><strong>Kartenbereich</strong></td><td>Mitte links</td><td>Leaflet-Karte mit Layer-Control, Stationen, Trajektorien und Infrastruktur-Layern</td></tr>
+        <tr><td><strong>Seitlicher Inspektor</strong></td><td>Rechts</td><td>Aktuelle Nachricht, Request-Details, Priorisierungsfehler oder Detail-Inspektor je Workspace</td></tr>
+        <tr><td><strong>Wiedergabesteuerung</strong></td><td>Unten</td><td>Problemstellenmodus, Zeitachse, Play/Pause/Stop, Geschwindigkeit</td></tr>
+        <tr><td><strong>Statusleiste</strong></td><td>Ganz unten</td><td>Sichtbare Nachrichten, Stationen, Dauer, Kartenbackend, Leistung, RAM und Diagnose</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="toolbar" class="content">
+    <div class="section">
+      <h2>Menüleiste und Werkzeugleiste</h2>
+      <p>
+        In Version 2026.0607 wurde das Hauptfenster durch eine echte Menüleiste (<code>QMenuBar</code>) strukturiert. Dadurch wurde die Werkzeugleiste (Toolbar) erheblich aufgeräumt und von ausladenden Auswahllisten befreit.
+      </p>
+
+      <h3>Menüstruktur</h3>
+      <table>
+        <tr><th>Menü</th><th>Aktionen / Untermenüs</th></tr>
+        <tr>
+          <td><strong>Datei</strong></td>
+          <td>Importieren (PCAP/XML), Letzte Sitzung laden, Sitzungsverlauf (Sitzungs-Auswahlliste), KML exportieren, Priorisierung exportieren, Inhalt löschen, Beenden</td>
+        </tr>
+        <tr>
+          <td><strong>Optionen</strong></td>
+          <td>Diagnose exportieren, Heatmap (mit Modus-Auswahl), Rot/Grün-Modus (Farbblindheits-Modus umschalten), Karte neu laden, Screenshot aufnehmen, ASN.1-Schemas verwalten</td>
+        </tr>
+        <tr>
+          <td><strong>Hilfe</strong></td>
+          <td>Benutzerhandbuch öffnen, Info zu C-ITS Inspector</td>
+        </tr>
+      </table>
+
+      <h3>Werkzeugleiste (Toolbar)</h3>
+      <p>
+        Die Werkzeugleiste enthält die am häufigsten genutzten Schnellzugriffsschaltflächen für einen effizienten Workflow:
+      </p>
+      <table>
+        <tr><th>Schaltfläche</th><th>Funktion</th></tr>
+        <tr><td><strong>Importieren</strong></td><td>Öffnet den Dateidialog zur Auswahl von PCAP- oder MAP-XML-Dateien</td></tr>
+        <tr><td><strong>Letzte Sitzung</strong></td><td>Lädt die zuletzt verwendeten PCAP-Dateien erneut</td></tr>
+        <tr><td><strong>KML exportieren</strong></td><td>Exportiert gefilterte Entitäten als KML-Dateien</td></tr>
+        <tr><td><strong>Fehler exportieren</strong></td><td>Exportiert Priorisierungsfehler als CSV, JSON oder TXT-Report</td></tr>
+        <tr><td><strong>Farben</strong></td><td>Schaltet die Farbpalette für Rot/Grün-Schwäche um (Barrierefreiheit)</td></tr>
+        <tr><td><strong>Schnellbefehl</strong></td><td>Öffnet die Befehlspalette (<kbd>Ctrl</kbd>+<kbd>K</kbd>) zur Tastaturnavigation</td></tr>
+      </table>
+      <div class="callout info">
+        <strong>Hinweis</strong>
+        Statusinformationen wie das aktive Kartenbackend, der Leistungsmodus, der Farbmodus sowie die RAM-Speicheranzeige sind in der unteren permanenten Statusleiste untergebracht.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="dashboard" class="content">
+    <div class="section">
+      <h2>Statistik-Dashboard</h2>
+      <p>
+        Die Schaltfläche <strong>Dashboard</strong> öffnet ein separates
+        Statistikfenster. Es fasst die geladene Sitzung zusammen und bietet Tabs
+        für Überblick, Nachrichtenraten sowie Speed/Heading.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">DASHBOARD</div>
+        <div class="ss-desc">Statistik-Dashboard über der geladenen Kartenansicht</div>
+        <img src="screenshots/current-functions-2026-05-28/03-statistik-dashboard.png" alt="Statistik-Dashboard mit Gesamtzahl, Stationen, Nachrichtentypen, Dauer und Nachrichtenrate" />
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="overview-panel" class="content">
+    <div class="section">
+      <h2>Statusleiste und Sitzungsstatus</h2>
+      <p>
+        Der aktuelle UI-Stand zeigt Sitzungskennzahlen dauerhaft in der unteren
+        Statusleiste. Dort stehen geladene Nachrichten, Stationen, Dauer,
+        sichtbare Datensätze, Kartenbackend, Leistungsmodus, Farbmodus, RAM-Anzeige und
+        der Diagnosezugang.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 3</div>
+        <div class="ss-desc">Status- und Wiedergabebereich nach dem Laden einer Sitzung</div>
+        <img src="screenshots/current-functions-2026-05-28/01-hauptfenster-karte.png" alt="Wiedergabesteuerung und Statusleiste mit Nachrichten-, Stations- und Leistungsangaben" />
+      </div>
+
+      <table>
+        <tr><th>Anzeige</th><th>Bedeutung</th></tr>
+        <tr><td><strong>Geladen</strong></td><td>Gesamtzahl dekodierter Nachrichten, Stationen und Sitzungsdauer</td></tr>
+        <tr><td><strong>Sichtbar</strong></td><td>Nachrichten und Stationen nach aktuellem Filter</td></tr>
+        <tr><td><strong>Karte</strong></td><td>Aktives Kartenbackend, z.&nbsp;B. Leaflet</td></tr>
+        <tr><td><strong>Leistung</strong></td><td>Aktiver Render-/Performance-Modus</td></tr>
+        <tr><td><strong>Farben</strong></td><td>Aktiver Standard- oder Rot/Gruen-Farbmodus</td></tr>
+        <tr><td><strong>RAM</strong></td><td>Aktueller Speicherstatus, falls verfügbar</td></tr>
+      </table>
+      <p>
+        Die frühere Kopfzusammenfassung wurde durch die Workspace-Leiste und die
+        permanente Statuszeile ersetzt. Dadurch bleibt im Hauptbereich mehr Platz
+        für Karte, Analyse und Rohdaten.
+      </p>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="filter" class="content">
+    <div class="section">
+      <h2>Filter-Zeile</h2>
+      <p>
+        Die Filter-Zeile steuert, welche Nachrichten in Karte, Tabelle und
+        Wiedergabe angezeigt werden.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 4</div>
+        <div class="ss-desc">Filter-Zeile mit aktivierten Nachrichtentypen und ausgewählten Stationen</div>
+        <img src="screenshots/current-functions-2026-05-28/06-rohdaten-inspektor.png" alt="Filter-Zeile mit Nachrichtentyp-Checkboxen, Stationsliste und Merge-Schalter im Rohdaten-Workspace" />
+      </div>
+
+      <h3>Nachrichtentyp-Filter</h3>
+      <p>Jeder Nachrichtentyp hat eine eigene Checkbox. Deaktivierte Typen werden
+      vollständig aus Tabelle, Karte und Wiedergabe ausgeschlossen.</p>
+
+      <table>
+        <tr><th>Checkbox</th><th>Enthaltene Nachrichten</th></tr>
+        <tr><td><span class="badge badge-cam">CAM</span></td><td>Cooperative Awareness Messages – Fahrzeugposition und -status</td></tr>
+        <tr><td><span class="badge badge-denm">DENM</span></td><td>Decentralized Environmental Notification Messages – Ereignisse</td></tr>
+        <tr><td><span class="badge badge-srem">SREM</span></td><td>Signal Request Messages – Priorisierungsanfragen von Fahrzeugen</td></tr>
+        <tr><td><span class="badge badge-ssem">SSEM</span></td><td>Signal Status Messages – Antworten der Kreuzung auf SREM</td></tr>
+        <tr><td><span class="badge badge-mapem">MAPEM</span></td><td>MAP Extended Messages – Kreuzungsgeometrie und Fahrspurdaten</td></tr>
+        <tr><td><span class="badge badge-spatem">SPATEM</span></td><td>Signal Phase and Timing Messages – Ampelzustand und Prognose</td></tr>
+        <tr><td><span class="badge badge-nmea">NMEA</span></td><td>GPS/GNSS-Rohdaten (NMEA 0183)</td></tr>
+      </table>
+
+      <h3>Stations-Filter</h3>
+      <p>
+        Die Stationsliste zeigt alle in der Sitzung enthaltenen Stations-IDs.
+        Durch Klick (Mehrfachauswahl mit <kbd>Ctrl</kbd>+Klick oder <kbd>Shift</kbd>+Klick)
+        werden nur die gewählten Stationen angezeigt. Keine Auswahl = alle Stationen aktiv.
+        Schnelle Auswahlwechsel werden gebuendelt, damit die Karte nicht fuer jeden einzelnen Klick
+        neu aufgebaut werden muss.
+      </p>
+
+      <h3>Gemergte Sicht</h3>
+      <p>
+        Aktiviert die Option <strong>„Gemergte Sicht"</strong>, werden
+        Mehrfachbeobachtungen derselben physischen Nachricht (TXA- und RXA-Capture)
+        zusammengeführt und nur einmal kanonisch dargestellt.
+        Die Merge-Konfidenz ist in der Tabellenspalte <em>Merge</em> sichtbar.
+      </p>
+      <div class="callout tip">
+        <strong>Tipp</strong>
+        Wenn TXA- und RXA-Dateien gleichzeitig geladen sind, empfiehlt sich die
+        Gemergte Sicht, um Duplikate in der Positionsdarstellung zu vermeiden.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="karte" class="content">
+    <div class="section">
+      <h2>Kartenansicht</h2>
+      <p>
+        Die Karte basiert auf Leaflet und zeigt die Positionen aller gefilterten
+        Nachrichten als farbige Marker. Während der Wiedergabe bewegen sich die
+        Fahrzeugpositionen in Echtzeit.
+      </p>
+      <p>
+        MAP-XML-Sitzungen werden ohne Luftbild-Overlay als technischer Lageplan
+        gezeichnet. Die App nutzt die lane-lokalen <code>NodeXY</code>-Deltas aus
+        <code>IntersectionGeometry</code>, zeichnet Fahrstreifenflaechen,
+        Stoplines, Ingress-/Outbound-Approaches und Connections und zoomt beim
+        Import automatisch auf die Ausdehnung der geladenen Kreuzung.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 5</div>
+        <div class="ss-desc">Interaktive Karte mit Fahrzeug-Markern und Trajektorien während der Wiedergabe</div>
+        <img src="screenshots/current-functions-2026-05-28/08-pcap-kartenausschnitt-trajektorien.png" alt="Leaflet-Karte mit Fahrzeug-Markern, Trajektorien und MAP/SPAT-Layern" />
+      </div>
+
+      <h3>Karteninteraktion</h3>
+      <table>
+        <tr><th>Aktion</th><th>Funktion</th></tr>
+        <tr><td>Linksklick + Ziehen</td><td>Karte verschieben (Pan)</td></tr>
+        <tr><td>Mausrad</td><td>Rein-/Rauszoomen</td></tr>
+        <tr><td>Klick auf Marker</td><td>Zugehörige Nachricht in der Tabelle markieren und Details anzeigen</td></tr>
+        <tr><td>Layer-Umschalter (rechts oben)</td><td>Kachel-Layer wechseln (OpenStreetMap, Satellit etc.)</td></tr>
+      </table>
+
+      <h3>Marker-Farben nach Nachrichtentyp</h3>
+      <table>
+        <tr><th>Farbe</th><th>Typ</th></tr>
+        <tr><td><span style="display:inline-block;width:18px;height:18px;background:#0000ff;border-radius:50%;vertical-align:middle;"></span> Blau</td><td>CAM</td></tr>
+        <tr><td><span style="display:inline-block;width:18px;height:18px;background:#ff0000;border-radius:50%;vertical-align:middle;"></span> Rot</td><td>DENM</td></tr>
+        <tr><td><span style="display:inline-block;width:18px;height:18px;background:#ff6600;border-radius:50%;vertical-align:middle;"></span> Orange</td><td>SREM</td></tr>
+        <tr><td><span style="display:inline-block;width:18px;height:18px;background:#00ffff;border-radius:50%;vertical-align:middle;"></span> Cyan</td><td>SSEM</td></tr>
+        <tr><td><span style="display:inline-block;width:18px;height:18px;background:#00ff00;border-radius:50%;vertical-align:middle;"></span> Grün</td><td>MAPEM</td></tr>
+        <tr><td><span style="display:inline-block;width:18px;height:18px;background:#ff00ff;border-radius:50%;vertical-align:middle;"></span> Magenta</td><td>SPATEM</td></tr>
+        <tr><td><span style="display:inline-block;width:18px;height:18px;background:#800000;border-radius:50%;vertical-align:middle;"></span> Dunkelrot</td><td>NMEA</td></tr>
+      </table>
+
+      <h3>Marker-Bewegung &amp; Interpolation</h3>
+      <p>
+        Um Fahrzeugbewegungen auf der Karte m&ouml;glichst fl&uuml;ssig und realit&auml;tsnah darzustellen, interpoliert die Kartenkomponente Bewegungsabl&auml;ufe zwischen aufeinanderfolgenden GNSS-Meldungen (CAM oder NMEA). Anstatt dass die Marker sprunghaft von einer Position zur n&auml;chsten springen, bewegen sie sich mittels einer nicht-linearen Easing-Funktion weich &uuml;ber die Fahrbahn. Die Animationsdauer wird hierbei dynamisch an die tats&auml;chlichen Zeitabst&auml;nde der eintreffenden Positionsmeldungen angepasst.
+      </p>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="nachrichtenliste" class="content">
+    <div class="section">
+      <h2>Nachrichtentabelle</h2>
+      <p>
+        Der Workspace <em>Rohdaten</em> listet alle gefilterten Nachrichten
+        chronologisch auf. Ein Klick auf eine Zeile füllt den Detail-Inspektor
+        rechts mit Basisdaten, dekodierten Feldern und Security-/PKI-Hinweisen.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 6</div>
+        <div class="ss-desc">Rohdaten-Workspace mit Nachrichtentabelle und Detail-Inspektor</div>
+        <img src="screenshots/current-functions-2026-05-28/06-rohdaten-inspektor.png" alt="Rohdaten-Workspace mit markierter Nachricht, Quellen-/Merge-Spalten und Detail-Inspektor" />
+      </div>
+
+      <h3>Spalten</h3>
+      <table>
+        <tr><th>Spalte</th><th>Inhalt</th><th>Rohdaten-Workspace</th></tr>
+        <tr><td>Timestamp</td><td>Zeitstempel der Nachricht (ISO-8601)</td><td>✓ sichtbar</td></tr>
+        <tr><td>Station ID</td><td>Eindeutige Stations-ID des Senders</td><td>✓ sichtbar</td></tr>
+        <tr><td>Msg Type</td><td>Nachrichtentyp (CAM, DENM, …)</td><td>✓ sichtbar</td></tr>
+        <tr><td>Lat / Lon</td><td>Geografische Koordinaten</td><td>✗ ausgeblendet</td></tr>
+        <tr><td>Speed / Heading</td><td>Geschwindigkeit (km/h) und Fahrtrichtung (°)</td><td>✓ sichtbar</td></tr>
+        <tr><td>Quelle</td><td>Quelldateiname und Rolle (TXA/RXA)</td><td>✗ ausgeblendet</td></tr>
+        <tr><td>Merge</td><td>Merge-Gruppe und Konfidenz (bei gemergter Sicht)</td><td>✗ ausgeblendet</td></tr>
+      </table>
+
+      <h3>Tabelle maximieren</h3>
+      <p>
+        Mit der Schaltfläche <strong>„Tabelle maximieren"</strong> oberhalb der Tabelle
+        wird der vertikale Splitter so verschoben, dass die Tabelle mehr Platz erhält.
+        Nützlich auf kleinen Bildschirmen oder bei vielen Nachrichten.
+      </p>
+
+      <div class="callout info">
+        <strong>Hinweis</strong>
+        Die aktuell abgespielte Nachricht wird während der Wiedergabe automatisch
+        in der Tabelle markiert (blaue Hervorhebung).
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="context-tabs" class="content">
+    <div class="section">
+      <h2>Zweistufiges Workspace-Konzept</h2>
+      <p>
+        Um die gestiegene Funktionsvielfalt übersichtlich zu strukturieren, verwendet die Anwendung eine <strong>zweistufige Workspace-Navigation</strong>. Diese teilt die Benutzeroberfläche in thematische Hauptgruppen (Obergruppen) und zugehörige Arbeitsbereiche (Unter-Tabs) auf. Alle Workspaces synchronisieren die geladenen V2X-Mitschnittdaten sowie die zeitliche Wiedergabeposition.
+      </p>
+      
+      <h3>Struktur der Obergruppen</h3>
+      <table>
+        <tr><th>Hauptgruppe</th><th>Enthaltene Workspaces / Unter-Tabs</th><th>Fokus</th></tr>
+        <tr>
+          <td><strong>MAP-Analyse</strong></td>
+          <td><em>Karte</em>, <em>Track-Vergleich</em>, <em>MAP prüfen</em></td>
+          <td>Geometrische Auswertung der Knotenpunkte, Abgleich von Empfangsspuren (RSU vs. Fahrzeug) sowie integrierte MAP/SPAT-Konformitätsprüfung (C-Roads).</td>
+        </tr>
+        <tr>
+          <td><strong>Priorisierungs-Analyse</strong></td>
+          <td><em>ETA Analyse</em>, <em>Priorisierung</em></td>
+          <td>Detailuntersuchung von ÖPNV- und Einsatzfahrzeug-Anforderungen an Lichtsignalanlagen (SREM/SSEM).</td>
+        </tr>
+        <tr>
+          <td><strong>Compliance</strong></td>
+          <td><em>PKI Analyse</em>, <em>Analyse Ergebnisse</em></td>
+          <td>Kryptografische Signaturprüfung und detaillierte Standard-Konformitätstests (z. B. nach C-Roads).</td>
+        </tr>
+        <tr>
+          <td><strong>Signalzustandsanalyse</strong></td>
+          <td><em>Dashboard</em>, <em>Detailansicht</em>, <em>Qualitätsansicht</em>, <em>Signalzeitenplan (Gantt)</em>, <em>Prognosehorizont</em></td>
+          <td>Statistische Qualitätsbewertung der Signalübergangsvorhersagen, visueller Signalzeitenplan (Gantt) mit SRM-Priorisierung und Stabilitätsdiagramm für den Prognosehorizont.</td>
+        </tr>
+        <tr>
+          <td><strong>Rohdaten</strong></td>
+          <td><em>Rohdaten</em></td>
+          <td>Chronologische Paketliste und vollständiger ASN.1-Decoder-Baum mit Hex-Ansicht.</td>
+        </tr>
+      </table>
+
+      <h3>Navigation &amp; Bedienung</h3>
+      <ul>
+        <li><strong>Schnelles Umschalten:</strong> Die Obergruppen sind über die obere Reihe der Tab-Leiste erreichbar. Die zugeordneten Unter-Tabs erscheinen dynamisch in der zweiten Reihe.</li>
+        <li><strong>Arbeitsstatus-Speicherung:</strong> Die App merkt sich pro Hauptgruppe den zuletzt ausgewählten Unter-Tab. Beim Wechsel der Obergruppe wird dieser Unter-Tab automatisch wieder fokussiert, um den Arbeitsfluss nicht zu unterbrechen.</li>
+        <li><strong>Tastatur-Shortcuts:</strong> Der Wechsel der Workspaces kann effizient über Tastenkürzel wie <kbd>Ctrl</kbd>+<kbd>1</kbd> bis <kbd>Ctrl</kbd>+<kbd>5</kbd> gesteuert werden.</li>
+      </ul>
+    </div>
+
+    <!-- Detail-Inspektor -->
+    <div class="section" id="inspector">
+      <h3>Detail-Inspektor</h3>
+      <p>
+        Der Detail-Inspektor ist in allen Workspaces verfügbar und zeigt die
+        vollständige Dekodierung der zuletzt ausgewählten Nachricht. Er besteht
+        aus drei Bereichen: Decode-Tree, Hex/Raw-Ansicht und Security/PKI.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 7</div>
+        <div class="ss-desc">Inspektor mit Decode-Tree, Hex-Dump und PKI-Bereich</div>
+        <img src="screenshots/current-functions-2026-05-28/06-rohdaten-inspektor.png" alt="Detail-Inspektor mit dekodierten ASN.1-Feldern als Baum, Hex-Dump und Security-Bereich" />
+      </div>
+
+      <h4>Decode-Tree</h4>
+      <p>
+        Der dekodierte Nachrichteninhalt wird als hierarchischer Baum dargestellt.
+        Jeder Knoten zeigt Feldname, Wert, Datentyp und Raw-Hex an. Über das
+        Suchfeld lassen sich Felder per Teilzeichenkette (case-insensitiv) filtern.
+        Klick auf einen Knoten öffnet/schließt dessen Kinder; ein Doppelklick
+        kopiert den Wert in die Zwischenablage.
+      </p>
+
+      <h4>Hex-/Raw-Ansicht</h4>
+      <p>
+        Unter dem Baum befindet sich ein Hex-Dump im Monospace-Format
+        (Offset + Hex + ASCII). Kopier-Buttons erlauben das Übernehmen der
+        Rohbytes als Hex-String oder Base64.
+      </p>
+
+      <h4>Inspektor-Trigger</h4>
+      <p>
+        Über die Trigger-Einstellung lässt sich steuern, wann der Inspektor
+        eine Nachricht lädt. Die Einstellung wird in QSettings persistiert.
+      </p>
+      <table>
+        <tr><th>Modus</th><th>Beschreibung</th></tr>
+        <tr><td><strong>Klick</strong></td><td>Nachricht wird beim Klick auf Tabelle oder Marker geladen</td></tr>
+        <tr><td><strong>Pause-Auto</strong></td><td>Bei Wiedergabe-Pause wird die aktuelle Nachricht automatisch angezeigt</td></tr>
+        <tr><td><strong>Manuell (Ctrl+I)</strong></td><td>Nur bei explizitem Tastaturkürzel oder Button-Klick</td></tr>
+        <tr><td><strong>Aus</strong></td><td>Inspektor bleibt leer; keine automatische Nachrichtenladung</td></tr>
+      </table>
+
+      <h4>Tastaturnavigation in der Nachrichtentabelle</h4>
+      <p>
+        Im Rohdaten-Workspace können die Pfeiltasten (↑/↓) genutzt werden,
+        um durch die Nachrichtentabelle zu navigieren. Der Inspektor aktualisiert
+        sich entsprechend der gewählten Zeile (sofern der Trigger-Modus dies erlaubt).
+      </p>
+    </div>
+
+    <!-- Workspace: Priorisierung -->
+    <div class="section">
+      <h3>Workspace „Priorisierung"</h3>
+      <p>
+        Der Priorisierungs-Workspace aggregiert Karte, Infrastruktur-Layer und
+        Fehlerpanel zur aktuellen Wiedergabeposition. Rechts lassen sich Fehler
+        nach Schweregrad und Kreuzung filtern.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 8</div>
+        <div class="ss-desc">Priorisierungs-Workspace mit Kartenansicht und Fehlerpanel</div>
+        <img src="screenshots/current-functions-2026-05-28/05-priorisierungsfehler.png" alt="Priorisierungs-Workspace mit Fehlerfilter, Fehlerliste und Kartenlayern" />
+      </div>
+
+      <h4>Kreuzungstabelle</h4>
+      <table>
+        <tr><th>Spalte</th><th>Inhalt</th></tr>
+        <tr><td>Intersection</td><td>Kreuzungs-ID</td></tr>
+        <tr><td>Revision</td><td>MAP-Revisionsnummer</td></tr>
+        <tr><td>Signalgruppen</td><td>Anzahl aktiver Signalgruppen</td></tr>
+        <tr><td>Prognose</td><td>Konfidenz der Phasenprognose (high/medium/low)</td></tr>
+        <tr><td>30s Timeline</td><td>Symbolische 30-Sekunden-Vorschau der Signalphasen</td></tr>
+      </table>
+
+      <h4>Timeline-Legende</h4>
+      <table>
+        <tr><th>Symbol</th><th>Phase</th></tr>
+        <tr><td><code>G</code></td><td>Freigabe (protected-Movement-Allowed)</td></tr>
+        <tr><td><code>R</code></td><td>Halt (stop-And-Remain)</td></tr>
+        <tr><td><code>C</code></td><td>Clearance (protected-clearance)</td></tr>
+        <tr><td><code>P</code></td><td>Vorlauf (pre-Movement)</td></tr>
+        <tr><td><code>!</code></td><td>Konflikt (caution-Conflicting-Traffic)</td></tr>
+        <tr><td><code>?</code></td><td>Unbekannte Phase</td></tr>
+      </table>
+
+      <h4>Request-Tabelle</h4>
+      <table>
+        <tr><th>Spalte</th><th>Inhalt</th></tr>
+        <tr><td>Request</td><td>Request-ID</td></tr>
+        <tr><td>Station</td><td>Anfragende Station</td></tr>
+        <tr><td>Prio</td><td>Prioritätsstufe (importanceLevel)</td></tr>
+        <tr><td>Status</td><td>Betriebsstatus (pending / acknowledged / granted / rejected / timeout)</td></tr>
+        <tr><td>Lanes</td><td>Ein- und Ausfahrtsspuren</td></tr>
+      </table>
+
+      <h4>Request-Farblegende</h4>
+      <p>Die Statusfarben in der Tabelle und auf der Karte:</p>
+      <table>
+        <tr><th>Farbe</th><th>Status</th></tr>
+        <tr><td><span style="display:inline-block;width:14px;height:14px;background:#0969da;border-radius:3px;vertical-align:middle;"></span> Blau</td><td>pending</td></tr>
+        <tr><td><span style="display:inline-block;width:14px;height:14px;background:#e3a000;border-radius:3px;vertical-align:middle;"></span> Gelb</td><td>acknowledged</td></tr>
+        <tr><td><span style="display:inline-block;width:14px;height:14px;background:#2da44e;border-radius:3px;vertical-align:middle;"></span> Grün</td><td>granted</td></tr>
+        <tr><td><span style="display:inline-block;width:14px;height:14px;background:#cf222e;border-radius:3px;vertical-align:middle;"></span> Rot</td><td>rejected</td></tr>
+        <tr><td><span style="display:inline-block;width:14px;height:14px;background:#6e0000;border-radius:3px;vertical-align:middle;"></span> Dunkelrot</td><td>timeout</td></tr>
+      </table>
+    </div>
+
+    <!-- Tab: ETA Analyse -->
+    <div class="section">
+      <h3>Tab „ETA Analyse"</h3>
+      <p>
+        Der ETA-Tab stellt die Restzeit aus dem SREM-Feld
+        <code>expectedTimeOfArrival</code> grafisch dar – synchronisiert mit
+        der Wiedergabeposition. Die Auswahl ist fahrzeugzentriert und gruppiert
+        mehrere SREM-Updates eines Fahrzeugs in einem Track.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 9</div>
+        <div class="ss-desc">ETA-Analyse-Workspace mit Request-Auswahl, Kennzahlen und Ereignistabelle</div>
+        <img src="screenshots/current-functions-2026-05-28/04-eta-analyse.png" alt="ETA-Analyse-Workspace mit Karte, Request-Details, ETA-Verlauf und Ereignistabelle" />
+      </div>
+
+      <h4>Graphelemente</h4>
+      <table>
+        <tr><th>Element</th><th>Farbe</th><th>Bedeutung</th></tr>
+        <tr><td>ETA-Kurve</td><td>Blau</td><td>Restzeit bis Haltelinie aus SREM <code>expectedTimeOfArrival</code></td></tr>
+        <tr><td>Geschwindigkeitskurve</td><td>Grün</td><td>Geglättete CAM-Fahrzeuggeschwindigkeit, wenn CAM-Ergänzung aktiv ist</td></tr>
+        <tr><td>SREM-Ereignislinien</td><td>Vertikal</td><td>Zeitpunkte von Priorisierungsanfragen</td></tr>
+        <tr><td>SSEM-Statusbänder</td><td>Farbig</td><td>Status-Intervalle der Kreuzungsantwort</td></tr>
+        <tr><td>Diagnosemarker</td><td>Symbole</td><td>ETA-Sprung, fehlendes SSEM, spätes granted, Sender-MAC-Fallback, Stopline-Passage ohne granted</td></tr>
+      </table>
+
+      <p>
+        Die Dropdown-Liste <strong>„Fahrzeug/Request"</strong> erlaubt die Auswahl
+        des Fahrzeugs. Die Knotenpunktliste filtert mehrere Intersection-IDs.
+        Die Checkbox <strong>„CAM-Daten ergänzen"</strong> aktiviert zusätzliche
+        CAM-Geschwindigkeit und Stopline-Verifikation; die ETA selbst bleibt
+        weiterhin die SREM-ETA. <code>transitSchedule</code> beschreibt
+        Verfrühung oder Verspätung zum Fahrplan und wird nicht als ETA genutzt.
+      </p>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="spat-quality-workspace" class="content">
+    <div class="section">
+      <h2>Workspace „Signalzustandsanalyse“</h2>
+      <p>
+        Der Workspace <strong>Signalzustandsanalyse</strong> (vormals <em>Signalzustandsanalyse</em>) dient der umfassenden visuellen und statistischen Auswertung von Signal Phase and Timing (SPAT) Nachrichten. Der Workspace gliedert sich in fünf spezialisierte Unter-Tabs, die über eine gemeinsame Filter-Seitenleiste gesteuert werden.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 11</div>
+        <div class="ss-desc">Workspace Signalzustandsanalyse - Dashboard zur Vorhersagequalität</div>
+        <img src="screenshots/current-functions-2026-05-28/11-spat-vorhersagequalitaet.png" alt="Signalzustandsanalyse - Dashboard zur Vorhersagequalität" />
+      </div>
+
+      <h3>1. Dashboard, Detailansicht und Qualitätsansicht</h3>
+      <p>
+        Diese drei Unter-Tabs bewerten die statistische Genauigkeit der Phasenwechselprognosen der RSU (LikelyTime / MinEndTime im Vergleich zur Ground Truth):
+      </p>
+      <ul>
+        <li><strong>Dashboard:</strong> Übersicht aller Kreuzungen mit MAE (mittlerer absoluter Fehler), RMSE, Bias und der On-Time-Quote.</li>
+        <li><strong>Detailansicht:</strong> Visualisierung des Prognosefehlers über die Zeit, Histogramm der Fehlerverteilung und Soll/Ist-Scatterplot für eine gewählte Kreuzung und Signalgruppe.</li>
+        <li><strong>Qualitätsansicht:</strong> Prozentuale Datenverfügbarkeit (gültig, ungültig, fehlend) im Kreisdiagramm und MAE-Stundenprofile zur Untersuchung von Tageszeiteinflüssen.</li>
+      </ul>
+
+      <h3>2. Signalzeitenplan (Gantt)</h3>
+      <p>
+        Der Unter-Tab <strong>Signalzeitenplan (Gantt)</strong> stellt den zeitlichen Verlauf der Ampelphasen aller Signalgruppen (SG) der ausgewählten Kreuzung als horizontale, farbkodierte Balken dar.
+      </p>
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 12</div>
+        <div class="ss-desc">Visualisierung der Signalzustände aller Signalgruppen über der Zeit inkl. SRM-Priorisierungen</div>
+        <img src="screenshots/current-functions-2026-05-28/12-spat-gantt.png" alt="Signalzeitenplan-Gantt mit SRM-Markierungen" />
+      </div>
+      <ul>
+        <li><strong>Farbkodierung der Ampelphasen:</strong>
+          <ul>
+            <li><span style="display:inline-block;width:12px;height:12px;background:#22c55e;border-radius:2px;vertical-align:middle;margin-right:4px;"></span> <strong>Grün (protected-Movement-Allowed):</strong> Freigabe.</li>
+            <li><span style="display:inline-block;width:12px;height:12px;background:#ef4444;border-radius:2px;vertical-align:middle;margin-right:4px;"></span> <strong>Rot (stop-And-Remain):</strong> Halt.</li>
+            <li><span style="display:inline-block;width:12px;height:12px;background:#86efac;border-radius:2px;vertical-align:middle;margin-right:4px;"></span> <strong>Hellgrün (permissive-Movement-Allowed):</strong> Bedingte Freigabe.</li>
+            <li><span style="display:inline-block;width:12px;height:12px;background:#eab308;border-radius:2px;vertical-align:middle;margin-right:4px;"></span> <strong>Gelb (pre-Movement):</strong> Vorlauf / Gelb.</li>
+            <li><span style="display:inline-block;width:12px;height:12px;background:#f87171;border-radius:2px;vertical-align:middle;margin-right:4px;"></span> <strong>Rot/Gelb (protected-clearance):</strong> Räumzeit.</li>
+            <li><span style="display:inline-block;width:12px;height:12px;border:2px dashed #ef4444;border-radius:2px;vertical-align:middle;margin-right:4px;"></span> <strong>Rot gestrichelt (caution-Conflicting-Traffic):</strong> Konfliktsignalisierung.</li>
+          </ul>
+        </li>
+        <li><strong>SRM-Priorisierungsanforderung:</strong> Wenn ein ÖPNV- oder Einsatzfahrzeug eine Priorisierung anfordert (SREM), wird dies direkt über dem Balken des betroffenen Signalgebers als blaues/grünes Pfeilsymbol oder Marker über den entsprechenden Zeitraum gezeichnet. Dies macht die Kopplung zwischen Fahrzeuganforderung und Schaltung der Signalgruppe unmittelbar sichtbar.</li>
+      </ul>
+
+      <h3>3. Prognosehorizont</h3>
+      <p>
+        Der Unter-Tab <strong>Prognosehorizont</strong> visualisiert die Stabilität der prognostizierten Phasen-Endzeiten (LikelyTime) über der Zeit seit Aufnahmestart.
+      </p>
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 13</div>
+        <div class="ss-desc">Darstellung des Prognosehorizonts (LikelyTime minus Sendezeit) zur Stabilitätsprüfung</div>
+        <img src="screenshots/current-functions-2026-05-28/13-spat-prognosehorizont.png" alt="Prognosehorizont-Diagramm" />
+      </div>
+      <ul>
+        <li><strong>Y-Achse:</strong> Verbleibende Restzeit bis zum Phasenwechsel ($T_{likely} - T_{send}$) in Sekunden.</li>
+        <li><strong>X-Achse:</strong> Zeit seit Aufnahmestart in Sekunden.</li>
+        <li><strong>Interpretation:</strong> Ein gleichmäßig linear abfallender Graph deutet auf eine stabile und verlässliche Prognose hin. Treppenstufen oder abrupte Sprünge zeigen an, dass das Steuergerät die Prognose dynamisch korrigieren musste.</li>
+      </ul>
+
+      <h3>4. Filterung &amp; Performance-Steuerung</h3>
+      <p>
+        Die Steuerung erfolgt über die linke Seitenleiste:
+      </p>
+      <ul>
+        <li><strong>Zweistufiger Filter:</strong> Zuerst wird die korrekte Kreuzungs-ID ausgewählt. Darunter listet die App alle zugeordneten Signalgruppen auf, die einzeln über Kontrollkästchen ein- oder ausgeblendet werden können.</li>
+        <li><strong>Zeitfenster-Schnitt (Time Slices):</strong> Um die Übersichtlichkeit und Rendergeschwindigkeit bei großen Aufzeichnungen zu maximieren, können die Daten in Zeitfenster zwischen 60 und 600 Sekunden geschnitten werden. Mit den Pfeiltasten (◀ und ▶) lässt sich komfortabel durch die Segmente blättern.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="issue-panel" class="content">
+    <div class="section">
+      <h2>Priorisierungsfehler-Panel</h2>
+      <p>
+        Das Panel im Workspace <em>Priorisierung</em> listet automatisch erkannte
+        Priorisierungsfehler auf. Die rote Badge zeigt die Anzahl der aktuell
+        passenden Fehler; wenn im aktuellen Zeitpunkt kein Fehler aktiv ist,
+        zeigt das Panel einen leeren Zustand mit Icon und Hinweistext.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 10</div>
+        <div class="ss-desc">Priorisierungsfehler-Panel mit Filter für Schweregrad und Kreuzung</div>
+        <img src="screenshots/current-functions-2026-05-28/05-priorisierungsfehler.png" alt="Priorisierungsfehler-Panel mit Filterauswahl, Fehler-Badge und Kartenansicht" />
+      </div>
+
+      <h3>Fehlerfilter</h3>
+      <table>
+        <tr><th>Filter</th><th>Anzeige</th></tr>
+        <tr><td>Alle</td><td>Alle erkannten Priorisierungsfehler</td></tr>
+        <tr><td>Nur kritisch</td><td>Nur Fehler mit Schweregrad <em>critical</em></td></tr>
+        <tr><td>Aktuelle Kreuzung</td><td>Fehler nur für die aktuell sichtbare Kreuzung</td></tr>
+      </table>
+      <p>
+        Der zweite Dropdown <strong>„Kreuzung"</strong> grenzt die Liste auf eine
+        spezifische Kreuzungs-ID ein.
+      </p>
+
+      <h3>Navigation über Fehler</h3>
+      <p>
+        Ein Klick auf einen Eintrag in der Fehlerliste springt die Wiedergabe
+        automatisch zum Zeitpunkt des Fehlers und markiert die betroffene Nachricht
+        in der Rohdaten-Tabelle. Alternativ können die Zurück-/Weiter-Schaltflächen
+        in der Wiedergabesteuerung genutzt werden.
+      </p>
+
+      <h3>Leere Fehlerliste</h3>
+      <p>
+        Wenn im aktuellen Zeitpunkt kein Fehler aktiv ist oder der Filter zu
+        restriktiv eingestellt ist, zeigt das Panel einen leeren Zustand mit
+        Icon und Hinweistext. Über den Button <strong>„Filter zurücksetzen"</strong>
+        können alle Filter auf den Standardzustand zurückgesetzt werden.
+      </p>
+
+      <h3>Panel ein-/ausklappen</h3>
+      <p>
+        Mit der Schaltfläche <strong>„Einklappen"</strong> kann das Panel ausgeblendet
+        werden, um der Karte mehr Breite zu geben.
+      </p>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="wiedergabe" class="content">
+    <div class="section">
+      <h2>Wiedergabesteuerung</h2>
+      <p>
+        Die Wiedergabesteuerung am unteren Fensterrand steuert die zeitgesteuerte
+        Simulation der V2X-Nachrichtenfolge.
+      </p>
+
+      <div class="screenshot-box">
+        <div class="ss-label">SCREENSHOT 11</div>
+        <div class="ss-desc">Wiedergabesteuerung während aktiver Wiedergabe</div>
+        <img src="screenshots/current-functions-2026-05-28/01-hauptfenster-karte.png" alt="Wiedergabeleiste mit Problemstellenmodus, Play, Pause, Stop, Slider und Geschwindigkeit" />
+      </div>
+
+      <table>
+        <tr><th>Element</th><th>Funktion</th></tr>
+        <tr><td><strong>Nur Fehler</strong></td><td>Wenn aktiviert, springt die Wiedergabe nur zu Zeitpunkten mit erkannten Priorisierungsfehlern</td></tr>
+        <tr><td><strong>Zurück / Weiter</strong></td><td>Springt zum vorherigen bzw. nächsten relevanten Zeitpunkt</td></tr>
+        <tr><td><strong>Play</strong></td><td>Startet oder setzt die Wiedergabe fort</td></tr>
+        <tr><td><strong>Pause</strong></td><td>Hält die Wiedergabe an (Position bleibt erhalten)</td></tr>
+        <tr><td><strong>Stop</strong></td><td>Beendet die Wiedergabe und setzt auf den Anfang zurück</td></tr>
+        <tr><td><strong>Zeitachsen-Schieberegler</strong></td><td>Manuelle Positionierung (Ziehen oder Klicken)</td></tr>
+        <tr><td><strong>Geschwindigkeit</strong></td><td>Wiedergabegeschwindigkeit: 0.1×, 0.5×, 1×, 2×, 5×, 10×</td></tr>
+        <tr><td><strong>Zeitanzeige</strong></td><td>Aktuelle Position und Gesamtdauer im Format <code>MM:SS.t / MM:SS.t</code></td></tr>
+      </table>
+
+      <div class="callout tip">
+        <strong>Tipp</strong>
+        Für eine detaillierte Analyse empfiehlt sich zunächst die Geschwindigkeit
+        <strong>1×</strong> oder <strong>0.5×</strong>. Zur schnellen Übersicht
+        eignet sich <strong>5×</strong> oder <strong>10×</strong>.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="performance" class="content">
+    <div class="section">
+      <h2>Performance-Modi</h2>
+      <p>
+        Der Performance-Modus regelt, wie viele Marker, Trail-Punkte und Sekunden Verlauf
+        die Karte gleichzeitig zeichnet. Er ist über die Werkzeugleiste umschaltbar
+        und beeinflusst Speicher- und CPU-Bedarf während der Wiedergabe.
+      </p>
+
+      <table>
+        <tr><th>Modus</th><th>Trail-Fenster</th><th>Anwendungsfall</th></tr>
+        <tr><td><strong>Normal</strong></td><td>120 s</td><td>Standard für übliche Captures bis ca. 5000 Nachrichten</td></tr>
+        <tr><td><strong>Schonend</strong></td><td>45 s</td><td>Längere Captures oder schwächere Hardware</td></tr>
+        <tr><td><strong>Diagnose</strong></td><td>20 s</td><td>Sehr dichte Captures, Live-Analyse einzelner Kreuzungen</td></tr>
+      </table>
+
+      <h3>Render-Budgets</h3>
+      <p>
+        Pro Modus existiert ein internes Budget für maximale Marker-Anzahl,
+        Infrastruktur-Overlays, Trajektorien und Trail-Punkte. Wird das Budget überschritten,
+        zeigt die Karte die jeweils aktuellsten Einträge — ältere werden ausgedünnt.
+      </p>
+
+      <h3>Automatischer Wechsel bei Speicherdruck</h3>
+      <p>
+        Ein interner Memory-Watcher beobachtet den Prozessverbrauch. Überschreitet er
+        <strong>1.2 GB</strong>, wechselt die Anwendung automatisch in den
+        <strong>Schonend</strong>-Modus. Bei <strong>1.8 GB</strong> wird auf
+        <strong>Diagnose</strong> geschaltet. Eine entsprechende Statusmeldung
+        erscheint in der unteren Statusleiste.
+      </p>
+
+      <div class="callout info">
+        <strong>Hinweis</strong>
+        Der gewaehlte Modus wird gespeichert und bleibt nach einem Neustart der
+        EXE erhalten.
+      </div>
+
+      <div class="callout tip">
+        <strong>Empfehlung</strong>
+        Bei spuerbarem Stuttering der Wiedergabe zuerst auf <em>Schonend</em>
+        wechseln. Bei sehr grossen oder sehr dichten Captures hilft
+        <em>Diagnose</em>, weil weniger Kartenobjekte gleichzeitig gerendert
+        werden.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="map-stabilitaet" class="content">
+    <div class="section">
+      <h2>Map-Stabilität</h2>
+      <p>
+        Die Kartenanzeige nutzt eine eingebettete Online-Karte. Mehrere
+        Schutzmechanismen verhindern Aussetzer und Freeze-Zustaende waehrend
+        laengerer Sitzungen:
+      </p>
+
+      <table>
+        <tr><th>Mechanismus</th><th>Wirkung</th></tr>
+        <tr><td><strong>Interaktion schuetzen</strong></td>
+            <td>Waehrend Pan, Zoom oder Fenster-Resize werden Kartenaktualisierungen
+                kurz gebuendelt. Danach springt die Karte automatisch auf den
+                aktuellen Wiedergabezustand.</td></tr>
+        <tr><td><strong>Hintergrundberechnung</strong></td>
+            <td>Aufwendige Kartenberechnungen laufen im Hintergrund, damit die
+                Oberflaeche bedienbar bleibt.</td></tr>
+        <tr><td><strong>Haenger erkennen</strong></td>
+            <td>Antwortet die Karte laenger nicht, wird der Zustand erkannt und
+                automatisch behandelt.</td></tr>
+        <tr><td><strong>Auto-Recovery</strong></td>
+            <td>Bei wiederholten Kartenproblemen laedt die App die Kartenansicht
+                neu und stellt den letzten bekannten Zustand wieder her.</td></tr>
+        <tr><td><strong>Resize-Schutz</strong></td>
+            <td>Beim Maximieren oder Bildschirm-Wechsel werden Aktualisierungen
+                gepuffert, damit die Karte nicht einfriert.</td></tr>
+      </table>
+
+      <div class="callout info">
+        <strong>Diagnose</strong>
+        Bei wiederholten Kartenproblemen <strong>Diagnose exportieren</strong>
+        ausfuehren und den Bericht zusammen mit einer kurzen Beschreibung des
+        Problems weitergeben.
+      </div>
+
+      <div class="callout warn">
+        <strong>Manuelles Eingreifen</strong>
+        Sollte die Map dennoch dauerhaft leer bleiben, hilft folgender Ablauf:
+        <ol class="steps" style="margin-top:8px;">
+          <li>Auf <strong>Schonend</strong>-Performance-Modus wechseln.</li>
+          <li>Wiedergabe stoppen und 5 s warten.</li>
+          <li>Anwendung neu starten — die zuletzt geladene Sitzung ist über
+              <em>„Letzte Sitzung"</em> wiederherstellbar.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="pcap-laden" class="content">
+    <div class="section">
+      <h2>Arbeitsablauf: PCAP-Datei laden</h2>
+
+      <h3>Methode 1: Dateidialog</h3>
+      <ol class="steps">
+        <li>Schaltfläche <strong>„Importieren"</strong> in der Werkzeugleiste klicken.</li>
+        <li>Im Dateidialog eine oder mehrere <code>.pcap</code>/<code>.pcapng</code>/<code>.cap</code>-Dateien auswählen.</li>
+        <li>Auf <strong>„Öffnen"</strong> klicken. Der Ladebalken in der Statusleiste zeigt den Fortschritt.</li>
+        <li>Nach erfolgreichem Laden werden Sitzungskennzahlen in der Statusleiste angezeigt; Rohdaten, Karte und Analyse-Workspaces sind gefüllt.</li>
+      </ol>
+
+      <h3>Methode 2: Drag &amp; Drop</h3>
+      <ol class="steps">
+        <li>Eine oder mehrere PCAP-Dateien im Windows-Explorer auswählen.</li>
+        <li>Die Dateien auf das C-ITS-Inspector-Fenster ziehen und loslassen.</li>
+        <li>Der Parse-Vorgang startet automatisch.</li>
+      </ol>
+
+      <h3>Methode 3: Letzte Sitzung</h3>
+      <ol class="steps">
+        <li>Schaltfläche <strong>„Letzte Sitzung"</strong> klicken.</li>
+        <li>Die zuletzt geladenen Dateien werden automatisch erneut geparst.</li>
+      </ol>
+
+      <div class="callout warn">
+        <strong>Hinweis: Mehrere Dateien</strong>
+        Werden mehrere Dateien geladen (z.&nbsp;B. TXA + RXA eines Feldtests),
+        sollte die <strong>Gemergte Sicht</strong> aktiviert werden, um
+        Doppel-Darstellungen zu vermeiden.
+      </div>
+
+      <h3>MAP-XML als reine Karten-Session</h3>
+      <ol class="steps">
+        <li>Eine oder mehrere MAP-<code>.xml</code>-Dateien ueber <strong>Importieren</strong> oder per Drag &amp; Drop oeffnen.</li>
+        <li>Die Anwendung erzeugt daraus synthetische MAPEM-Nachrichten; PCAP-Daten sind dafuer nicht erforderlich.</li>
+        <li>Enthaelt eine XML-Datei mehrere Kreuzungen, erscheinen diese als getrennte Stationen und Layer-Gruppen.</li>
+        <li>Im Workspace <em>Karte</em> Fahrstreifenflaechen, Referenzpunkte, Ingress-/Outbound-Approaches, Connections und Stoplines pruefen.</li>
+        <li>Die Karte zoomt automatisch auf die MAP-Ausdehnung. Wenn alte Filter alle neuen Nachrichten ausblenden wuerden, setzt die App die Filter fuer die neue Sitzung zurueck.</li>
+      </ol>
+
+      <h3>Laden abbrechen</h3>
+      <p>
+        Ein laufender Parse-Vorgang kann jederzeit mit <strong>„Laden abbrechen"</strong>
+        unterbrochen werden. Bereits geparste Pakete werden verworfen.
+      </p>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="map-pruefen" class="content">
+    <div class="section">
+      <h2>Arbeitsablauf: MAP prüfen</h2>
+      <p>
+        Die C-Roads-orientierte Konformitätsprüfung für MAP/SPAT-Nachrichten ist nun nahtlos als Unter-Tab direkt in den Haupt-Workspace <strong>MAP-Analyse</strong> integriert.
+      </p>
+
+      <ol class="steps">
+        <li>MAP-XML oder eine PCAP-Sitzung mit MAPEM/SPATEM laden.</li>
+        <li>In den Haupt-Workspace <strong>MAP-Analyse</strong> wechseln (über die Tab-Leiste oder <kbd>Ctrl</kbd>+<kbd>1</kbd>).</li>
+        <li>Den Unter-Tab <strong>MAP prüfen</strong> anklicken.</li>
+        <li>Die Prüfung läuft vollautomatisch im Hintergrund. Die Ergebnisliste zeigt Fehler, Warnungen und Hinweise nach Schweregrad sortiert an.</li>
+      </ol>
+
+      <div class="screenshot-box">
+        <div class="ss-label">AKTUELLER SCREENSHOT 5</div>
+        <div class="ss-desc">Integrierte MAP/SPAT-Prüfung mit C-Roads-Handbuchregeln und Exportaktionen</div>
+        <img src="screenshots/current-functions-2026-05-28/07-map-spat-pruefung.png" alt="Integrierte MAP/SPAT-Prüfung mit Severity, Code, Rule, Intersection, Lane und Beschreibung" />
+      </div>
+
+      <h3>Gepruefte C-Roads-Punkte</h3>
+      <table>
+        <tr><th>Bereich</th><th>Pruefung</th></tr>
+        <tr><td>Intersection</td><td>Numerische <code>intersectionId</code>, vorhandene <code>revision</code> und gueltiger <code>refPoint</code></td></tr>
+        <tr><td>LaneSet</td><td>Nicht leer, eindeutige <code>laneID</code>, mindestens zwei NodeList-Punkte je Lane</td></tr>
+        <tr><td>Connections</td><td><code>connectsTo</code> verweist auf bekannte Lanes; <code>signalGroup</code> ist vorhanden</td></tr>
+        <tr><td>SPATEM</td><td>Intersection-State, Revision, Signalgruppen und Event-State sind auswertbar</td></tr>
+        <tr><td>MAP/SPAT-Abgleich</td><td>Revisionen je Kreuzung stimmen ueberein; MAP-Signalgruppen sind in SPATEM auffindbar</td></tr>
+      </table>
+
+      <div class="callout info">
+        <strong>Hinweis</strong>
+        In einer reinen MAP-Session ohne SPATEM meldet der Check fehlende SPATEM-Daten als Hinweis, nicht als Fehler.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="filter-anwenden" class="content">
+    <div class="section">
+      <h2>Arbeitsablauf: Filter anwenden</h2>
+
+      <h3>Nachrichtentypen filtern</h3>
+      <ol class="steps">
+        <li>In der Filter-Zeile die gewünschten Typ-Checkboxen aktivieren oder deaktivieren.</li>
+        <li>Tabelle und Wiedergabe aktualisieren sich nach kurzer Entprellung; die aktive Karte rendert sofort, andere Karten erst beim Workspace-Wechsel.</li>
+      </ol>
+
+      <h3>Auf einzelne Station fokussieren</h3>
+      <ol class="steps">
+        <li>In der Stationsliste die gewünschte Station anklicken.</li>
+        <li>Für mehrere Stationen: <kbd>Ctrl</kbd>+Klick für einzelne Auswahl oder <kbd>Shift</kbd>+Klick für Bereich.</li>
+        <li>Karte zeigt nur Nachrichten der gewählten Station(en).</li>
+        <li>Auswahl aufheben: Alle Stationen abwählen → alle werden wieder angezeigt.</li>
+      </ol>
+
+      <h3>Nur Priorisierungsnachrichten</h3>
+      <ol class="steps">
+        <li>Alle Checkboxen deaktivieren.</li>
+        <li>Nur <strong>SREM</strong> und <strong>SSEM</strong> aktivieren.</li>
+        <li>Optional: Gemergte Sicht aktivieren, falls TXA+RXA geladen.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="wiedergabe-workflow" class="content">
+    <div class="section">
+      <h2>Arbeitsablauf: Wiedergabe nutzen</h2>
+
+      <ol class="steps">
+        <li>PCAP-Datei laden (siehe oben).</li>
+        <li>Filter nach Bedarf einstellen (z.&nbsp;B. nur CAM + SREM).</li>
+        <li><strong>Play</strong> drücken – Fahrzeugpositionen bewegen sich auf der Karte.</li>
+        <li>Geschwindigkeit anpassen: Für Überblick <strong>5×</strong>, für Detailanalyse <strong>0.5×</strong>.</li>
+        <li>Zum gewünschten Zeitpunkt per Schieberegler navigieren.</li>
+        <li>Workspace <em>Rohdaten</em> öffnen und eine interessante Nachricht anklicken; der Detail-Inspektor zeigt die dekodierten Felder.</li>
+        <li>Workspace <em>ETA Analyse</em> oder <em>Priorisierung</em> für Request-Verlauf, Kreuzungsbezug und Fehlerkontext öffnen.</li>
+      </ol>
+
+      <div class="callout tip">
+        <strong>Problem-Replay-Modus</strong>
+        Checkbox <strong>„Nur Problemstellen"</strong> aktivieren: Die Wiedergabe
+        überspringt fehlerfreie Zeitbereiche automatisch und springt direkt zu
+        erkannten Priorisierungsproblemen. Ideal für schnelle Diagnosen in langen Captures.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="fehler-analysieren" class="content">
+    <div class="section">
+      <h2>Arbeitsablauf: Priorisierungsfehler analysieren</h2>
+
+      <ol class="steps">
+        <li>PCAP-Datei(en) mit SREM/SSEM-Inhalt laden.</li>
+        <li>Im Priorisierungsfehler-Panel werden erkannte Fehler automatisch aufgelistet.</li>
+        <li>Fehlerliste nach Schwere oder Kreuzung filtern (Dropdown oben im Panel).</li>
+        <li>Auf einen Fehlereintrag klicken → Wiedergabe springt zum Fehlerzeitpunkt.</li>
+        <li>Im Workspace <em>Priorisierung</em> Fehler-Badge, Kreuzungsfilter und Kartenkontext prüfen.</li>
+        <li>Im Workspace <em>ETA Analyse</em> den Verlauf der Restzeit und SSEM-Antworten betrachten.</li>
+        <li>Mit den Zurück-/Weiter-Schaltflächen chronologisch durch relevante Zeitpunkte navigieren.</li>
+        <li>Fehler exportieren für Bericht (siehe unten).</li>
+      </ol>
+
+      <h3>Erkannte Fehlertypen</h3>
+      <table>
+        <tr><th>Fehlertyp</th><th>Bedeutung</th></tr>
+        <tr><td>Timeout ohne SSEM</td><td>SREM wurde gesendet, aber keine SSEM-Antwort empfangen</td></tr>
+        <tr><td>Verspätetes granted</td><td>granted-Status kam nach der erwarteten Ankunft an der Kreuzung</td></tr>
+        <tr><td>ETA-Sprung</td><td>Die ETA-Schätzung hat sich sprunghaft um mehr als 5 Sekunden geändert</td></tr>
+        <tr><td>Fehlendes SSEM</td><td>Für einen aktiven Request fehlen SSEM-Updates über längeren Zeitraum</td></tr>
+        <tr><td>Stopline-Passage ohne granted</td><td>Fahrzeug hat Haltelinie passiert, ohne granted erhalten zu haben</td></tr>
+        <tr><td>Überholte Anfrage</td><td>Request ist abgelaufen bevor er beantwortet wurde</td></tr>
+        <tr><td>Uhr-Skew-Warnung</td><td>Zeitstempel-Abweichung zwischen TXA und RXA überschreitet Schwellwert</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="eta-analyse" class="content">
+    <div class="section">
+      <h2>Arbeitsablauf: ETA-Analyse</h2>
+
+      <ol class="steps">
+        <li>PCAP mit SREM/SSEM und CAM laden.</li>
+        <li>Tab <strong>„ETA Analyse"</strong> klicken.</li>
+        <li>Im Dropdown <strong>„Fahrzeug/Request"</strong> das gewünschte Fahrzeug auswählen.</li>
+        <li>In der Knotenpunktliste eine oder mehrere Intersection-IDs auswählen.</li>
+        <li>Bei Bedarf <strong>„CAM-Daten ergänzen"</strong> aktivieren, um geglättete Geschwindigkeit und Stopline-Verifikation einzublenden.</li>
+        <li>Graph zeigt: SREM-ETA-Kurve, optionale Geschwindigkeitskurve, vertikale SREM-Linien und farbige SSEM-Bänder; der Rot/Gruen-Farbmodus wird hier ebenfalls angewendet.</li>
+        <li>Diagnosemarker identifizieren Problemstellen (ETA-Sprünge, fehlendes granted, verspätetes granted, Sender-MAC-Fallback usw.).</li>
+        <li>Wiedergabe parallel laufen lassen – die Cursor-Position im Graphen bewegt sich mit.</li>
+      </ol>
+
+      <div class="callout info">
+        <strong>Interpretation</strong>
+        Eine gleichmäßig fallende SREM-ETA-Kurve ohne Sprünge bei konsistent
+        hoher Fahrzeuggeschwindigkeit und einem frühen <em>granted</em>-Band
+        ist das Zeichen einer funktionierenden Priorisierung. Für ÖPNV gilt
+        <em>granted</em> ab mehr als 3,0&nbsp;s als spät, für
+        <em>EmergencyVehicle</em> ab mehr als 2,0&nbsp;s.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="spat-analyse-workflow" class="content">
+    <div class="section">
+      <h2>Arbeitsablauf: SPAT-Prognosequalität analysieren</h2>
+      <p>
+        Dieses Verfahren dient zur Ermittlung der zeitlichen Genauigkeit von Signalphasen-Vorhersagen der RSU.
+      </p>
+
+      <ol class="steps">
+        <li>Eine PCAP-Datei mit MAPEM- und SPATEM-Inhalt (oder eine MAP-XML-Datei zusammen mit einer passenden SPATEM-PCAP-Datei) über <strong>Importieren</strong> oder Drag &amp; Drop laden.</li>
+        <li>Den Haupt-Workspace <strong>Signalzustandsanalyse</strong> über die obere Tab-Leiste oder per <kbd>Ctrl</kbd>+<kbd>K</kbd> auswählen. Die Ansicht öffnet sich standardmäßig auf dem <strong>Dashboard</strong>.</li>
+        <li>Die Filter in der Kopfzeile nach Bedarf einstellen (z. B. Analysezeitraum einschränken, Nächte/Wochenenden ausschließen oder eine spezifische Signalgruppe auswählen).</li>
+        <li>Auf der Karte die Farbcodierung der Kreuzungs-Marker prüfen. Klicken Sie auf einen Marker, um die betroffene Kreuzung in der Tabelle zu fokussieren.</li>
+        <li>Wechseln Sie zum Tab <strong>Detailansicht</strong>. Die zuvor selektierte Kreuzung ist bereits ausgewählt. Wählen Sie die gewünschte Signalgruppe im Dropdown.</li>
+        <li>Analysieren Sie die Diagramme:
+          <ul>
+            <li>Der <em>Prognosefehler-Plot</em> zeigt die Abweichung einzelner Prognosen. Punkte innerhalb der gestrichelten roten Linien (On-Time-Fehlerschwelle, Standard: ±2s) stellen Prognoseausreißer dar.</li>
+            <li>Das <em>Histogramm</em> veranschaulicht die Fehlerverteilung. Ein spitzes Maximum bei Null bedeutet exzellente Qualität. Ein verschobenes Maximum weist auf einen systematischen Fehler (Bias) hin.</li>
+            <li>Der <em>Scatterplot</em> zeigt das Soll/Ist-Verhältnis. Abweichungen von der Winkelhalbierenden verdeutlichen Verzögerungen oder verfrühte Meldungen.</li>
+          </ul>
+        </li>
+        <li>Wechseln Sie zum Tab <strong>Qualitätsansicht</strong>, um die prozentuale Datenvollständigkeit (Gültig/Fehlend/Ungültig) im Kreisdiagramm und tageszeitliche MAE-Trends (Werktage vs. Wochenende) zu analysieren.</li>
+      </ol>
+
+      <div class="callout tip">
+        <strong>On-Time-Fehlerschwelle konfigurieren</strong>
+        Die Fehlerschwelle für die On-Time-Quote kann in den globalen Anwendungseinstellungen
+        konfiguriert werden. Sie steuert, ab wie vielen Sekunden Abweichung eine Prognose als „nicht mehr pünktlich“ gewertet wird.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="kml-export" class="content">
+    <div class="section">
+      <h2>Arbeitsablauf: KML exportieren</h2>
+
+      <ol class="steps">
+        <li>PCAP importieren und ggf. Filter setzen (nur die zu exportierenden Typen/Stationen).</li>
+        <li>Schaltfläche <strong>„KML exportieren"</strong> klicken.</li>
+        <li>Zielordner im Dialog auswählen.</li>
+        <li>Die Anwendung erzeugt pro Station eine KML-Datei (<code>station_&lt;ID&gt;.kml</code>).</li>
+        <li>Der aktuell gewaehlte Farbmodus wird fuer Placemarks und Trajektorien uebernommen.</li>
+        <li>Die Dateien können direkt in <strong>Google Earth</strong> oder <strong>QGIS</strong> geöffnet werden.</li>
+      </ol>
+
+      <h3>KML-Inhalt</h3>
+      <table>
+        <tr><th>Element</th><th>Beschreibung</th></tr>
+        <tr><td>Placemarks</td><td>Jede Nachricht als georeferenzierter Punkt mit Zeitstempel und Typ</td></tr>
+        <tr><td>LineString-Trajektorie</td><td>Verbindet alle Positionen einer Station als Linie</td></tr>
+        <tr><td>Farben</td><td>Stationsspezifische Farben für Trajektorien; typbezogene Farben für Placemarks; optional Rot/Gruen-schwache Palette</td></tr>
+        <tr><td>ASN.1-Provenienz</td><td>Verwendete Schema-Versionen im KML-Dokumentkopf</td></tr>
+      </table>
+
+      <div class="callout tip">
+        <strong>Tipp</strong>
+        Die aktiven Filter (Typen, Stationen) werden beim Export berücksichtigt.
+        Für einen vollständigen Export alle Filter deaktivieren.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="issues-export" class="content">
+    <div class="section">
+      <h2>Arbeitsablauf: Fehler exportieren</h2>
+
+      <ol class="steps">
+        <li>Sitzung mit erkannten Priorisierungsfehlern laden.</li>
+        <li>Schaltfläche <strong>„Fehler exportieren"</strong> klicken.</li>
+        <li>Zielordner auswählen.</li>
+        <li>Die Anwendung erzeugt mehrere Dateien im gewählten Ordner.</li>
+      </ol>
+
+      <h3>Exportierte Dateien</h3>
+      <table>
+        <tr><th>Datei</th><th>Format</th><th>Verwendung</th></tr>
+        <tr><td><code>prioritization_issues.csv</code></td><td>CSV (lesbar)</td><td>Tabellenkalkulationen, manuelle Auswertung</td></tr>
+        <tr><td><code>prioritization_issues_machine.csv</code></td><td>CSV (Maschine)</td><td>Automatisierte Weiterverarbeitung</td></tr>
+        <tr><td><code>prioritization_issues.json</code></td><td>JSON</td><td>API-Integration, Skripte</td></tr>
+        <tr><td><code>prioritization_issues_report.txt</code></td><td>Textreport</td><td>Prüfberichte, Dokumentation</td></tr>
+      </table>
+
+      <h3>CSV-Felder</h3>
+      <table>
+        <tr><th>Feld</th><th>Beschreibung</th></tr>
+        <tr><td>Zeitstempel</td><td>Zeitpunkt des Fehlers</td></tr>
+        <tr><td>Fehlertyp</td><td>Kategorie des Problems</td></tr>
+        <tr><td>Schweregrad</td><td>critical / warning / info</td></tr>
+        <tr><td>Kreuzung</td><td>Betroffene Kreuzungs-ID</td></tr>
+        <tr><td>Request-ID / Sequenznummer</td><td>SREM-Kennung</td></tr>
+        <tr><td>Station</td><td>Betroffene Stations-ID</td></tr>
+        <tr><td>Verzögerung [s]</td><td>Gemessene Zeitverzögerung</td></tr>
+        <tr><td>Beschreibung</td><td>Lesbarer Fehlertext</td></tr>
+        <tr><td>Quelldateien</td><td>Herkunft der Nachrichten</td></tr>
+        <tr><td>Merge-Gruppe / Konfidenz</td><td>Merge-Informationen (falls vorhanden)</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="schemas" class="content">
+    <div class="section">
+      <h2>ASN.1-Schemas aktualisieren</h2>
+      <p>
+        C-ITS Inspector nutzt ASN.1-Schemadateien zur Dekodierung von ITS-PDUs
+        nach ETSI-Standard. Diese können auf dem neuesten Stand gehalten werden.
+      </p>
+
+      <ol class="steps">
+        <li>Internetverbindung sicherstellen.</li>
+        <li>Schaltfläche <strong>„ASN.1-Schemas aktualisieren"</strong> klicken.</li>
+        <li>Die Anwendung lädt aktualisierte Schemadateien aus den
+            offiziellen <strong>ETSI Forge GitLab</strong>-Repositorien.</li>
+        <li>Nach dem Update sollte die Sitzung neu geladen werden, damit neue Felder dekodiert werden.</li>
+      </ol>
+
+      <h3>Quellen</h3>
+      <table>
+        <tr><th>Modul</th><th>Repository</th></tr>
+        <tr><td>CAM, DENM, ITS-Container</td><td><code>forge.etsi.org/gitlab/ITS</code></td></tr>
+        <tr><td>SREM, SSEM, MAPEM, SPATEM, IVIM</td><td>ETSI TS 103 301 v2.2.1</td></tr>
+        <tr><td>Security-Header</td><td>ETSI TS 103 097 v2.1.1</td></tr>
+      </table>
+
+      <div class="callout info">
+        <strong>Integritätsprüfung</strong>
+        Heruntergeladene Schemas werden über einen Hash-Vergleich verifiziert.
+        Schlägt die Prüfung fehl, fällt die Anwendung auf die mit ausgelieferte
+        Lokalkopie zurück (siehe Statusleiste).
+      </div>
+
+      <div class="callout warn">
+        <strong>Hinweis</strong>
+        Schema-Updates können bei bestehenden Sitzungen zu geänderten Feldbezeichnungen
+        oder zusätzlichen Feldern führen. KML-Exporte sollten nach einem Update
+        erneut durchgeführt werden.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="layout" class="content">
+    <div class="section">
+      <h2>Workspace wechseln</h2>
+      <p>
+        Die Anwendung nutzt vier feste Workspaces. Der Wechsel erfolgt über die
+        Tab-Leiste direkt unter der Werkzeugleiste, über die Befehlspalette
+        oder per Tastenkürzel.
+      </p>
+
+      <table>
+        <tr><th>Workspace</th><th>Tastenkürzel</th><th>Beschreibung</th></tr>
+        <tr><td><strong>Karte</strong></td><td><kbd>Ctrl</kbd>+<kbd>1</kbd></td><td>Kartenwiedergabe, Layer-Control und aktuelle Nachricht</td></tr>
+        <tr><td><strong>ETA Analyse</strong></td><td><kbd>Ctrl</kbd>+<kbd>2</kbd></td><td>Request-Auswahl, ETA-/Speed-Verlauf, Ereignisse und Export</td></tr>
+        <tr><td><strong>Priorisierung</strong></td><td><kbd>Ctrl</kbd>+<kbd>3</kbd></td><td>Karte plus Priorisierungsfehler-Panel und Fehlerfilter</td></tr>
+        <tr><td><strong>Rohdaten</strong></td><td><kbd>Ctrl</kbd>+<kbd>4</kbd></td><td>Nachrichtentabelle, Filter, Merge-Sicht und Detail-Inspektor</td></tr>
+      </table>
+
+      <p>
+        Im aktuellen Workspace-Layout wechseln die Tabs zwischen Karte,
+        ETA-Analyse, Priorisierung und Rohdaten. Die rechte Seitenleiste passt
+        ihren Inhalt je Workspace an. Der aktive Tab wird durch eine
+        farbige Unterstreichung hervorgehoben.
+      </p>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="nachrichtentypen" class="content">
+    <div class="section">
+      <h2>Referenz: Nachrichtentypen</h2>
+      <table>
+        <tr><th>Typ</th><th>Vollbezeichnung</th><th>Standard</th><th>Inhalt</th></tr>
+        <tr>
+          <td><span class="badge badge-cam">CAM</span></td>
+          <td>Cooperative Awareness Message</td>
+          <td>ETSI EN 302 637-2</td>
+          <td>Fahrzeugposition, Geschwindigkeit, Richtung, Fahrzeugtyp</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-denm">DENM</span></td>
+          <td>Decentralized Environmental Notification Message</td>
+          <td>ETSI EN 302 637-3</td>
+          <td>Gefahrenereignisse, Baustellen, Unfälle</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-srem">SREM</span></td>
+          <td>Signal Request Message</td>
+          <td>ETSI TS 103 301</td>
+          <td>Priorisierungsanfrage: Request-ID, Wichtigkeit, Spuren, ETA</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-ssem">SSEM</span></td>
+          <td>Signal Status Message</td>
+          <td>ETSI TS 103 301</td>
+          <td>Kreuzungsantwort: Status (pending/granted/rejected), Sequenz</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-mapem">MAPEM</span></td>
+          <td>MAP Extended Message</td>
+          <td>SAE J2735 / ISO TS 19091</td>
+          <td>Kreuzungsgeometrie: Fahrspuren, Stoplinien, Verbindungen</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-spatem">SPATEM</span></td>
+          <td>Signal Phase and Timing Message</td>
+          <td>SAE J2735 / ISO TS 19091</td>
+          <td>Aktueller Ampelzustand, Phasenprognose für alle Signalgruppen</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-nmea">NMEA</span></td>
+          <td>NMEA 0183 GNSS</td>
+          <td>NMEA 0183</td>
+          <td>GPS-Rohsätze: Position, Geschwindigkeit, Qualität</td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="fehlercodes" class="content">
+    <div class="section">
+      <h2>Referenz: Fehlercodes &amp; Schweregrade</h2>
+      <table>
+        <tr><th>Schweregrad</th><th>Bedeutung</th><th>Farbe</th></tr>
+        <tr>
+          <td><strong>critical</strong></td>
+          <td>Funktionsrelevanter Fehler der Priorisierung (z.&nbsp;B. kein granted erhalten)</td>
+          <td><span style="background:#ffe0e0;color:#7a0a15;padding:2px 8px;border-radius:4px;">Rot</span></td>
+        </tr>
+        <tr>
+          <td><strong>warning</strong></td>
+          <td>Auffälligkeit ohne direkte Funktionsbeeinträchtigung (z.&nbsp;B. ETA-Sprung)</td>
+          <td><span style="background:#fff3d6;color:#7a4f00;padding:2px 8px;border-radius:4px;">Gelb</span></td>
+        </tr>
+        <tr>
+          <td><strong>info</strong></td>
+          <td>Informative Diagnosemeldung</td>
+          <td><span style="background:#dff0ff;color:#0550ae;padding:2px 8px;border-radius:4px;">Blau</span></td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="glossar" class="content">
+    <div class="section">
+      <h2>Glossar</h2>
+      <table>
+        <tr><th>Begriff</th><th>Erläuterung</th></tr>
+        <tr><td><strong>V2X</strong></td><td>Vehicle-to-Everything – Kommunikation zwischen Fahrzeug und Infrastruktur/anderen Fahrzeugen</td></tr>
+        <tr><td><strong>ITS-PDU</strong></td><td>Intelligent Transport Systems Protocol Data Unit – Datenpaket nach ETSI-Standard</td></tr>
+        <tr><td><strong>PCAP</strong></td><td>Packet Capture – Aufzeichnungsformat für Netzwerkpakete</td></tr>
+        <tr><td><strong>ASN.1</strong></td><td>Abstract Syntax Notation One – Beschreibungssprache für ITS-Nachrichten</td></tr>
+        <tr><td><strong>TXA</strong></td><td>Transmit-seitige Aufzeichnung (Fahrzeugseite)</td></tr>
+        <tr><td><strong>RXA</strong></td><td>Receive-seitige Aufzeichnung (Infrastrukturseite)</td></tr>
+        <tr><td><strong>Merge</strong></td><td>Zusammenführung von TXA/RXA-Beobachtungen derselben Nachricht</td></tr>
+        <tr><td><strong>Station-ID</strong></td><td>Eindeutige numerische Kennung einer V2X-Einheit</td></tr>
+        <tr><td><strong>MAP</strong></td><td>Kreuzungsgeometrie-Nachricht (MAPEM)</td></tr>
+        <tr><td><strong>SPaT</strong></td><td>Signalzustandsnachricht (SPATEM)</td></tr>
+        <tr><td><strong>SRM/SREM</strong></td><td>Signal Request Message – Priorisierungsanfrage eines Fahrzeugs</td></tr>
+        <tr><td><strong>SSM/SSEM</strong></td><td>Signal Status Message – Kreuzungsantwort auf Priorisierungsanfrage</td></tr>
+        <tr><td><strong>ETA</strong></td><td>Estimated Time of Arrival – geschätzte Ankunftszeit an der Haltelinie</td></tr>
+        <tr><td><strong>KML</strong></td><td>Keyhole Markup Language – Geodatenformat für Google Earth und QGIS</td></tr>
+        <tr><td><strong>granted</strong></td><td>Status: Priorisierungsanfrage wurde gewährt</td></tr>
+        <tr><td><strong>rejected</strong></td><td>Status: Priorisierungsanfrage wurde abgelehnt</td></tr>
+        <tr><td><strong>timeout</strong></td><td>Status: Keine Antwort innerhalb der erwarteten Zeit</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="lizenzierung" class="content">
+    <div class="section">
+      <h2>Lizenzierung und Demo-Modus</h2>
+      <p>
+        Ab Version 2.0 verfügt der C-ITS Inspector über ein kryptografisches Lizenzsystem. 
+        Wenn keine gültige Lizenzdatei eingespielt ist, startet die Anwendung automatisch im <strong>Demo-Modus</strong>.
+      </p>
+
+      <h3>Gegenüberstellung: Demo-Modus vs. Kommerzielle Version</h3>
+      <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+        <thead>
+          <tr style="background: var(--navy); color: white; text-align: left;">
+            <th style="padding: 10px; border: 1px solid var(--border);">Funktion / Einschränkung</th>
+            <th style="padding: 10px; border: 1px solid var(--border);">Demo-Modus (Unlizenziert)</th>
+            <th style="padding: 10px; border: 1px solid var(--border);">Kommerzielle Vollversion</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding: 10px; border: 1px solid var(--border);"><strong>PCAP-Dateigröße</strong></td>
+            <td style="padding: 10px; border: 1px solid var(--border);">Maximal 2 MB (größere Dateien werden mit einer Fehlermeldung blockiert)</td>
+            <td style="padding: 10px; border: 1px solid var(--border);">Unbegrenzt (auch hunderte MB große Captures)</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border: 1px solid var(--border);"><strong>Unterstützte Nachrichtentypen</strong></td>
+            <td style="padding: 10px; border: 1px solid var(--border);">Nur <code>CAM</code> und <code>NMEA</code> (andere Typen wie <code>DENM</code>, <code>SPATEM</code>, <code>MAPEM</code>, <code>SREM</code>, <code>SSEM</code> werden ausgefiltert)</td>
+            <td style="padding: 10px; border: 1px solid var(--border);">Vollständig (alle V2X- und GNSS-Nachrichtentypen werden geladen)</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border: 1px solid var(--border);"><strong>MAP-XML-Import</strong></td>
+            <td style="padding: 10px; border: 1px solid var(--border);">Deaktiviert (Import von Kreuzungstopologien wird blockiert)</td>
+            <td style="padding: 10px; border: 1px solid var(--border);">Aktiviert (voller Vektor-Lageplan-Import)</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border: 1px solid var(--border);"><strong>Fenstertitel</strong></td>
+            <td style="padding: 10px; border: 1px solid var(--border);">Zeigt den Zusatz <code>(Demo)</code> im Fenstertitel an</td>
+            <td style="padding: 10px; border: 1px solid var(--border);">Zeigt den Standardtitel <code>C-ITS Inspector</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Lizenz verwalten und importieren</h3>
+      <p>
+        Um Ihren aktuellen Lizenzstatus zu prüfen, Ihre Hardware-ID für eine neue Lizenz zu kopieren oder eine erhaltene Lizenzdatei zu importieren, öffnen Sie das Lizenzfenster über <strong>Hilfe &gt; Lizenz</strong>.
+      </p>
+
+      <div class="image-group" style="display: flex; gap: 20px; margin-top: 15px;">
+        <div style="flex: 1; text-align: center;">
+          <img src="screenshots/current-functions-2026-05-28/14-lizenz-dialog-demo.png" alt="Lizenz-Dialog im Demo-Modus" style="max-width: 100%; border: 1px solid var(--border); border-radius: 4px;" />
+          <p style="font-size: 11px; margin-top: 5px; color: var(--muted);"><strong>Abb. 1:</strong> Lizenzdialog im Demo-Modus mit rotem Warnbanner und Hardware-ID</p>
+        </div>
+        <div style="flex: 1; text-align: center;">
+          <img src="screenshots/current-functions-2026-05-28/15-lizenz-dialog-vollversion.png" alt="Lizenz-Dialog in der kommerziellen Version" style="max-width: 100%; border: 1px solid var(--border); border-radius: 4px;" />
+          <p style="font-size: 11px; margin-top: 5px; color: var(--muted);"><strong>Abb. 2:</strong> Lizenzdialog mit erfolgreicher Verifikation und grünem Status</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <section id="fehlerbehebung" class="content">
+    <div class="section">
+      <h2>Fehlerbehebung</h2>
+
+      <h3>Häufige Probleme</h3>
+      <table>
+        <tr><th>Problem</th><th>Ursache</th><th>Lösung</th></tr>
+        <tr>
+          <td>EXE startet nicht</td>
+          <td>Windows blockiert die Datei oder der Programmordner ist unvollstaendig</td>
+          <td>Datei gemaess interner Freigabe entsperren; kompletten bereitgestellten Ordner erneut kopieren</td>
+        </tr>
+        <tr>
+          <td>Karte bleibt leer / grau</td>
+          <td>Keine Internetverbindung für Kartenkacheln</td>
+          <td>Internetverbindung prüfen; ggf. anderen Kachel-Layer wählen</td>
+        </tr>
+        <tr>
+          <td>Keine Nachrichten in der Tabelle</td>
+          <td>Alle Filter deaktiviert oder keine V2X-Pakete in PCAP</td>
+          <td>Filter-Zeile prüfen; Datei auf V2X-Inhalt prüfen</td>
+        </tr>
+        <tr>
+          <td>Priorisierungsfehler-Panel fehlt</td>
+          <td>Keine SREM/SSEM-Nachrichten in der Sitzung</td>
+          <td>PCAP mit SREM/SSEM-Inhalt laden</td>
+        </tr>
+        <tr>
+          <td>ETA-Tab zeigt keinen Graph</td>
+          <td>Keine Request/Merge-Spur verfügbar oder keine SREM</td>
+          <td>SREM in Filtern aktivieren; andere Spur im Dropdown wählen</td>
+        </tr>
+        <tr>
+          <td>KML-Export-Schaltfläche ausgegraut</td>
+          <td>Noch keine Sitzung geladen</td>
+          <td>Erst PCAP importieren</td>
+        </tr>
+        <tr>
+          <td>Anwendung friert beim Laden ein</td>
+          <td>Sehr große PCAP-Datei (&gt; 500 MB)</td>
+          <td>Datei aufteilen oder Ladevorgang auf Hintergrundbetrieb warten</td>
+        </tr>
+        <tr>
+          <td>Wiedergabe stockt / ruckelt</td>
+          <td>Hohe Nachrichtendichte oder schwächere Hardware</td>
+          <td>Performance-Modus auf <em>Schonend</em> oder <em>Diagnose</em> setzen
+              (siehe <a href="#performance">Performance-Modi</a>)</td>
+        </tr>
+        <tr>
+          <td>Karte friert kurzzeitig ein</td>
+          <td>Pan/Zoom oder Resize während laufender Wiedergabe</td>
+          <td>Kurz warten — Catch-up-Flush spielt nach Interaktions-Ende automatisch nach</td>
+        </tr>
+        <tr>
+          <td>Hinweis <code>[map.reload]</code> in der Statusleiste</td>
+          <td>Drei Stalls innerhalb 60 s erkannt</td>
+          <td>Auto-Recovery hat die Map neu geladen — kein Eingreifen nötig</td>
+        </tr>
+        <tr>
+          <td>Map dauerhaft leer trotz Reload</td>
+          <td>Render-Pipeline-Crash oder fehlende GPU-Beschleunigung</td>
+          <td>Anwendung neu starten; bei Wiederholung <strong>Diagnose exportieren</strong> ausfuehren und Bericht weitergeben</td>
+        </tr>
+      </table>
+
+      <div class="callout danger">
+        <strong>Unerwarteter Fehler</strong>
+        Erscheint ein Fehlerdialog „Unerwarteter Fehler", bitte wenn moeglich
+        <strong>Diagnose exportieren</strong> ausfuehren und den erzeugten Bericht
+        zusammen mit der betroffenen PCAP-Beschreibung weitergeben.
+      </div>
+
+      <h3>Diagnosebericht erzeugen</h3>
+      <p>
+        Fuer erweiterte Diagnoseinformationen in der Werkzeugleiste
+        <strong>Diagnose exportieren</strong> waehlen. Die App schreibt einen
+        Bericht mit Sitzungsdaten, Kartenstatus und Laufzeitinformationen in den
+        ausgewaehlten Ordner.
+      </p>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <div style="background:var(--navy);color:#6a829c;padding:24px 56px;font-size:12px;margin-left:0;">
+    C-ITS Inspector · Benutzerhandbuch fuer die Windows-EXE · Stand 2026-05-28 · SWARCO ITS
+  </div>
+
+</div><!-- /.main -->
+
+<script>
+  // Highlight active nav link on scroll
+  const sections = document.querySelectorAll('section[id]');
+  const navLinks = document.querySelectorAll('.sidebar nav a');
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(a => a.classList.remove('active'));
+        const active = document.querySelector(`.sidebar nav a[href="#${entry.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
