@@ -156,6 +156,61 @@
       border-radius: 8px;
       box-shadow: 0 2px 12px rgba(16,35,63,.15);
     }
+    /* ── v1.10: Side-by-Side-Vergleich Vollversion vs Demo ── */
+    .screenshot-box.side-by-side {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      text-align: left;
+    }
+    .screenshot-box.side-by-side .ss-pair {
+      background: var(--bg);
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .screenshot-box.side-by-side .ss-pair-mode {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--text);
+      opacity: .65;
+      margin-bottom: 6px;
+    }
+    .screenshot-box.side-by-side .ss-pair img {
+      margin: 0;
+      width: 100%;
+    }
+    .screenshot-box.side-by-side .ss-pair[data-mode="demo"] {
+      background: #fff5f5;
+      border: 1px dashed #d99;
+    }
+    .screenshot-box.side-by-side .ss-pair[data-mode="demo"] .ss-pair-mode {
+      color: #b00;
+    }
+    .screenshot-box.side-by-side .ss-pair[data-mode="vollversion"] {
+      background: #f4fbf6;
+      border: 1px solid #bdb;
+    }
+    .screenshot-box.side-by-side .ss-pair[data-mode="vollversion"] .ss-pair-mode {
+      color: #060;
+    }
+    .screenshot-box.side-by-side .ss-pair-fallback {
+      font-size: 11px;
+      color: var(--text);
+      opacity: .55;
+      padding: 30px 10px;
+      text-align: center;
+      background: repeating-linear-gradient(
+        45deg, transparent, transparent 8px,
+        rgba(0,0,0,.04) 8px, rgba(0,0,0,.04) 16px
+      );
+      border-radius: 4px;
+      min-height: 100px;
+    }
+    @media (max-width: 900px) {
+      .screenshot-box.side-by-side { grid-template-columns: 1fr; }
+    }
 
     /* ── Tables ── */
     table {
@@ -313,15 +368,15 @@
 
   <!-- Hero -->
   <div class="hero">
-    <div class="hero-badge">SWARCO ITS · V2X Analyse</div>
+    <div class="hero-badge">Kevin Seipel · V2X Analyse</div>
     <h1>C-ITS Inspector</h1>
     <p>Datenorientierte V2X-Analyse: PCAP- und MAP-XML-Dateien laden, Nachrichten auf einer interaktiven Karte visualisieren, Priorisierungsfehler diagnostizieren und Ergebnisse als KML oder CSV exportieren.</p>
     <div class="hero-meta">
-      <div class="hero-meta-item"><strong>Version</strong>2026.0607</div>
+      <div class="hero-meta-item"><strong>Version</strong>2026.0611</div>
       <div class="hero-meta-item"><strong>Plattform</strong>Windows 10/11</div>
       <div class="hero-meta-item"><strong>Ausfuehrung</strong>C-ITS-Inspector.exe</div>
       <div class="hero-meta-item"><strong>Formate</strong>.pcap · .pcapng · .cap · .xml</div>
-      <div class="hero-meta-item"><strong>Stand</strong>2026-06-07</div>
+      <div class="hero-meta-item"><strong>Stand</strong>2026-06-11</div>
     </div>
   </div>
 
@@ -352,8 +407,8 @@
     <div class="section">
       <h2>Aktuelle Funktionen und Screenshots</h2>
       <p>
-        Dieser Abschnitt dokumentiert den aktuellen UI-Stand vom 14.05.2026.
-        Die vollstaendige Markdown-Sammlung fuer eine spaetere Praesentation liegt
+        Dieser Abschnitt dokumentiert den aktuellen UI-Stand (Version 2026.0611).
+        Die vollständige Markdown-Sammlung für eine spätere Präsentation liegt
         unter <code>docs/aktuelle_funktionen_screenshots.md</code>.
       </p>
       <table>
@@ -370,25 +425,25 @@
       <div class="screenshot-box">
         <div class="ss-label">AKTUELLER SCREENSHOT 1</div>
         <div class="ss-desc">Karten-Workspace mit OSM-Karte, V2X-Layern und Statusleiste</div>
-        <img src="screenshots/current-functions-2026-05-28/01-hauptfenster-karte.png" alt="Aktueller Karten-Workspace mit Leaflet-Karte, Layer-Control und Wiedergabeleiste" />
+        <img src="benutzerhandbuch_screenshots/vollversion/01_hauptfenster_karte.png" alt="Aktueller Karten-Workspace mit Leaflet-Karte, Layer-Control und Wiedergabeleiste" />
       </div>
 
       <div class="screenshot-box">
         <div class="ss-label">AKTUELLER SCREENSHOT 2</div>
         <div class="ss-desc">Schnellbefehl-Palette mit Workspace-Shortcuts und Aktionen</div>
-        <img src="screenshots/current-functions-2026-05-28/02-schnellbefehl-palette.png" alt="Schnellbefehl-Palette mit Workspaces und Aktionen" />
+        <img src="benutzerhandbuch_screenshots/vollversion/02_schnellbefehl_palette.png" alt="Schnellbefehl-Palette mit Workspaces und Aktionen" />
       </div>
 
       <div class="screenshot-box">
         <div class="ss-label">AKTUELLER SCREENSHOT 3</div>
         <div class="ss-desc">ETA-Analyse mit Request-Auswahl, Kennzahlen und Ereignistabelle</div>
-        <img src="screenshots/current-functions-2026-05-28/04-eta-analyse.png" alt="ETA-Analyse-Workspace mit Karte, Request-Details, Zeitachse und Ereignistabelle" />
+        <img src="benutzerhandbuch_screenshots/vollversion/04_eta_analyse.png" alt="ETA-Analyse-Workspace mit Karte, Request-Details, Zeitachse und Ereignistabelle" />
       </div>
 
       <div class="screenshot-box">
         <div class="ss-label">AKTUELLER SCREENSHOT 4</div>
         <div class="ss-desc">Rohdaten-Workspace mit Tabelle und Detail-Inspektor</div>
-        <img src="screenshots/current-functions-2026-05-28/06-rohdaten-inspektor.png" alt="Rohdaten-Workspace mit Nachrichtentabelle und Detail-Inspektor" />
+        <img src="benutzerhandbuch_screenshots/vollversion/06_rohdaten_inspektor.png" alt="Rohdaten-Workspace mit Nachrichtentabelle und Detail-Inspektor" />
       </div>
 
       <h3>Karten-Ausschnitte aus Beispieldaten</h3>
@@ -401,13 +456,13 @@
       <div class="screenshot-box">
         <div class="ss-label">AKTUELLER SCREENSHOT 7</div>
         <div class="ss-desc">PCAP-Beispieldaten, Zoom 19 auf MAPEM-Knotenpunkt 52.427970 / 13.526802</div>
-        <img src="screenshots/current-functions-2026-05-28/08-pcap-kartenausschnitt-trajektorien.png" alt="PCAP-Kartenausschnitt mit Trajektorien, Stationen und Infrastruktur-Layern" />
+        <img src="benutzerhandbuch_screenshots/vollversion/08_pcap_kartenausschnitt.png" alt="PCAP-Kartenausschnitt mit Trajektorien, Stationen und Infrastruktur-Layern" />
       </div>
 
       <div class="screenshot-box">
         <div class="ss-label">AKTUELLER SCREENSHOT 6</div>
         <div class="ss-desc">MAP-XML-Beispieldaten, Zoom 19 auf Knotenpunkt 49.2034845 / 8.1241752</div>
-        <img src="screenshots/current-functions-2026-05-28/09-map-xml-kartenausschnitt-landau.png" alt="MAP-XML-Kartenausschnitt mit Fahrspur- und Kreuzungsgeometrie" />
+        <img src="benutzerhandbuch_screenshots/vollversion/09_map_xml_kartenausschnitt.png" alt="MAP-XML-Kartenausschnitt mit Fahrspur- und Kreuzungsgeometrie" />
       </div>
     </div>
   </section>
@@ -457,7 +512,7 @@
       <div class="screenshot-box">
         <div class="ss-label">START-HINWEIS SCREENSHOT</div>
         <div class="ss-desc">Hinweisdialog beim Programmstart zur Wireshark-Optimierung</div>
-        <img src="screenshots/current-functions-2026-05-28/10-wireshark-start-hinweis.png" alt="Wireshark-Start-Hinweis Dialog mit Checkbox und OK-Schaltfläche" />
+        <img src="benutzerhandbuch_screenshots/vollversion/10_wireshark_start_hinweis.png" alt="Wireshark-Start-Hinweis Dialog mit Checkbox und OK-Schaltfläche" />
       </div>
     </div>
   </section>
@@ -471,12 +526,12 @@
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 1</div>
         <div class="ss-desc">Gesamtansicht des Hauptfensters nach dem Laden einer PCAP-Datei</div>
-        <img src="screenshots/current-functions-2026-05-28/01-hauptfenster-karte.png" alt="Gesamtansicht des C-ITS Inspector-Hauptfensters mit geladener PCAP-Sitzung" />
+        <img src="benutzerhandbuch_screenshots/vollversion/01_hauptfenster_karte.png" alt="Gesamtansicht des C-ITS Inspector-Hauptfensters mit geladener PCAP-Sitzung" />
       </div>
 
       <table>
         <tr><th>Bereich</th><th>Position</th><th>Funktion</th></tr>
-        <tr><td><strong>Werkzeugleiste</strong></td><td>Ganz oben</td><td>Datei laden, Exporte, Diagnose, Karte, Schemas, Dashboard, Farbmodus und Schnellbefehl</td></tr>
+        <tr><td><strong>Werkzeugleiste</strong></td><td>Ganz oben</td><td>Importieren, Letzte Sitzung, Inhalt löschen, Farbmodus, Schnellbefehl. Exporte und Dashboard sind über die Menüs <em>Datei</em>, <em>Export</em> und <em>Ansicht</em> erreichbar.</td></tr>
         <tr><td><strong>Workspace-Tabs</strong></td><td>Unter der Toolbar</td><td><em>Karte</em>, <em>ETA Analyse</em>, <em>Priorisierung</em> und <em>Rohdaten</em></td></tr>
         <tr><td><strong>Kartenbereich</strong></td><td>Mitte links</td><td>Leaflet-Karte mit Layer-Control, Stationen, Trajektorien und Infrastruktur-Layern</td></tr>
         <tr><td><strong>Seitlicher Inspektor</strong></td><td>Rechts</td><td>Aktuelle Nachricht, Request-Details, Priorisierungsfehler oder Detail-Inspektor je Workspace</td></tr>
@@ -489,9 +544,10 @@
   <!-- ─────────────────────────────────────────────── -->
   <section id="toolbar" class="content">
     <div class="section">
+      <!-- TODO v2.0: Screenshots im gesamten Handbuch neu aufnehmen. Die aktuellen Screenshots stammen aus Version 2026.0607; das UI-Layout hat sich mit v1.10 (2026.0611) geändert (neue Menüs „Export" und „Ansicht", aufgeräumte Toolbar). Text-Beschreibungen unten sind aktualisiert. -->
       <h2>Menüleiste und Werkzeugleiste</h2>
       <p>
-        In Version 2026.0607 wurde das Hauptfenster durch eine echte Menüleiste (<code>QMenuBar</code>) strukturiert. Dadurch wurde die Werkzeugleiste (Toolbar) erheblich aufgeräumt und von ausladenden Auswahllisten befreit.
+        In Version 2026.0607 wurde das Hauptfenster durch eine echte Menüleiste (<code>QMenuBar</code>) strukturiert. In Version 2026.0611 (v1.10) wurde die Menüstruktur erweitert: die fünf in der Toolbar verbliebenen Export-Buttons sind in zwei dedizierte Menüs <strong>„Export"</strong> und <strong>„Ansicht"</strong> verschoben. Die Werkzeugleiste enthält jetzt nur noch die wichtigsten Schnellzugriffsaktionen.
       </p>
 
       <h3>Menüstruktur</h3>
@@ -499,11 +555,19 @@
         <tr><th>Menü</th><th>Aktionen / Untermenüs</th></tr>
         <tr>
           <td><strong>Datei</strong></td>
-          <td>Importieren (PCAP/XML), Letzte Sitzung laden, Sitzungsverlauf (Sitzungs-Auswahlliste), KML exportieren, Priorisierung exportieren, Inhalt löschen, Beenden</td>
+          <td>Importieren (PCAP/XML), Letzte Sitzung laden, Sitzungsverlauf (Sitzungs-Auswahlliste), Inhalt löschen, Beenden</td>
+        </tr>
+        <tr>
+          <td><strong>Export</strong> <em>(neu in v1.10)</em></td>
+          <td>KML exportieren, Priorisierung exportieren, Diagnose exportieren, Bericht exportieren</td>
         </tr>
         <tr>
           <td><strong>Optionen</strong></td>
-          <td>Diagnose exportieren, Heatmap (mit Modus-Auswahl), Rot/Grün-Modus (Farbblindheits-Modus umschalten), Karte neu laden, Screenshot aufnehmen, ASN.1-Schemas verwalten</td>
+          <td>Heatmap (mit Modus-Auswahl), Rot/Grün-Modus (Farbblindheits-Modus umschalten), ASN.1-Schemas verwalten</td>
+        </tr>
+        <tr>
+          <td><strong>Ansicht</strong> <em>(neu in v1.10)</em></td>
+          <td>Dashboard, Karte neu laden, Screenshot aufnehmen</td>
         </tr>
         <tr>
           <td><strong>Hilfe</strong></td>
@@ -513,16 +577,15 @@
 
       <h3>Werkzeugleiste (Toolbar)</h3>
       <p>
-        Die Werkzeugleiste enthält die am häufigsten genutzten Schnellzugriffsschaltflächen für einen effizienten Workflow:
+        Die Werkzeugleiste enthält die am häufigsten genutzten Schnellzugriffsschaltflächen für einen effizienten Workflow. In v1.10 wurden die Export-Buttons aus der Toolbar entfernt; sie sind jetzt über die Menüs <strong>Datei</strong>, <strong>Export</strong> und <strong>Ansicht</strong> erreichbar.
       </p>
       <table>
         <tr><th>Schaltfläche</th><th>Funktion</th></tr>
         <tr><td><strong>Importieren</strong></td><td>Öffnet den Dateidialog zur Auswahl von PCAP- oder MAP-XML-Dateien</td></tr>
         <tr><td><strong>Letzte Sitzung</strong></td><td>Lädt die zuletzt verwendeten PCAP-Dateien erneut</td></tr>
-        <tr><td><strong>KML exportieren</strong></td><td>Exportiert gefilterte Entitäten als KML-Dateien</td></tr>
-        <tr><td><strong>Fehler exportieren</strong></td><td>Exportiert Priorisierungsfehler als CSV, JSON oder TXT-Report</td></tr>
+        <tr><td><strong>Inhalt löschen</strong></td><td>Entfernt alle geladenen Nachrichten und Karten-Layer</td></tr>
         <tr><td><strong>Farben</strong></td><td>Schaltet die Farbpalette für Rot/Grün-Schwäche um (Barrierefreiheit)</td></tr>
-        <tr><td><strong>Schnellbefehl</strong></td><td>Öffnet die Befehlspalette (<kbd>Ctrl</kbd>+<kbd>K</kbd>) zur Tastaturnavigation</td></tr>
+        <tr><td><strong>Schnellbefehl</strong></td><td>Öffnet die Befehlspalette (<kbd>Ctrl</kbd>+<kbd>K</kbd>) zur Tastaturnavigation. Enthält weiterhin alle Export-Aktionen, das Dashboard und die Kartenneuladung als Tastatur-Shortcuts.</td></tr>
       </table>
       <div class="callout info">
         <strong>Hinweis</strong>
@@ -544,7 +607,7 @@
       <div class="screenshot-box">
         <div class="ss-label">DASHBOARD</div>
         <div class="ss-desc">Statistik-Dashboard über der geladenen Kartenansicht</div>
-        <img src="screenshots/current-functions-2026-05-28/03-statistik-dashboard.png" alt="Statistik-Dashboard mit Gesamtzahl, Stationen, Nachrichtentypen, Dauer und Nachrichtenrate" />
+        <img src="benutzerhandbuch_screenshots/vollversion/03_statistik_dashboard.png" alt="Statistik-Dashboard mit Gesamtzahl, Stationen, Nachrichtentypen, Dauer und Nachrichtenrate" />
       </div>
     </div>
   </section>
@@ -563,7 +626,7 @@
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 3</div>
         <div class="ss-desc">Status- und Wiedergabebereich nach dem Laden einer Sitzung</div>
-        <img src="screenshots/current-functions-2026-05-28/01-hauptfenster-karte.png" alt="Wiedergabesteuerung und Statusleiste mit Nachrichten-, Stations- und Leistungsangaben" />
+        <img src="benutzerhandbuch_screenshots/vollversion/01_hauptfenster_karte.png" alt="Wiedergabesteuerung und Statusleiste mit Nachrichten-, Stations- und Leistungsangaben" />
       </div>
 
       <table>
@@ -595,7 +658,7 @@
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 4</div>
         <div class="ss-desc">Filter-Zeile mit aktivierten Nachrichtentypen und ausgewählten Stationen</div>
-        <img src="screenshots/current-functions-2026-05-28/06-rohdaten-inspektor.png" alt="Filter-Zeile mit Nachrichtentyp-Checkboxen, Stationsliste und Merge-Schalter im Rohdaten-Workspace" />
+        <img src="benutzerhandbuch_screenshots/vollversion/06_rohdaten_inspektor.png" alt="Filter-Zeile mit Nachrichtentyp-Checkboxen, Stationsliste und Merge-Schalter im Rohdaten-Workspace" />
       </div>
 
       <h3>Nachrichtentyp-Filter</h3>
@@ -657,7 +720,7 @@
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 5</div>
         <div class="ss-desc">Interaktive Karte mit Fahrzeug-Markern und Trajektorien während der Wiedergabe</div>
-        <img src="screenshots/current-functions-2026-05-28/08-pcap-kartenausschnitt-trajektorien.png" alt="Leaflet-Karte mit Fahrzeug-Markern, Trajektorien und MAP/SPAT-Layern" />
+        <img src="benutzerhandbuch_screenshots/vollversion/08_pcap_kartenausschnitt.png" alt="Leaflet-Karte mit Fahrzeug-Markern, Trajektorien und MAP/SPAT-Layern" />
       </div>
 
       <h3>Karteninteraktion</h3>
@@ -701,7 +764,7 @@
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 6</div>
         <div class="ss-desc">Rohdaten-Workspace mit Nachrichtentabelle und Detail-Inspektor</div>
-        <img src="screenshots/current-functions-2026-05-28/06-rohdaten-inspektor.png" alt="Rohdaten-Workspace mit markierter Nachricht, Quellen-/Merge-Spalten und Detail-Inspektor" />
+        <img src="benutzerhandbuch_screenshots/vollversion/06_rohdaten_inspektor.png" alt="Rohdaten-Workspace mit markierter Nachricht, Quellen-/Merge-Spalten und Detail-Inspektor" />
       </div>
 
       <h3>Spalten</h3>
@@ -789,7 +852,7 @@
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 7</div>
         <div class="ss-desc">Inspektor mit Decode-Tree, Hex-Dump und PKI-Bereich</div>
-        <img src="screenshots/current-functions-2026-05-28/06-rohdaten-inspektor.png" alt="Detail-Inspektor mit dekodierten ASN.1-Feldern als Baum, Hex-Dump und Security-Bereich" />
+        <img src="benutzerhandbuch_screenshots/vollversion/06_rohdaten_inspektor.png" alt="Detail-Inspektor mit dekodierten ASN.1-Feldern als Baum, Hex-Dump und Security-Bereich" />
       </div>
 
       <h4>Decode-Tree</h4>
@@ -841,7 +904,7 @@
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 8</div>
         <div class="ss-desc">Priorisierungs-Workspace mit Kartenansicht und Fehlerpanel</div>
-        <img src="screenshots/current-functions-2026-05-28/05-priorisierungsfehler.png" alt="Priorisierungs-Workspace mit Fehlerfilter, Fehlerliste und Kartenlayern" />
+        <img src="benutzerhandbuch_screenshots/vollversion/05_priorisierungsfehler.png" alt="Priorisierungs-Workspace mit Fehlerfilter, Fehlerliste und Kartenlayern" />
       </div>
 
       <h4>Kreuzungstabelle</h4>
@@ -900,7 +963,7 @@
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 9</div>
         <div class="ss-desc">ETA-Analyse-Workspace mit Request-Auswahl, Kennzahlen und Ereignistabelle</div>
-        <img src="screenshots/current-functions-2026-05-28/04-eta-analyse.png" alt="ETA-Analyse-Workspace mit Karte, Request-Details, ETA-Verlauf und Ereignistabelle" />
+        <img src="benutzerhandbuch_screenshots/vollversion/04_eta_analyse.png" alt="ETA-Analyse-Workspace mit Karte, Request-Details, ETA-Verlauf und Ereignistabelle" />
       </div>
 
       <h4>Graphelemente</h4>
@@ -935,7 +998,7 @@
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 11</div>
         <div class="ss-desc">Workspace Signalzustandsanalyse - Dashboard zur Vorhersagequalität</div>
-        <img src="screenshots/current-functions-2026-05-28/11-spat-vorhersagequalitaet.png" alt="Signalzustandsanalyse - Dashboard zur Vorhersagequalität" />
+        <img src="benutzerhandbuch_screenshots/vollversion/11_spat_vorhersagequalitaet.png" alt="Signalzustandsanalyse - Dashboard zur Vorhersagequalität" />
       </div>
 
       <h3>1. Dashboard, Detailansicht und Qualitätsansicht</h3>
@@ -955,7 +1018,7 @@
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 12</div>
         <div class="ss-desc">Visualisierung der Signalzustände aller Signalgruppen über der Zeit inkl. SRM-Priorisierungen</div>
-        <img src="screenshots/current-functions-2026-05-28/12-spat-gantt.png" alt="Signalzeitenplan-Gantt mit SRM-Markierungen" />
+        <img src="benutzerhandbuch_screenshots/vollversion/12_spat_gantt.png" alt="Signalzeitenplan-Gantt mit SRM-Markierungen" />
       </div>
       <ul>
         <li><strong>Farbkodierung der Ampelphasen:</strong>
@@ -978,7 +1041,7 @@
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 13</div>
         <div class="ss-desc">Darstellung des Prognosehorizonts (LikelyTime minus Sendezeit) zur Stabilitätsprüfung</div>
-        <img src="screenshots/current-functions-2026-05-28/13-spat-prognosehorizont.png" alt="Prognosehorizont-Diagramm" />
+        <img src="benutzerhandbuch_screenshots/vollversion/13_spat_prognosehorizont.png" alt="Prognosehorizont-Diagramm" />
       </div>
       <ul>
         <li><strong>Y-Achse:</strong> Verbleibende Restzeit bis zum Phasenwechsel ($T_{likely} - T_{send}$) in Sekunden.</li>
@@ -1011,7 +1074,7 @@
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 10</div>
         <div class="ss-desc">Priorisierungsfehler-Panel mit Filter für Schweregrad und Kreuzung</div>
-        <img src="screenshots/current-functions-2026-05-28/05-priorisierungsfehler.png" alt="Priorisierungsfehler-Panel mit Filterauswahl, Fehler-Badge und Kartenansicht" />
+        <img src="benutzerhandbuch_screenshots/vollversion/05_priorisierungsfehler.png" alt="Priorisierungsfehler-Panel mit Filterauswahl, Fehler-Badge und Kartenansicht" />
       </div>
 
       <h3>Fehlerfilter</h3>
@@ -1062,7 +1125,7 @@
       <div class="screenshot-box">
         <div class="ss-label">SCREENSHOT 11</div>
         <div class="ss-desc">Wiedergabesteuerung während aktiver Wiedergabe</div>
-        <img src="screenshots/current-functions-2026-05-28/01-hauptfenster-karte.png" alt="Wiedergabeleiste mit Problemstellenmodus, Play, Pause, Stop, Slider und Geschwindigkeit" />
+        <img src="benutzerhandbuch_screenshots/vollversion/01_hauptfenster_karte.png" alt="Wiedergabeleiste mit Problemstellenmodus, Play, Pause, Stop, Slider und Geschwindigkeit" />
       </div>
 
       <table>
@@ -1253,7 +1316,7 @@
       <div class="screenshot-box">
         <div class="ss-label">AKTUELLER SCREENSHOT 5</div>
         <div class="ss-desc">Integrierte MAP/SPAT-Prüfung mit C-Roads-Handbuchregeln und Exportaktionen</div>
-        <img src="screenshots/current-functions-2026-05-28/07-map-spat-pruefung.png" alt="Integrierte MAP/SPAT-Prüfung mit Severity, Code, Rule, Intersection, Lane und Beschreibung" />
+        <img src="benutzerhandbuch_screenshots/vollversion/07_map_spat_pruefung.png" alt="Integrierte MAP/SPAT-Prüfung mit Severity, Code, Rule, Intersection, Lane und Beschreibung" />
       </div>
 
       <h3>Gepruefte C-Roads-Punkte</h3>
@@ -1529,24 +1592,43 @@
     <div class="section">
       <h2>Workspace wechseln</h2>
       <p>
-        Die Anwendung nutzt vier feste Workspaces. Der Wechsel erfolgt über die
-        Tab-Leiste direkt unter der Werkzeugleiste, über die Befehlspalette
+        Die Anwendung nutzt eine <strong>zweistufige Workspace-Navigation</strong>
+        (siehe <a href="#context-tabs">Zweistufige Workspaces</a>): fünf thematische
+        Obergruppen in der oberen Tab-Reihe, deren Unter-Workspaces dynamisch in der
+        zweiten Reihe erscheinen. Der Wechsel erfolgt über die Tab-Leiste direkt
+        unter der Werkzeugleiste, über die Befehlspalette (<kbd>Ctrl</kbd>+<kbd>K</kbd>)
         oder per Tastenkürzel.
       </p>
 
+      <h3>Obergruppen und Unter-Workspaces</h3>
+      <table>
+        <tr><th>Obergruppe</th><th>Unter-Workspaces</th></tr>
+        <tr><td><strong>MAP-Analyse</strong></td><td>Karte, Track-Vergleich, MAP prüfen</td></tr>
+        <tr><td><strong>Priorisierungs-Analyse</strong></td><td>ETA Analyse, Priorisierung</td></tr>
+        <tr><td><strong>Compliance</strong></td><td>PKI Analyse, Analyse Ergebnisse</td></tr>
+        <tr><td><strong>Signalzustandsanalyse</strong></td><td>SPAT-Vorhersagequalität (mit den Unter-Tabs Dashboard, Detailansicht, Qualitätsansicht, Signalzeitenplan/Gantt, Prognosehorizont)</td></tr>
+        <tr><td><strong>Rohdaten</strong></td><td>Rohdaten</td></tr>
+      </table>
+
+      <h3>Tastenkürzel</h3>
+      <p>Die Tastenkürzel springen direkt zum jeweiligen Workspace (nicht nur zur Obergruppe):</p>
       <table>
         <tr><th>Workspace</th><th>Tastenkürzel</th><th>Beschreibung</th></tr>
         <tr><td><strong>Karte</strong></td><td><kbd>Ctrl</kbd>+<kbd>1</kbd></td><td>Kartenwiedergabe, Layer-Control und aktuelle Nachricht</td></tr>
         <tr><td><strong>ETA Analyse</strong></td><td><kbd>Ctrl</kbd>+<kbd>2</kbd></td><td>Request-Auswahl, ETA-/Speed-Verlauf, Ereignisse und Export</td></tr>
         <tr><td><strong>Priorisierung</strong></td><td><kbd>Ctrl</kbd>+<kbd>3</kbd></td><td>Karte plus Priorisierungsfehler-Panel und Fehlerfilter</td></tr>
         <tr><td><strong>Rohdaten</strong></td><td><kbd>Ctrl</kbd>+<kbd>4</kbd></td><td>Nachrichtentabelle, Filter, Merge-Sicht und Detail-Inspektor</td></tr>
+        <tr><td><strong>PKI Analyse</strong></td><td><kbd>Ctrl</kbd>+<kbd>5</kbd></td><td>Kryptografische Signatur- und Zertifikatsprüfung</td></tr>
+        <tr><td><strong>Analyse Ergebnisse</strong></td><td><kbd>Ctrl</kbd>+<kbd>6</kbd></td><td>Detaillierte Standard-Konformitätstests (z.&nbsp;B. C-Roads)</td></tr>
+        <tr><td><strong>Track-Vergleich</strong></td><td><kbd>Ctrl</kbd>+<kbd>7</kbd></td><td>Abgleich von Empfangsspuren (RSU vs. Fahrzeug)</td></tr>
+        <tr><td><strong>SPAT-Vorhersagequalität</strong></td><td><kbd>Ctrl</kbd>+<kbd>8</kbd></td><td>Signalzustandsanalyse mit Gantt und Prognosehorizont</td></tr>
+        <tr><td><strong>MAP prüfen</strong></td><td><kbd>Ctrl</kbd>+<kbd>9</kbd></td><td>Integrierte MAP/SPAT-Konformitätsprüfung (C-Roads)</td></tr>
       </table>
 
       <p>
-        Im aktuellen Workspace-Layout wechseln die Tabs zwischen Karte,
-        ETA-Analyse, Priorisierung und Rohdaten. Die rechte Seitenleiste passt
-        ihren Inhalt je Workspace an. Der aktive Tab wird durch eine
-        farbige Unterstreichung hervorgehoben.
+        Die rechte Seitenleiste passt ihren Inhalt je Workspace an. Der aktive
+        Tab wird hervorgehoben; pro Obergruppe merkt sich die App den zuletzt
+        gewählten Unter-Workspace.
       </p>
     </div>
   </section>
@@ -1676,7 +1758,7 @@
         <tbody>
           <tr>
             <td style="padding: 10px; border: 1px solid var(--border);"><strong>PCAP-Dateigröße</strong></td>
-            <td style="padding: 10px; border: 1px solid var(--border);">Maximal 2 MB (größere Dateien werden mit einer Fehlermeldung blockiert)</td>
+            <td style="padding: 10px; border: 1px solid var(--border);">Maximal 3 MB (größere Dateien werden mit einer Fehlermeldung blockiert)</td>
             <td style="padding: 10px; border: 1px solid var(--border);">Unbegrenzt (auch hunderte MB große Captures)</td>
           </tr>
           <tr>
@@ -1704,11 +1786,11 @@
 
       <div class="image-group" style="display: flex; gap: 20px; margin-top: 15px;">
         <div style="flex: 1; text-align: center;">
-          <img src="screenshots/current-functions-2026-05-28/14-lizenz-dialog-demo.png" alt="Lizenz-Dialog im Demo-Modus" style="max-width: 100%; border: 1px solid var(--border); border-radius: 4px;" />
+          <img src="benutzerhandbuch_screenshots/demo/14_lizenz_dialog.png" alt="Lizenz-Dialog im Demo-Modus" style="max-width: 100%; border: 1px solid var(--border); border-radius: 4px;" />
           <p style="font-size: 11px; margin-top: 5px; color: var(--muted);"><strong>Abb. 1:</strong> Lizenzdialog im Demo-Modus mit rotem Warnbanner und Hardware-ID</p>
         </div>
         <div style="flex: 1; text-align: center;">
-          <img src="screenshots/current-functions-2026-05-28/15-lizenz-dialog-vollversion.png" alt="Lizenz-Dialog in der kommerziellen Version" style="max-width: 100%; border: 1px solid var(--border); border-radius: 4px;" />
+          <img src="benutzerhandbuch_screenshots/vollversion/14_lizenz_dialog.png" alt="Lizenz-Dialog in der kommerziellen Version" style="max-width: 100%; border: 1px solid var(--border); border-radius: 4px;" />
           <p style="font-size: 11px; margin-top: 5px; color: var(--muted);"><strong>Abb. 2:</strong> Lizenzdialog mit erfolgreicher Verifikation und grünem Status</p>
         </div>
       </div>
@@ -1800,7 +1882,7 @@
 
   <!-- Footer -->
   <div style="background:var(--navy);color:#6a829c;padding:24px 56px;font-size:12px;margin-left:0;">
-    C-ITS Inspector · Benutzerhandbuch fuer die Windows-EXE · Stand 2026-05-28 · SWARCO ITS
+    C-ITS Inspector · Benutzerhandbuch für die Windows-EXE · Stand 2026-06-11 · Kevin Seipel
   </div>
 
 </div><!-- /.main -->
@@ -1821,6 +1903,65 @@
   }, { rootMargin: '-20% 0px -70% 0px' });
 
   sections.forEach(s => observer.observe(s));
+
+  // ── v1.10: Convert each .screenshot-box to side-by-side Vollversion vs Demo ──
+  (function () {
+    const boxes = document.querySelectorAll('.screenshot-box');
+    boxes.forEach(function (box) {
+      // Skip if already converted.
+      if (box.classList.contains('side-by-side')) return;
+      // Find the first img inside the box.
+      const img = box.querySelector('img');
+      if (!img) return;
+      const fullSrc = img.getAttribute('src');
+      if (!fullSrc) return;
+      // Vollversion src = current path. Demo src = swap "vollversion" → "demo".
+      const demoSrc = fullSrc.replace('/vollversion/', '/demo/');
+
+      // Build side-by-side container.
+      const wrap = document.createElement('div');
+      wrap.className = 'screenshot-box side-by-side';
+      // Preserve original label + description.
+      const label = box.querySelector('.ss-label');
+      const desc = box.querySelector('.ss-desc');
+      const headFrag = document.createDocumentFragment();
+      if (label) {
+        const lbl = label.cloneNode(true);
+        headFrag.appendChild(lbl);
+      }
+      if (desc) {
+        const d = desc.cloneNode(true);
+        headFrag.appendChild(d);
+      }
+      // Vollversion pair.
+      const vollPair = document.createElement('div');
+      vollPair.className = 'ss-pair';
+      vollPair.setAttribute('data-mode', 'vollversion');
+      vollPair.innerHTML =
+        '<div class="ss-pair-mode">✓ Vollversion (Lizenz aktiv)</div>' +
+        '<img src="' + fullSrc + '" alt="' + (img.alt || '') + ' (Vollversion)" />';
+      // Demo pair.
+      const demoPair = document.createElement('div');
+      demoPair.className = 'ss-pair';
+      demoPair.setAttribute('data-mode', 'demo');
+      demoPair.innerHTML =
+        '<div class="ss-pair-mode">⚠ Demo (ohne Lizenz)</div>' +
+        '<img src="' + demoSrc + '" alt="' + (img.alt || '') + ' (Demo)" ' +
+        'onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'block\'" />' +
+        '<div class="ss-pair-fallback" style="display:none">' +
+        'Screenshot für Demo-Modus noch nicht erstellt. ' +
+        'Skript: <code>python -m pcap2kml_player.main capture --mode demo</code>' +
+        '</div>';
+      // Replace box contents.
+      box.className = 'screenshot-box side-by-side';
+      while (box.firstChild) box.removeChild(box.firstChild);
+      while (headFrag.firstChild) box.appendChild(headFrag.firstChild);
+      box.appendChild(vollPair);
+      box.appendChild(demoPair);
+    });
+  })();
 </script>
 </body>
 </html>
+
+
