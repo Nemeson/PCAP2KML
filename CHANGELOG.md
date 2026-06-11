@@ -5,6 +5,33 @@ Dieses Changelog dokumentiert den aktuell rekonstruierten Entwicklungsstand der 
 Das Format orientiert sich an Keep a Changelog.  
 Eine lueckenlose Historie vor dem dokumentierten Stand wurde nicht rueckwirkend aus Commits rekonstruiert.
 
+## [2026.0611] - 2026-06-11
+
+### Added
+- **Live-Wiedergabe & Capture-System mit MQTT- und Seriell-Support**:
+  - `Esp32MqttSource` für Echtzeit-V2X-Datenströme (ESP32-Board mit OpenTrafficMap-Firmware) via MQTT. Enthält Ringpuffer (1000 Nachrichten, FIFO-Drop bei Überlauf) und vollständige Status-Maschine.
+  - `SerialBridge` zur Weiterleitung von COM-Port-Rohdaten an den MQTT-Broker.
+  - Eingebettete MQTT-Broker-Verwaltung (`MqttBroker`) zum automatischen Starten/Steuern lokaler Broker-Instanzen.
+  - `LiveConnectionDialog` zur einfachen Einrichtung und Verwaltung von Live-Quellen (Port, Host, Autostart-Optionen).
+  - `Esp32FlashDialog` zum direkten Flashen der OpenTrafficMap-Firmware auf ESP32-Controller via `esptool`, inklusive Port- und Baudrate-Konfiguration und Live-Log-Ausgabe.
+- **Hardware-Diagnose & Status-Tracking**:
+  - `HardwareDiagnosticsDialog` für geführte Fehlerbehebung in vier Schritten: COM-Port-Scan, MQTT-Port-Prüfung, Bridge-Status und V2X-Live-Paket-Sniffing mit detaillierter Log-Ausgabe.
+  - `LiveStatusWidget` in der Haupt-Toolbar zur Live-Anzeige von Verbindungstyp, Broker-Status, Port und Paketrate.
+  - `LiveExplanationDialog` mit bebilderter Setup-Anleitung und Systemübersicht.
+- **Umfangreiche Testabdeckung**:
+  - Neue Integrationstests für `Esp32MqttSource`, `SerialBridge`, `MqttBroker`, Lazy PCAP Streaming, Toolbar-Layouts und Export-Menüs (insgesamt 745 bestandene Tests).
+
+### Changed
+- **Build-Tooling & Dokumentation**:
+  - PowerShell-Build-Skript `build_exe.ps1` nutzt nun `python` statt des `py`-Launchers für bessere Portabilität unter Windows.
+  - Benutzerhandbuch (`benutzerhandbuch.html`) an das neue zweistufige Navigationslayout (5 Gruppen / 9 Workspaces) angepasst, inkonsistente Pfade und Lizenz-Hinweise korrigiert.
+  - Alle 28 Dokumentations-Screenshots (14x Vollversion, 14x Demo) vollständig neu generiert.
+  - Autogenerierte Kopfzeile in `build_config.py` vereinfacht.
+
+### Fixed
+- **Screenshot-Pipeline-Fixes**:
+  - Screenshot-Skript `capture.py` repariert: blockierender Wireshark-Start-Hinweis in Capture-Modus deaktiviert, modale Dialoge nicht-modal erfasst (zur fehlerfreien Abbildung via `window.grab()`), Import-Fehler von `parse_map_xml` korrigiert und Testdaten-Import auf `ParsingWorker`-Pipeline umgestellt.
+
 ## [2026.0610] - 2026-06-10
 
 ### Added
@@ -18,6 +45,25 @@ Eine lueckenlose Historie vor dem dokumentierten Stand wurde nicht rueckwirkend 
 - **Import nach Fehlschlag blockierte alle weiteren Versuche**: Der Lade-Thread wurde nach dem Import nie beendet, wodurch ein erneuter Import bis zum Neustart der App abgelehnt wurde. Der Worker beendet den Thread jetzt korrekt (`finished`/`cancelled → quit`), sodass ein Wiederholungsversuch sofort möglich ist.
 - **Cache ignorierte den Lizenzstatus**: Eine in der Demo gecachte Datei (nur CAM/NMEA) lieferte auch nach Lizenzaktivierung weiterhin gefilterte Daten. Der Lizenzstatus ist nun Teil des Cache-Schlüssels; Demo- und Vollversions-Caches kollidieren nicht mehr.
 - **„Gesperrt (Demo)"-Zähler im Cache bilanziert**: Die Zähler gesperrter Typen werden im Cache mitgespeichert (mit Abwärtskompatibilität zum alten Format), sodass sie auch bei einem Cache-Treffer konsistent bleiben.
+
+### Added (v1.10 — Pre-Live-Vorbereitung)
+- **Streaming-fähiges MessageSource-Protocol**: `state` (SourceState-Enum), `stats` (SourceStats-Dataclass), `pause()`, `resume()`, `on_event()` als additive Member. `DefaultMessageSourceMixin` reduziert Boilerplate für konkrete Quellen. Alle bestehenden Implementierungen (`PcapFileSource`, `XmlMapSource`, `SessionMessageSource`, `CombinedMessageSource`) sind weiterhin abwärtskompatibel.
+- **Esp32MqttSource-Skeleton** für die OpenTrafficMap-Firmware-Integration: plug-in-fähiger `message_callback` für Tests, Ringbuffer (default 1000 Messages, FIFO-Drop bei Überlauf), vollständige State-Machine (UNKNOWN/STREAMING/DRAINED/ENDED/ERROR). Phase 4 wird die echte MQTT-Subscription einbauen.
+- **CohdaMk6Source + OpenC2XSource-Skeleton-Stubs**: Erfüllen das erweiterte Protocol, werfen `NotImplementedError` auf `iter_messages()`. Cohda ist lower priority (kommerziell + Lizenz-kritisch); OpenC2X ist nicht im Deployment-Plan.
+- **Tests**: 56 neue Tests (Phase 1+1.2+2), Total 745 passing, 0 failures.
+
+### Changed (v1.10)
+- **Top-Toolbar bereinigt**: Die fünf Buttons „KML exportieren", „Fehler exportieren", „Diagnose exportieren", „Dashboard" und „Bericht" sind aus der Toolbar entfernt. Die Toolbar enthält jetzt nur noch die wichtigsten Aktionen: Brand, Profil-Switcher, Import, Inhalt löschen, Spacer, Schnellbefehl-Suche.
+- **Menü-Struktur neu angeordnet**: Reihenfolge jetzt Datei → **Export** → Optionen → **Ansicht** → Hilfe. Das neue Menü „Export" enthält „KML exportieren", „Fehler exportieren", „Diagnose exportieren" und „Bericht exportieren". Das neue Menü „Ansicht" enthält „Dashboard". Klick-Handler wurden auf `QAction.triggered.connect` umgestellt, was sauberer ist als Toolbar-Buttons.
+- **Workspace-Toolbar visuell an Haupttoolbar angepasst**: Container, Row1 und Row2 haben kein explizites `background` mehr (Default-Qt-Grau). `QPushButton#wsGroupTab` bekam explizites Padding (`6px 14px`, `min-height: 24px`) — verhindert das Abschneiden von Buchstaben wie „M" in „MAP-Analyse" und „e" in „Compliance".
+- **Profile-Switcher verbreitert**: `setFixedWidth(160)` → `setFixedWidth(240)`, damit alle drei Profile (`🔬 Analyst`, `🚗 Feldtester`, `🆕 Einsteiger`) ohne Scrollen sichtbar sind.
+- **Zwei tote Separatoren aus der Haupt-Toolbar entfernt**: Nach der Verlagerung der Export-Buttons in das Export-Menü waren zwei aufeinanderfolgende `add_toolbar_sep`-Aufrufe nutzlos und wurden als sichtbare vertikale Striche wahrgenommen. Toolbar ist jetzt: Brand, Profile, Import, Inhalt löschen, Spacer, Schnellbefehl.
+- **`_session_combo` mit `hide()` statt `setVisible(False)`**: Das Placeholder-Widget für die Sitzungs-Historie reserviert keinen Layout-Platz mehr.
+
+### Fixed (v1.10)
+- **Replay-Duration-Latenz-Bugfix**: Der Aufruf von `PcapFileSource.duration()` vor `iter_messages()` hat das vollständige PCAP-Parse getriggert. UI-Elemente, die die Dauer vor der Iteration anzeigen wollten, haben dadurch den Main-Thread blockiert. Behoben: `duration()` ist jetzt ein Cache (erstes/letztes Message) und liefert `None`, solange `iter_messages()` noch nicht aufgerufen wurde.
+- **Klasse-State-Bug im Mixin**: Erste Version von `DefaultMessageSourceMixin` hatte `_state`, `_stats`, `_paused` und `_event_callbacks` als Klassen-Attribute statt als Instanz-Attribute. Folge: alle Instanzen teilten denselben Counter. TDD hat den Bug gefunden, bevor er in Produktion landete. Behoben: `__init__()` initialisiert jetzt per-Instance.
+- **Inline-Stylesheet auf `QToolButton` greift nicht**: Erste Versuche, Padding für Workspace-Tab-Buttons per `g_btn.setStyleSheet(...)` zu setzen, wurden von der `QToolButton`-internen Padding überschrieben. Behoben: `QPushButton#wsGroupTab`-objectName-Stylesheet auf `row1` setzt das Padding jetzt zuverlässig.
 
 ## [2026.0607] - 2026-06-07
 
