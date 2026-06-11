@@ -68,7 +68,7 @@ The application is built on PyQt6 and an optimized QWebEngine / Leaflet stack de
 *   *Optional*: Wireshark / TShark installed on the system (greatly accelerates PCAP parsing).
 
 ### Installation & Launch
-The free download of the Demo version is available at the following link: [C-ITS-Inspector.exe](https://drive.google.com/file/d/1lfbzzQe5kERKEV3OtPAnIj6QgiCBxyYq/view?usp=sharing)
+The free download of the Demo version is available at the following link: [C-ITS-Inspector.exe](https://drive.google.com/file/d/1p54nI-e_UJO4Gr8u9W-sWpO_6mTC0klo/view?usp=sharing)
 
 1.  Clone the repository or unpack the release bundle.
 2.  Install dependencies:
